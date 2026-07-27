@@ -1,0 +1,15 @@
+application:
+  name: GREENSMECAPT
+  environment: development
+
+paths:
+  raw_data: data/raw
+  interim_data: data/interim
+  processed_data: data/processed
+  sample_data: data/samples
+
+decision_support:
+  weighting_method: fuzzy_dematel
+  ranking_methods:
+    - topsis
+    - electre_iii

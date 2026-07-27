@@ -1,0 +1,45 @@
+# Python virtual environment
+.venv/
+
+# Python-generated cache and compiled files
+__pycache__/
+*.py[cod]
+
+# Testing and development caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environment variables and secrets
+.env
+
+# Operating-system-generated files
+.DS_Store
+Thumbs.db
+
+# Local project data
+data/raw/*
+!data/raw/.gitkeep
+
+data/interim/*
+!data/interim/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+# Python packaging output
+*.egg-info/
+build/
+dist/
+
+# Local project data
+data/raw/*
+!data/raw/.gitkeep
+
+data/interim/*
+!data/interim/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
