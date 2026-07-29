@@ -5,6 +5,7 @@ from greensmecapt.domain.evidence import (
     EvidenceItem,
     EvidenceValidationStatus,
 )
+from greensmecapt.domain.investment_record import StructuredInvestmentRecord
 from greensmecapt.domain.sme import SME
 from greensmecapt.domain.source_document import DocumentType, SourceDocument
 
@@ -16,4 +17,5 @@ __all__ = [
     "EvidenceValidationStatus",
     "SME",
     "SourceDocument",
+    "StructuredInvestmentRecord",
 ]
