@@ -49,6 +49,7 @@ class CriterionPolicy(ProfileModel):
     output: Literal["green", "financial", "context"]
     requirement: Requirement
     module_ids: tuple[NonBlank, ...] = ()
+    indicator_ids: tuple[NonBlank, ...] = ()
     when: Rule
     question: NonBlank
     evidence_routes: tuple[NonBlank, ...] = Field(min_length=1)
@@ -117,6 +118,7 @@ class CriterionDecision(ProfileModel):
     title: NonBlank
     output: Literal["green", "financial", "context"]
     requirement: Requirement
+    indicator_ids: tuple[str, ...] = ()
     rule_status: Applicability
     status: Applicability
     reason: NonBlank

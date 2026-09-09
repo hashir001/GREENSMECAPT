@@ -69,6 +69,7 @@
       "output": "green",
       "requirement": "conditional",
       "module_ids": ["digital_services", "buildings", "retail_hospitality"],
+      "indicator_ids": ["renewable_energy_percentage"],
       "when": {"any_true": ["operates_facility", "uses_cloud_services"]},
       "question": "How do you obtain and manage electricity or cloud services? Share bills, supplier details, monitoring practices or an approximate usage range if available.",
       "evidence_routes": ["utility_or_supplier_record", "bounded_usage_estimate", "management_description", "not_measured", "explain_not_applicable"],

@@ -1,0 +1,34 @@
+[
+  {
+    "response_id": "response_green_001",
+    "sme_id": "demo_small_manufacturer",
+    "criterion_id": "green_contribution",
+    "kind": "linguistic",
+    "linguistic_value": "high",
+    "narrative": "Recycled inputs are central to the product and supported by purchase records.",
+    "supporting_evidence_ids": [],
+    "submitted_by": "demo_applicant"
+  },
+  {
+    "response_id": "response_financial_001",
+    "sme_id": "demo_small_manufacturer",
+    "criterion_id": "investment_context",
+    "kind": "number_range",
+    "lower_value": 900000,
+    "upper_value": 1100000,
+    "unit": "AED annual revenue",
+    "reporting_period": "FY2025",
+    "narrative": "Approximate range pending final accounts.",
+    "supporting_evidence_ids": [],
+    "submitted_by": "demo_applicant"
+  },
+  {
+    "response_id": "response_emissions_001",
+    "sme_id": "demo_small_manufacturer",
+    "criterion_id": "direct_operational_emissions",
+    "kind": "not_measured",
+    "narrative": "The company can provide generator fuel invoices but has not calculated emissions.",
+    "supporting_evidence_ids": [],
+    "submitted_by": "demo_applicant"
+  }
+]
