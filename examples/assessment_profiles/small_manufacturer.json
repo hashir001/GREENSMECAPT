@@ -1,0 +1,23 @@
+{
+  "sme_id": "demo_small_manufacturer",
+  "activity_description": "A small packaging manufacturer with a workshop and electricity bills, but no formal carbon inventory.",
+  "sector": "Packaging manufacturing",
+  "stage": "operating",
+  "funding_purpose": "Replace inefficient equipment.",
+  "facts": {
+    "manufactures_or_processes": true,
+    "burns_fuel_on_site": true,
+    "operates_vehicle_fleet": false,
+    "operates_facility": true,
+    "uses_cloud_services": false,
+    "handles_materials_or_waste": true,
+    "provides_clean_energy": false,
+    "provides_circular_services": false,
+    "works_on_buildings": false,
+    "works_in_agriculture_food_land": false,
+    "provides_digital_services": false,
+    "offers_environmental_solution": false,
+    "operates_retail_or_hospitality": false,
+    "plans_operational_transition": true
+  }
+}

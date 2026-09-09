@@ -1,0 +1,22 @@
+{
+  "sme_id": "demo_activity_incomplete",
+  "activity_description": "A services company with a small office; its fuel use and fleet arrangements have not been clarified.",
+  "sector": "Services",
+  "stage": "operating",
+  "facts": {
+    "manufactures_or_processes": false,
+    "burns_fuel_on_site": null,
+    "operates_vehicle_fleet": null,
+    "operates_facility": true,
+    "uses_cloud_services": false,
+    "handles_materials_or_waste": false,
+    "provides_clean_energy": false,
+    "provides_circular_services": false,
+    "works_on_buildings": false,
+    "works_in_agriculture_food_land": false,
+    "provides_digital_services": true,
+    "offers_environmental_solution": false,
+    "operates_retail_or_hospitality": false,
+    "plans_operational_transition": false
+  }
+}
