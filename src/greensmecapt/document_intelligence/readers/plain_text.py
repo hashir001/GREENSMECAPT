@@ -3,6 +3,7 @@
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
+    TextSource,
 )
 from greensmecapt.domain import SourceDocument
 
@@ -50,6 +51,8 @@ class PlainTextDocumentReader:
                 ExtractedPage(
                     page_number=1,
                     text=text,
+                    text_source=TextSource.PLAIN_TEXT,
                 ),
             ),
+            total_pages=1,
         )

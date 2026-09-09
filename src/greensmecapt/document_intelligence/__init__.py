@@ -6,6 +6,7 @@ from greensmecapt.document_intelligence.extractors import (
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
+    TextSource,
 )
 from greensmecapt.document_intelligence.ports import (
     DocumentReader,
@@ -13,7 +14,14 @@ from greensmecapt.document_intelligence.ports import (
 )
 from greensmecapt.document_intelligence.readers import (
     DocumentReadError,
+    HybridPdfDocumentReader,
+    ImageDocumentReader,
+    OcrEngine,
+    OcrError,
+    PdfTextDocumentReader,
     PlainTextDocumentReader,
+    RoutingDocumentReader,
+    TesseractOcrEngine,
     UnsupportedMimeTypeError,
 )
 from greensmecapt.document_intelligence.service import (
@@ -31,7 +39,15 @@ __all__ = [
     "ExtractedDocument",
     "ExtractedPage",
     "ExtractionConsistencyError",
+    "HybridPdfDocumentReader",
+    "ImageDocumentReader",
+    "OcrEngine",
+    "OcrError",
+    "PdfTextDocumentReader",
     "PlainTextDocumentReader",
     "RenewableEnergyPercentageExtractor",
+    "RoutingDocumentReader",
+    "TesseractOcrEngine",
+    "TextSource",
     "UnsupportedMimeTypeError",
 ]

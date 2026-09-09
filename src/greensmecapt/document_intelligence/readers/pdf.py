@@ -8,6 +8,7 @@ from pypdf.errors import PyPdfError
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
+    TextSource,
 )
 from greensmecapt.document_intelligence.readers.plain_text import (
     DocumentReadError,
@@ -41,9 +42,14 @@ class PdfTextDocumentReader:
                     "Encrypted PDFs are not supported by this reader."
                 )
 
+            total_pages = len(reader.pages)
             pages: list[ExtractedPage] = []
+            unreadable_pages: list[int] = []
 
-            for page_number, page in enumerate(reader.pages, start=1):
+            for page_number, page in enumerate(
+                reader.pages,
+                start=1,
+            ):
                 text = (page.extract_text() or "").strip()
 
                 if text:
@@ -51,8 +57,11 @@ class PdfTextDocumentReader:
                         ExtractedPage(
                             page_number=page_number,
                             text=text,
+                            text_source=TextSource.PDF_EMBEDDED,
                         )
                     )
+                else:
+                    unreadable_pages.append(page_number)
 
         except (PyPdfError, ValueError, TypeError, OSError) as error:
             if isinstance(error, DocumentReadError):
@@ -71,4 +80,6 @@ class PdfTextDocumentReader:
         return ExtractedDocument(
             document_id=document.document_id,
             pages=tuple(pages),
+            total_pages=total_pages,
+            unreadable_pages=tuple(unreadable_pages),
         )
