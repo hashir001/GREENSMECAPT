@@ -1,0 +1,77 @@
+{
+  "policy_id": "greensmecapt_normalization",
+  "version": "0.1.0",
+  "status": "development",
+  "weight_source": "development_equal_weights_pending_fuzzy_dematel",
+  "minimum_coverage_ratio": 0.6,
+  "default_linguistic_scale": {
+    "very_low": {
+      "lower": 0.0,
+      "modal": 0.0,
+      "upper": 0.25
+    },
+    "low": {
+      "lower": 0.0,
+      "modal": 0.25,
+      "upper": 0.5
+    },
+    "medium": {
+      "lower": 0.25,
+      "modal": 0.5,
+      "upper": 0.75
+    },
+    "high": {
+      "lower": 0.5,
+      "modal": 0.75,
+      "upper": 1.0
+    },
+    "very_high": {
+      "lower": 0.75,
+      "modal": 1.0,
+      "upper": 1.0
+    }
+  },
+  "rules": [
+    {
+      "criterion_id": "green_contribution",
+      "base_weight": 1.0,
+      "allow_linguistic": true
+    },
+    {
+      "criterion_id": "direct_operational_emissions",
+      "base_weight": 1.0,
+      "allow_linguistic": true
+    },
+    {
+      "criterion_id": "purchased_energy_management",
+      "base_weight": 1.0,
+      "allow_linguistic": true,
+      "numeric_scale": {
+        "lower_bound": 0.0,
+        "upper_bound": 100.0,
+        "direction": "benefit",
+        "allowed_units": [
+          "percent"
+        ],
+        "allowed_indicator_ids": [
+          "renewable_energy_percentage"
+        ]
+      }
+    },
+    {
+      "criterion_id": "resource_use_and_recovery",
+      "base_weight": 1.0,
+      "allow_linguistic": true
+    },
+    {
+      "criterion_id": "customer_environmental_effect",
+      "base_weight": 1.0,
+      "allow_linguistic": true
+    },
+    {
+      "criterion_id": "transition_execution",
+      "base_weight": 1.0,
+      "allow_linguistic": true
+    }
+  ]
+}
