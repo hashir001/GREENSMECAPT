@@ -12,6 +12,7 @@ class TextSource(StrEnum):
     PLAIN_TEXT = "plain_text"
     PDF_EMBEDDED = "pdf_embedded"
     OCR = "ocr"
+    HYBRID = "hybrid"
 
 
 class TextBlockKind(StrEnum):
