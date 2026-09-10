@@ -37,6 +37,8 @@ class IndicatorDefinition(BaseModel):
     name: str = Field(min_length=1)
     unit: str = Field(min_length=1)
     direction: NumericDirection
+    # Required inside this fixed specification only. Applicability for an
+    # individual SME is resolved before a comparison specification is built.
     required: bool = True
 
     minimum: float | None = None
@@ -96,6 +98,7 @@ class ResolvedIndicator(BaseModel):
     status: InputStatus
     value: float | None = None
     evidence_ids: tuple[str, ...] = ()
+    response_ids: tuple[str, ...] = ()
     issues: tuple[str, ...] = ()
 
     @model_validator(mode="after")
@@ -103,9 +106,13 @@ class ResolvedIndicator(BaseModel):
         """Keep status, value and provenance consistent."""
 
         if self.status is InputStatus.READY:
-            if self.value is None or not self.evidence_ids:
+            if self.value is None:
                 raise ValueError(
                     "Ready inputs require a value and supporting evidence."
+                )
+            if not self.evidence_ids and not self.response_ids:
+                raise ValueError(
+                    "Ready inputs require evidence or response provenance."
                 )
 
             if self.issues:
