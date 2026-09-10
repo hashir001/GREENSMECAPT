@@ -1,0 +1,52 @@
+{
+  "specification_id": "greensmecapt_driver_dematel",
+  "version": "0.1.0",
+  "status": "development",
+  "factor_ids": [
+    "policy",
+    "social",
+    "technology",
+    "internal"
+  ],
+  "stakeholder_groups": [
+    "academics",
+    "government",
+    "sme_managers",
+    "lenders"
+  ],
+  "aggregation": "group_balanced",
+  "convergence_margin": 0.999,
+  "cause_effect_tolerance": 1e-09,
+  "linguistic_scale": {
+    "no_influence": {
+      "lower": 0.0,
+      "modal": 0.0,
+      "upper": 0.0
+    },
+    "very_low": {
+      "lower": 0.0,
+      "modal": 0.1,
+      "upper": 0.25
+    },
+    "low": {
+      "lower": 0.1,
+      "modal": 0.25,
+      "upper": 0.4
+    },
+    "medium": {
+      "lower": 0.3,
+      "modal": 0.5,
+      "upper": 0.7
+    },
+    "high": {
+      "lower": 0.6,
+      "modal": 0.75,
+      "upper": 0.9
+    },
+    "very_high": {
+      "lower": 0.75,
+      "modal": 0.9,
+      "upper": 1.0
+    }
+  }
+}
