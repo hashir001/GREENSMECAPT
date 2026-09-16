@@ -15,9 +15,16 @@ from greensmecapt.document_intelligence.structure.routing import (
     PageRoutingPolicy,
     PageSignals,
 )
+from greensmecapt.document_intelligence.structure.runtime import (
+    PaddleRuntimeReport,
+    initialize_paddle_runtime,
+    inspect_paddle_runtime,
+    parse_image_file,
+)
 
 __all__ = [
     "PaddleParserConfiguration",
+    "PaddleRuntimeReport",
     "PaddleStructuredPageParser",
     "PageProcessingMode",
     "PageRoutingDecision",
@@ -26,4 +33,7 @@ __all__ = [
     "StructuredPageParser",
     "StructuredParserUnavailableError",
     "StructuredParsingError",
+    "initialize_paddle_runtime",
+    "inspect_paddle_runtime",
+    "parse_image_file",
 ]

@@ -20,9 +20,12 @@ from greensmecapt.document_intelligence.readers import (
     OcrError,
     PdfTextDocumentReader,
     PlainTextDocumentReader,
+    ProductionReaderConfiguration,
     RoutingDocumentReader,
+    StructuredImageDocumentReader,
     TesseractOcrEngine,
     UnsupportedMimeTypeError,
+    build_production_document_reader,
 )
 from greensmecapt.document_intelligence.service import (
     DocumentIntegrityError,
@@ -45,9 +48,12 @@ __all__ = [
     "OcrError",
     "PdfTextDocumentReader",
     "PlainTextDocumentReader",
+    "ProductionReaderConfiguration",
     "RenewableEnergyPercentageExtractor",
     "RoutingDocumentReader",
+    "StructuredImageDocumentReader",
     "TesseractOcrEngine",
     "TextSource",
     "UnsupportedMimeTypeError",
+    "build_production_document_reader",
 ]

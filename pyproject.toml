@@ -9,7 +9,6 @@ description = "Evidence-aware decision-support platform for assessing and rankin
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "numpy>=1.26",
     "pydantic>=2.0",
     "PyYAML>=6.0",
     "pypdf>=6,<7",
@@ -27,8 +26,8 @@ dev = [
     "ruff>=0.6",
 ]
 document-ai = [
-    "paddleocr>=3.0,<4.0",
-    "paddlepaddle>=3.0,<4.0",
+    "paddleocr[doc-parser]>=3.0,<4.0",
+    "paddlepaddle>=3.2,<3.3",
 ]
 
 [tool.setuptools.packages.find]

@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from html.parser import HTMLParser
 from typing import Any
 
@@ -30,8 +31,15 @@ class StructuredParserUnavailableError(
     """Raised when the configured parser cannot be loaded."""
 
 
+class PaddleResourceProfile(StrEnum):
+    """Describe a supported structured-OCR resource profile."""
+
+    LOCAL_CPU = "local_cpu"
+    FULL_STRUCTURE = "full_structure"
+
+
 class PaddleParserConfiguration(BaseModel):
-    """Configure local PaddleOCR structured inference."""
+    """Configure resource-aware PaddleOCR structured inference."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -40,13 +48,32 @@ class PaddleParserConfiguration(BaseModel):
         allow_inf_nan=False,
     )
 
-    device: str = Field(default="cpu", min_length=1)
-    cpu_threads: int = Field(default=6, ge=1, le=64)
+    profile: PaddleResourceProfile = (
+        PaddleResourceProfile.LOCAL_CPU
+    )
 
-    use_orientation_classification: bool = True
-    use_document_unwarping: bool = True
-    use_textline_orientation: bool = True
-    use_table_recognition: bool = True
+    device: str = Field(default="cpu", min_length=1)
+    cpu_threads: int = Field(default=2, ge=1, le=64)
+    enable_mkldnn: bool = False
+
+    layout_detection_model_name: str = Field(
+        default="PP-DocLayout-S",
+        min_length=1,
+    )
+    text_detection_model_name: str = Field(
+        default="PP-OCRv5_mobile_det",
+        min_length=1,
+    )
+    text_recognition_model_name: str = Field(
+        default="en_PP-OCRv4_mobile_rec",
+        min_length=1,
+    )
+
+    use_region_detection: bool = False
+    use_orientation_classification: bool = False
+    use_document_unwarping: bool = False
+    use_textline_orientation: bool = False
+    use_table_recognition: bool = False
     use_formula_recognition: bool = False
     use_chart_recognition: bool = False
 
@@ -56,6 +83,66 @@ class PaddleParserConfiguration(BaseModel):
         le=1,
     )
 
+    @classmethod
+    def for_profile(
+        cls,
+        profile: PaddleResourceProfile | str,
+        *,
+        device: str = "cpu",
+        cpu_threads: int | None = None,
+    ) -> "PaddleParserConfiguration":
+        """Create a safe configuration for a named profile."""
+
+        selected_profile = PaddleResourceProfile(profile)
+
+        if selected_profile is PaddleResourceProfile.LOCAL_CPU:
+            return cls(
+                profile=selected_profile,
+                device=device,
+                cpu_threads=(
+                    2 if cpu_threads is None else cpu_threads
+                ),
+                enable_mkldnn=False,
+                layout_detection_model_name="PP-DocLayout-S",
+                text_detection_model_name=(
+                    "PP-OCRv5_mobile_det"
+                ),
+                text_recognition_model_name=(
+                    "en_PP-OCRv4_mobile_rec"
+                ),
+                use_region_detection=False,
+                use_orientation_classification=False,
+                use_document_unwarping=False,
+                use_textline_orientation=False,
+                use_table_recognition=False,
+                use_formula_recognition=False,
+                use_chart_recognition=False,
+            )
+
+        return cls(
+            profile=selected_profile,
+            device=device,
+            cpu_threads=(
+                4 if cpu_threads is None else cpu_threads
+            ),
+            enable_mkldnn=False,
+            layout_detection_model_name=(
+                "PP-DocLayout_plus-L"
+            ),
+            text_detection_model_name=(
+                "PP-OCRv5_server_det"
+            ),
+            text_recognition_model_name=(
+                "PP-OCRv5_server_rec"
+            ),
+            use_region_detection=True,
+            use_orientation_classification=True,
+            use_document_unwarping=True,
+            use_textline_orientation=True,
+            use_table_recognition=True,
+            use_formula_recognition=False,
+            use_chart_recognition=False,
+        )
 
 @dataclass(frozen=True)
 class _HTMLCell:
@@ -289,7 +376,7 @@ class PaddleStructuredPageParser:
         )
 
     def _create_pipeline(self) -> object:
-        """Create Paddle lazily so core installs remain lightweight."""
+        """Create Paddle lazily using the selected resource profile."""
 
         try:
             from paddleocr import PPStructureV3
@@ -303,6 +390,25 @@ class PaddleStructuredPageParser:
             return PPStructureV3(
                 device=self._configuration.device,
                 cpu_threads=self._configuration.cpu_threads,
+                enable_mkldnn=(
+                    self._configuration.enable_mkldnn
+                ),
+                layout_detection_model_name=(
+                    self._configuration
+                    .layout_detection_model_name
+                ),
+                text_detection_model_name=(
+                    self._configuration
+                    .text_detection_model_name
+                ),
+                text_recognition_model_name=(
+                    self._configuration
+                    .text_recognition_model_name
+                ),
+                use_region_detection=(
+                    self._configuration
+                    .use_region_detection
+                ),
                 use_doc_orientation_classify=(
                     self._configuration
                     .use_orientation_classification
@@ -336,8 +442,9 @@ class PaddleStructuredPageParser:
             )
         except Exception as error:
             raise StructuredParserUnavailableError(
-                "PaddleOCR could not initialize its local "
-                "structured-document pipeline."
+                "PaddleOCR could not initialize the "
+                f"{self._configuration.profile.value!r} "
+                "structured-document profile."
             ) from error
 
 

@@ -19,8 +19,15 @@ from greensmecapt.document_intelligence.readers.plain_text import (
     PlainTextDocumentReader,
     UnsupportedMimeTypeError,
 )
+from greensmecapt.document_intelligence.readers.production import (
+    ProductionReaderConfiguration,
+    build_production_document_reader,
+)
 from greensmecapt.document_intelligence.readers.router import (
     RoutingDocumentReader,
+)
+from greensmecapt.document_intelligence.readers.structured_image import (
+    StructuredImageDocumentReader,
 )
 
 __all__ = [
@@ -31,7 +38,10 @@ __all__ = [
     "OcrError",
     "PdfTextDocumentReader",
     "PlainTextDocumentReader",
+    "ProductionReaderConfiguration",
     "RoutingDocumentReader",
+    "StructuredImageDocumentReader",
     "TesseractOcrEngine",
     "UnsupportedMimeTypeError",
+    "build_production_document_reader",
 ]

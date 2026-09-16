@@ -378,10 +378,10 @@ class AdaptivePdfDocumentReader:
 
         if self._fallback_ocr_engine is None:
             return None
-
-        text = self._fallback_ocr_engine.recognize(
-            image
-        ).strip()
+        try:
+            text = self._fallback_ocr_engine.recognize(image).strip()
+        except DocumentReadError:
+            return None
 
         if not text:
             return None
