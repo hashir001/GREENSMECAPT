@@ -46,7 +46,7 @@ class RenewableEnergyPercentageExtractor:
                         f"{page.page_number}:"
                         f"{match.start()}:"
                         f"{match.end()}"
-                    ).encode("utf-8")
+                    ).encode()
                 ).hexdigest()[:16]
 
                 evidence_items.append(

@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from greensmecapt.assessment.observations import (
     CriterionResponse,
     ObservationStatus,
-    ResponseKind,
     build_observations,
 )
 from greensmecapt.assessment.profiles import (
