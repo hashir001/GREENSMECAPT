@@ -17,6 +17,10 @@ dependencies = [
     "PyMuPDF>=1.24",
     "pdfplumber>=0.11,<1.0",
     "pytesseract>=0.3.10",
+    "fastapi>=0.115,<1.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "sqlmodel>=0.0.24,<1.0",
+    "uvicorn[standard]>=0.34,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +28,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
+    "httpx>=0.28,<1.0",
 ]
 document-ai = [
     "paddleocr[doc-parser]>=3.0,<4.0",
