@@ -1,0 +1,171 @@
+{
+  "catalog_id": "greensmecapt_environmental_metrics",
+  "version": "1.0.0",
+  "metrics": [
+    {
+      "indicator_id": "renewable_energy_percentage",
+      "criterion_id": "renewable_energy",
+      "name": "Renewable energy share",
+      "aliases": [
+        "renewable energy contribution",
+        "renewable sources",
+        "renewable energy share",
+        "renewable electricity share",
+        "electricity from renewable sources",
+        "energy from renewable sources"
+      ],
+      "units": [
+        {
+          "canonical_unit": "percent",
+          "aliases": [
+            "%",
+            "percent",
+            "percentage"
+          ],
+          "multiplier": 1.0
+        }
+      ],
+      "minimum": 0.0,
+      "maximum": 100.0
+    },
+    {
+      "indicator_id": "electricity_consumption_kwh",
+      "criterion_id": "energy_efficiency",
+      "name": "Electricity consumption",
+      "aliases": [
+        "electricity consumption",
+        "electricity used",
+        "electric power consumption",
+        "total electricity use"
+      ],
+      "units": [
+        {
+          "canonical_unit": "kwh",
+          "aliases": [
+            "kwh",
+            "kilowatt hour",
+            "kilowatt hours"
+          ],
+          "multiplier": 1.0
+        },
+        {
+          "canonical_unit": "kwh",
+          "aliases": [
+            "mwh",
+            "megawatt hour",
+            "megawatt hours"
+          ],
+          "multiplier": 1000.0
+        },
+        {
+          "canonical_unit": "kwh",
+          "aliases": [
+            "gwh",
+            "gigawatt hour",
+            "gigawatt hours"
+          ],
+          "multiplier": 1000000.0
+        }
+      ],
+      "minimum": 0.0,
+      "maximum": null
+    },
+    {
+      "indicator_id": "water_consumption_m3",
+      "criterion_id": "water_management",
+      "name": "Water consumption",
+      "aliases": [
+        "water consumption",
+        "water used",
+        "total water use",
+        "water withdrawal"
+      ],
+      "units": [
+        {
+          "canonical_unit": "m3",
+          "aliases": [
+            "m3",
+            "m³",
+            "cubic meter",
+            "cubic meters",
+            "cubic metre",
+            "cubic metres"
+          ],
+          "multiplier": 1.0
+        },
+        {
+          "canonical_unit": "m3",
+          "aliases": [
+            "l",
+            "liter",
+            "liters",
+            "litre",
+            "litres"
+          ],
+          "multiplier": 0.001
+        }
+      ],
+      "minimum": 0.0,
+      "maximum": null
+    },
+    {
+      "indicator_id": "total_ghg_emissions_tco2e",
+      "criterion_id": "emissions_management",
+      "name": "Total greenhouse-gas emissions",
+      "aliases": [
+        "total greenhouse gas emissions",
+        "total ghg emissions",
+        "total carbon emissions",
+        "combined scope 1 and scope 2 emissions"
+      ],
+      "units": [
+        {
+          "canonical_unit": "tco2e",
+          "aliases": [
+            "tco2e",
+            "t co2e",
+            "tonnes co2e",
+            "tons co2e",
+            "metric tonnes co2e"
+          ],
+          "multiplier": 1.0
+        },
+        {
+          "canonical_unit": "tco2e",
+          "aliases": [
+            "kgco2e",
+            "kg co2e",
+            "kilograms co2e"
+          ],
+          "multiplier": 0.001
+        }
+      ],
+      "minimum": 0.0,
+      "maximum": null
+    },
+    {
+      "indicator_id": "waste_diversion_percentage",
+      "criterion_id": "waste_management",
+      "name": "Waste diverted from disposal",
+      "aliases": [
+        "waste diversion rate",
+        "waste diverted from landfill",
+        "waste recycled or reused",
+        "waste recovery rate"
+      ],
+      "units": [
+        {
+          "canonical_unit": "percent",
+          "aliases": [
+            "%",
+            "percent",
+            "percentage"
+          ],
+          "multiplier": 1.0
+        }
+      ],
+      "minimum": 0.0,
+      "maximum": 100.0
+    }
+  ]
+}
