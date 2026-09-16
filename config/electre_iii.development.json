@@ -1,0 +1,44 @@
+{
+  "configuration_id": "greensmecapt_electre_iii",
+  "version": "0.1.0",
+  "credibility_cutoff": 0.65,
+  "projection": "centroid",
+  "thresholds": [
+    {
+      "criterion_id": "green_contribution",
+      "indifference": 0.05,
+      "preference": 0.15,
+      "veto": 0.4
+    },
+    {
+      "criterion_id": "direct_operational_emissions",
+      "indifference": 0.05,
+      "preference": 0.15,
+      "veto": 0.4
+    },
+    {
+      "criterion_id": "purchased_energy_management",
+      "indifference": 0.05,
+      "preference": 0.15,
+      "veto": 0.4
+    },
+    {
+      "criterion_id": "resource_use_and_recovery",
+      "indifference": 0.05,
+      "preference": 0.15,
+      "veto": 0.4
+    },
+    {
+      "criterion_id": "customer_environmental_effect",
+      "indifference": 0.05,
+      "preference": 0.15,
+      "veto": 0.4
+    },
+    {
+      "criterion_id": "transition_execution",
+      "indifference": 0.05,
+      "preference": 0.15,
+      "veto": 0.4
+    }
+  ]
+}
