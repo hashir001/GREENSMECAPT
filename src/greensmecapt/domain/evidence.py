@@ -29,19 +29,41 @@ class EvidenceItem(BaseModel):
     sme_id: str = Field(min_length=1)
     document_id: str = Field(min_length=1)
     indicator_id: str = Field(min_length=1)
-    criterion_id: str | None = Field(default=None, min_length=1)
+    criterion_id: str | None = Field(
+        default=None,
+        min_length=1,
+    )
 
     raw_value: str = Field(min_length=1)
     normalized_value: EvidenceValue
     unit: str | None = Field(default=None, min_length=1)
 
+    reporting_period: str | None = Field(
+        default=None,
+        min_length=1,
+    )
+    scope: str | None = Field(
+        default=None,
+        min_length=1,
+    )
+
     source_locator: str = Field(min_length=1)
-    source_excerpt: str | None = Field(default=None, min_length=1)
+    source_excerpt: str | None = Field(
+        default=None,
+        min_length=1,
+    )
 
     extraction_method: str = Field(min_length=1)
     extractor_name: str = Field(min_length=1)
-    extractor_version: str | None = Field(default=None, min_length=1)
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    extractor_version: str | None = Field(
+        default=None,
+        min_length=1,
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+    )
 
     validation_status: EvidenceValidationStatus = (
         EvidenceValidationStatus.UNVALIDATED
