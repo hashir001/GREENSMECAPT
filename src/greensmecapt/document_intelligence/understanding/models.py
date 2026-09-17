@@ -3,11 +3,12 @@
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
-from greensmecapt.domain import EvidenceItem
+
 from greensmecapt.document_intelligence.reconciliation import (
     EvidenceReconciliationReport,
 )
 from greensmecapt.domain import (
+    EvidenceItem,
     SourceDocument,
     StructuredInvestmentRecord,
 )

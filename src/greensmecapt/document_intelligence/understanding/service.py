@@ -20,8 +20,8 @@ from greensmecapt.document_intelligence.understanding.semantic import (
     HybridSemanticExtractor,
 )
 from greensmecapt.domain import (
-    EvidenceItem,
     SME,
+    EvidenceItem,
     SourceDocument,
     StructuredInvestmentRecord,
 )

@@ -2,8 +2,8 @@
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from PIL import Image, UnidentifiedImageError
 
