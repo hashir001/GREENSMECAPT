@@ -120,6 +120,8 @@ def test_compare_with_three_complementary_methods() -> None:
     assert result.electre_iii.rank_levels[0].sme_ids == (
         "sme_strong",
     )
+    assert result.calibration is not None
+    assert result.calibration.status == "development"
 
 
 def test_reject_duplicate_smes() -> None:

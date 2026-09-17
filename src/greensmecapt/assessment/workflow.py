@@ -6,6 +6,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from greensmecapt.assessment.calibration import (
+    MCDMCalibrationManifest,
+    load_calibration_manifest,
+)
 from greensmecapt.assessment.cohort import (
     CohortConfiguration,
     ComparableTopsisResult,
@@ -39,6 +43,11 @@ from greensmecapt.assessment.profiles import (
     build_profile,
     load_policy,
 )
+from greensmecapt.assessment.robustness import (
+    RankingRobustnessResult,
+    RobustnessConfiguration,
+    analyze_ranking_robustness,
+)
 from greensmecapt.domain import StructuredInvestmentRecord
 
 
@@ -71,6 +80,8 @@ class CohortAssessmentResult(AssessmentWorkflowModel):
     comparable_topsis: ComparableTopsisResult
     fuzzy_topsis: FuzzyTopsisResult
     electre_iii: ElectreIIIResult
+    robustness: RankingRobustnessResult | None = None
+    calibration: MCDMCalibrationManifest | None = None
 
 
 class AssessmentWorkflow:
@@ -82,10 +93,16 @@ class AssessmentWorkflow:
         assessment_policy: AssessmentPolicy,
         normalization_policy: NormalizationPolicy,
         electre_configuration: ElectreIIIConfiguration,
+        robustness_configuration: RobustnessConfiguration | None = None,
+        calibration_manifest: MCDMCalibrationManifest | None = None,
     ) -> None:
         self._assessment_policy = assessment_policy
         self._normalization_policy = normalization_policy
         self._electre_configuration = electre_configuration
+        self._robustness_configuration = (
+            robustness_configuration or RobustnessConfiguration()
+        )
+        self._calibration_manifest = calibration_manifest
 
     @classmethod
     def from_environment(
@@ -118,6 +135,14 @@ class AssessmentWorkflow:
                     configured.get(
                         "GREENSMECAPT_ELECTRE_CONFIGURATION",
                         "config/electre_iii.development.json",
+                    )
+                )
+            ),
+            calibration_manifest=load_calibration_manifest(
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_MCDM_CALIBRATION",
+                        "config/mcdm_calibration.development.json",
                     )
                 )
             ),
@@ -185,16 +210,30 @@ class AssessmentWorkflow:
             configuration,
         )
 
+        fuzzy_topsis = run_fuzzy_topsis(
+            normalized_inputs,
+            comparable_topsis,
+        )
+        electre_iii = run_electre_iii(
+            normalized_inputs,
+            comparable_topsis,
+            self._electre_configuration,
+        )
+        robustness = analyze_ranking_robustness(
+            inputs=normalized_inputs,
+            cohort_configuration=configuration,
+            electre_configuration=self._electre_configuration,
+            baseline_topsis=comparable_topsis,
+            baseline_fuzzy_topsis=fuzzy_topsis,
+            baseline_electre=electre_iii,
+            configuration=self._robustness_configuration,
+        )
+
         return CohortAssessmentResult(
             preparations=tuple(preparations),
             comparable_topsis=comparable_topsis,
-            fuzzy_topsis=run_fuzzy_topsis(
-                normalized_inputs,
-                comparable_topsis,
-            ),
-            electre_iii=run_electre_iii(
-                normalized_inputs,
-                comparable_topsis,
-                self._electre_configuration,
-            ),
+            fuzzy_topsis=fuzzy_topsis,
+            electre_iii=electre_iii,
+            robustness=robustness,
+            calibration=self._calibration_manifest,
         )

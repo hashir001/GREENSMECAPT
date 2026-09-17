@@ -1,0 +1,57 @@
+{
+  "mapping_id": "greensmecapt_driver_to_criterion",
+  "version": "0.1.0",
+  "status": "development",
+  "source": "Model-informed prototype allocation pending structured expert review",
+  "review_required": true,
+  "allocations": [
+    {
+      "driver_id": "policy",
+      "criterion_shares": {
+        "green_contribution": 0.2,
+        "direct_operational_emissions": 0.15,
+        "purchased_energy_management": 0.1,
+        "resource_use_and_recovery": 0.1,
+        "customer_environmental_effect": 0.05,
+        "transition_execution": 0.4
+      },
+      "rationale": "Policy conditions most directly shape transition execution, compliance and operational commitments."
+    },
+    {
+      "driver_id": "social",
+      "criterion_shares": {
+        "green_contribution": 0.3,
+        "direct_operational_emissions": 0.02,
+        "purchased_energy_management": 0.03,
+        "resource_use_and_recovery": 0.15,
+        "customer_environmental_effect": 0.4,
+        "transition_execution": 0.1
+      },
+      "rationale": "Social demand is expressed mainly through customer impact, market value and visible green contribution."
+    },
+    {
+      "driver_id": "technology",
+      "criterion_shares": {
+        "green_contribution": 0.05,
+        "direct_operational_emissions": 0.1,
+        "purchased_energy_management": 0.25,
+        "resource_use_and_recovery": 0.2,
+        "customer_environmental_effect": 0.25,
+        "transition_execution": 0.15
+      },
+      "rationale": "Technology enables energy, circularity, product impact and practical transition delivery."
+    },
+    {
+      "driver_id": "internal",
+      "criterion_shares": {
+        "green_contribution": 0.1,
+        "direct_operational_emissions": 0.25,
+        "purchased_energy_management": 0.18,
+        "resource_use_and_recovery": 0.25,
+        "customer_environmental_effect": 0.05,
+        "transition_execution": 0.17
+      },
+      "rationale": "Internal capability controls measurement, operations, resource recovery and execution discipline."
+    }
+  ]
+}

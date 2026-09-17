@@ -82,6 +82,16 @@ class ElectreIIIConfiguration(ElectreModel):
         gt=0.0,
         le=1.0,
     )
+    distillation_alpha: float = Field(
+        default=0.30,
+        ge=0.0,
+        le=1.0,
+    )
+    distillation_beta: float = Field(
+        default=-0.15,
+        ge=-1.0,
+        le=1.0,
+    )
     projection: ElectreProjection = (
         ElectreProjection.CENTROID
     )
@@ -101,6 +111,12 @@ class ElectreIIIConfiguration(ElectreModel):
         ):
             raise ValueError(
                 "ELECTRE threshold criterion IDs must be unique."
+            )
+
+        if self.distillation_alpha + self.distillation_beta < 0.0:
+            raise ValueError(
+                "The distillation discrimination threshold must remain "
+                "non-negative across credibility values from zero to one."
             )
 
         return self
@@ -151,6 +167,8 @@ class ElectreIIIResult(ElectreModel):
     projected_performance: dict[str, dict[str, float]]
     ordered_outrankings: tuple[OrderedOutranking, ...]
     pair_relations: tuple[SMEPairRelation, ...]
+    descending_rank_levels: tuple[ElectreRankLevel, ...] = ()
+    ascending_rank_levels: tuple[ElectreRankLevel, ...] = ()
     rank_levels: tuple[ElectreRankLevel, ...]
     incomparable_pairs: tuple[tuple[str, str], ...]
 
@@ -275,30 +293,22 @@ def run_electre_iii(
                 )
             )
 
-    strict_edges = {
-        sme_id: set()
-        for sme_id in sorted_sme_ids
-    }
-
-    for pair in pair_relations:
-        if (
-            pair.relation
-            is PairRelation.LEFT_PREFERRED
-        ):
-            strict_edges[pair.left_sme_id].add(
-                pair.right_sme_id
-            )
-        elif (
-            pair.relation
-            is PairRelation.RIGHT_PREFERRED
-        ):
-            strict_edges[pair.right_sme_id].add(
-                pair.left_sme_id
-            )
-
-    rank_levels = _build_rank_levels(
+    descending_rank_levels = _distill_credibility(
         sorted_sme_ids,
-        strict_edges,
+        ordered_lookup,
+        configuration,
+        descending=True,
+    )
+    ascending_rank_levels = _distill_credibility(
+        sorted_sme_ids,
+        ordered_lookup,
+        configuration,
+        descending=False,
+    )
+    rank_levels = _combine_distillations(
+        sorted_sme_ids,
+        descending_rank_levels,
+        ascending_rank_levels,
     )
 
     incomparable_pairs = tuple(
@@ -322,6 +332,8 @@ def run_electre_iii(
         projected_performance=performance,
         ordered_outrankings=ordered_outrankings,
         pair_relations=tuple(pair_relations),
+        descending_rank_levels=descending_rank_levels,
+        ascending_rank_levels=ascending_rank_levels,
         rank_levels=rank_levels,
         incomparable_pairs=incomparable_pairs,
     )
@@ -569,6 +581,186 @@ def _resolve_weights(
         weights[criterion_id] = next(iter(candidates))
 
     return weights
+
+
+def _distill_credibility(
+    sme_ids: tuple[str, ...],
+    ordered_lookup: dict[tuple[str, str], OrderedOutranking],
+    configuration: ElectreIIIConfiguration,
+    *,
+    descending: bool,
+) -> tuple[ElectreRankLevel, ...]:
+    """Create one best-first order from the credibility relation."""
+
+    extracted = _distill_subset(
+        set(sme_ids),
+        ordered_lookup,
+        configuration,
+        descending=descending,
+    )
+
+    best_first = extracted if descending else list(reversed(extracted))
+
+    return tuple(
+        ElectreRankLevel(
+            level=level,
+            sme_ids=sme_group,
+        )
+        for level, sme_group in enumerate(best_first, start=1)
+    )
+
+
+def _distill_subset(
+    sme_ids: set[str],
+    ordered_lookup: dict[tuple[str, str], OrderedOutranking],
+    configuration: ElectreIIIConfiguration,
+    *,
+    descending: bool,
+) -> list[tuple[str, ...]]:
+    """Recursively refine a selected distillation group where possible."""
+
+    if len(sme_ids) <= 1:
+        return [tuple(sorted(sme_ids))]
+
+    qualifications = _distillation_qualifications(
+        sme_ids,
+        ordered_lookup,
+        configuration,
+    )
+    selected_qualification = (
+        max(qualifications.values())
+        if descending
+        else min(qualifications.values())
+    )
+    selected = {
+        sme_id
+        for sme_id, qualification in qualifications.items()
+        if qualification == selected_qualification
+    }
+
+    if selected == sme_ids:
+        return [tuple(sorted(sme_ids))]
+
+    remaining = sme_ids - selected
+
+    return [
+        *_distill_subset(
+            selected,
+            ordered_lookup,
+            configuration,
+            descending=descending,
+        ),
+        *_distill_subset(
+            remaining,
+            ordered_lookup,
+            configuration,
+            descending=descending,
+        ),
+    ]
+
+
+def _distillation_qualifications(
+    sme_ids: set[str],
+    ordered_lookup: dict[tuple[str, str], OrderedOutranking],
+    configuration: ElectreIIIConfiguration,
+) -> dict[str, int]:
+    """Measure net strong outranking within the remaining alternatives."""
+
+    credibility_values = [
+        ordered_lookup[(source, target)].credibility
+        for source in sme_ids
+        for target in sme_ids
+        if source != target
+    ]
+    maximum_credibility = max(credibility_values)
+    discrimination = _distillation_discrimination(
+        maximum_credibility,
+        configuration,
+    )
+    lower_values = [
+        value
+        for value in credibility_values
+        if value < maximum_credibility - discrimination
+    ]
+    cut_level = max(lower_values, default=0.0)
+    outranked_by = {sme_id: 0 for sme_id in sme_ids}
+    outranks = {sme_id: 0 for sme_id in sme_ids}
+
+    for source in sme_ids:
+        for target in sme_ids:
+            if source == target:
+                continue
+
+            forward = ordered_lookup[(source, target)].credibility
+            reverse = ordered_lookup[(target, source)].credibility
+
+            if (
+                forward > cut_level
+                and forward - reverse
+                > _distillation_discrimination(
+                    forward,
+                    configuration,
+                )
+            ):
+                outranks[source] += 1
+                outranked_by[target] += 1
+
+    return {
+        sme_id: outranks[sme_id] - outranked_by[sme_id]
+        for sme_id in sme_ids
+    }
+
+
+def _distillation_discrimination(
+    credibility: float,
+    configuration: ElectreIIIConfiguration,
+) -> float:
+    return max(
+        0.0,
+        configuration.distillation_alpha
+        + configuration.distillation_beta * credibility,
+    )
+
+
+def _combine_distillations(
+    sme_ids: tuple[str, ...],
+    descending_levels: tuple[ElectreRankLevel, ...],
+    ascending_levels: tuple[ElectreRankLevel, ...],
+) -> tuple[ElectreRankLevel, ...]:
+    """Intersect both orders without forcing conflicting comparisons."""
+
+    descending_rank = _level_lookup(descending_levels)
+    ascending_rank = _level_lookup(ascending_levels)
+    strict_edges = {sme_id: set() for sme_id in sme_ids}
+
+    for source in sme_ids:
+        for target in sme_ids:
+            if source == target:
+                continue
+
+            source_not_worse = (
+                descending_rank[source] <= descending_rank[target]
+                and ascending_rank[source] <= ascending_rank[target]
+            )
+            source_strictly_better = (
+                descending_rank[source] < descending_rank[target]
+                or ascending_rank[source] < ascending_rank[target]
+            )
+
+            if source_not_worse and source_strictly_better:
+                strict_edges[source].add(target)
+
+    return _build_rank_levels(sme_ids, strict_edges)
+
+
+def _level_lookup(
+    levels: tuple[ElectreRankLevel, ...],
+) -> dict[str, int]:
+    return {
+        sme_id: level.level
+        for level in levels
+        for sme_id in level.sme_ids
+    }
 
 
 def _build_rank_levels(

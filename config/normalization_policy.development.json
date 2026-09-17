@@ -1,8 +1,8 @@
 {
   "policy_id": "greensmecapt_normalization",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "status": "development",
-  "weight_source": "development_equal_weights_pending_fuzzy_dematel",
+  "weight_source": "model_informed_development_weights_pending_expert_calibration",
   "minimum_coverage_ratio": 0.6,
   "default_linguistic_scale": {
     "very_low": {
@@ -34,17 +34,17 @@
   "rules": [
     {
       "criterion_id": "green_contribution",
-      "base_weight": 1.0,
+      "base_weight": 0.24,
       "allow_linguistic": true
     },
     {
       "criterion_id": "direct_operational_emissions",
-      "base_weight": 1.0,
+      "base_weight": 0.13,
       "allow_linguistic": true
     },
     {
       "criterion_id": "purchased_energy_management",
-      "base_weight": 1.0,
+      "base_weight": 0.12,
       "allow_linguistic": true,
       "numeric_scale": {
         "lower_bound": 0.0,
@@ -60,17 +60,17 @@
     },
     {
       "criterion_id": "resource_use_and_recovery",
-      "base_weight": 1.0,
+      "base_weight": 0.16,
       "allow_linguistic": true
     },
     {
       "criterion_id": "customer_environmental_effect",
-      "base_weight": 1.0,
+      "base_weight": 0.22,
       "allow_linguistic": true
     },
     {
       "criterion_id": "transition_execution",
-      "base_weight": 1.0,
+      "base_weight": 0.13,
       "allow_linguistic": true
     }
   ]

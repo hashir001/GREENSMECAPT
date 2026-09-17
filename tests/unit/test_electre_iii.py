@@ -131,6 +131,12 @@ def test_clear_preference_creates_rank_levels() -> None:
     assert relation.relation is PairRelation.LEFT_PREFERRED
     assert result.rank_levels[0].sme_ids == ("strong_sme",)
     assert result.rank_levels[1].sme_ids == ("weaker_sme",)
+    assert result.descending_rank_levels[0].sme_ids == (
+        "strong_sme",
+    )
+    assert result.ascending_rank_levels[0].sme_ids == (
+        "strong_sme",
+    )
 
 
 def test_similar_smes_can_be_indifferent() -> None:
@@ -272,4 +278,6 @@ def test_load_project_electre_configuration() -> None:
     )
 
     assert configuration.credibility_cutoff == 0.65
+    assert configuration.distillation_alpha == 0.3
+    assert configuration.distillation_beta == -0.15
     assert len(configuration.thresholds) == 6
