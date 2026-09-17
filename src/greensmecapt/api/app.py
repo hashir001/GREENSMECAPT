@@ -42,6 +42,12 @@ from greensmecapt.security import (
     require_roles,
     verifier_from_environment,
 )
+from greensmecapt.services import (
+    DocumentProcessingError,
+    DocumentProcessingResult,
+    StoredDocumentProcessingService,
+    build_document_processing_service,
+)
 from greensmecapt.storage import (
     DocumentStorage,
     DocumentStorageError,
@@ -93,6 +99,7 @@ def create_app(
     database_url: str | None = None,
     token_verifier: TokenVerifier | None = None,
     document_storage: DocumentStorage | None = None,
+    document_processor: StoredDocumentProcessingService | None = None,
 ) -> FastAPI:
     """Create a secured database-bound application."""
 
@@ -110,6 +117,10 @@ def create_app(
             )
         )
     )
+    processing_service = (
+        document_processor
+        or build_document_processing_service(storage_backend)
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -118,7 +129,7 @@ def create_app(
 
     app = FastAPI(
         title="GREENSMECAPT API",
-        version="0.2.0",
+        version="0.3.0",
         description=(
             "Evidence-aware assessment and decision-support "
             "platform for green SMEs."
@@ -128,6 +139,7 @@ def create_app(
     app.state.database = database
     app.state.token_verifier = verifier
     app.state.document_storage = storage_backend
+    app.state.document_processor = processing_service
 
     def get_session() -> Iterator[Session]:
         with database.session() as session:
@@ -362,6 +374,96 @@ def create_app(
             storage_key=storage_key,
         )
 
+    @app.get(
+        "/smes/{sme_id}/documents/{document_id}/processing",
+        response_model=DocumentProcessingResult,
+    )
+    def get_document_processing(
+        sme_id: str,
+        document_id: str,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> DocumentProcessingResult:
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+        _require_document_for_sme(
+            repository=repository,
+            document_id=document_id,
+            sme_id=sme_id,
+        )
+
+        try:
+            return processing_service.get_result(
+                repository=repository,
+                document_id=document_id,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+    @app.post(
+        "/smes/{sme_id}/documents/{document_id}/process",
+        response_model=DocumentProcessingResult,
+    )
+    def process_document(
+        sme_id: str,
+        document_id: str,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_roles(
+                    ApplicationRole.ADMIN,
+                    ApplicationRole.REVIEWER,
+                    ApplicationRole.SME_USER,
+                )
+            ),
+        ],
+    ) -> DocumentProcessingResult:
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+        _require_document_for_sme(
+            repository=repository,
+            document_id=document_id,
+            sme_id=sme_id,
+        )
+
+        try:
+            return processing_service.process(
+                repository=repository,
+                document_id=document_id,
+                actor_id=principal.user_id,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except DocumentProcessingError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={
+                    "code": error.code,
+                    "message": error.message,
+                },
+            ) from error
+
     @app.patch(
         "/evidence/{evidence_id}/validation",
         response_model=EvidenceItem,
@@ -422,6 +524,29 @@ def _require_sme_access(
             detail=(
                 "The authenticated user cannot access this SME."
             ),
+        )
+
+
+def _require_document_for_sme(
+    *,
+    repository: GreenSMERepository,
+    document_id: str,
+    sme_id: str,
+) -> None:
+    """Reject missing documents and cross-SME path mismatches."""
+
+    try:
+        registration = repository.get_stored_document(document_id)
+    except PersistenceNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    if registration.document.sme_id != sme_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id!r} was not found.",
         )
 
 

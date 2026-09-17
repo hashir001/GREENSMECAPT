@@ -1,7 +1,11 @@
 """Construct the production document-reader graph."""
 
+from threading import Lock
+
+from PIL.Image import Image
 from pydantic import BaseModel, ConfigDict, Field
 
+from greensmecapt.document_intelligence.models import ExtractedPage
 from greensmecapt.document_intelligence.ports import DocumentReader
 from greensmecapt.document_intelligence.readers.adaptive_pdf import (
     AdaptivePdfDocumentReader,
@@ -24,6 +28,43 @@ from greensmecapt.document_intelligence.structure import (
     PaddleStructuredPageParser,
     StructuredPageParser,
 )
+
+
+class LazyPaddleStructuredPageParser:
+    """Load Paddle models only when a page truly requires OCR."""
+
+    def __init__(
+        self,
+        configuration: PaddleParserConfiguration,
+    ) -> None:
+        self._configuration = configuration
+        self._parser: PaddleStructuredPageParser | None = None
+        self._lock = Lock()
+
+    def parse(
+        self,
+        image: Image,
+        *,
+        page_number: int,
+    ) -> ExtractedPage:
+        """Initialize once, then delegate structured page parsing."""
+
+        parser = self._parser
+
+        if parser is None:
+            with self._lock:
+                parser = self._parser
+
+                if parser is None:
+                    parser = PaddleStructuredPageParser(
+                        self._configuration
+                    )
+                    self._parser = parser
+
+        return parser.parse(
+            image,
+            page_number=page_number,
+        )
 
 
 class ProductionReaderConfiguration(BaseModel):
@@ -57,7 +98,7 @@ def build_production_document_reader(
     resolved_structured_parser = (
         structured_parser
         if structured_parser is not None
-        else PaddleStructuredPageParser(resolved.paddle)
+        else LazyPaddleStructuredPageParser(resolved.paddle)
     )
 
     resolved_fallback = fallback_ocr_engine

@@ -43,6 +43,37 @@ class DocumentRow(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utc_now)
 
 
+class DocumentProcessingRow(SQLModel, table=True):
+    """Persist the processing lifecycle for one source document."""
+
+    __tablename__ = "document_processing"
+
+    document_id: str = Field(
+        primary_key=True,
+        foreign_key="documents.document_id",
+    )
+    sme_id: str = Field(
+        foreign_key="smes.sme_id",
+        index=True,
+    )
+    status: str = Field(default="stored", index=True)
+    attempt_count: int = Field(default=0)
+
+    evidence_count: int = Field(default=0)
+    deterministic_evidence_count: int = Field(default=0)
+    intelligent_evidence_count: int = Field(default=0)
+    rejected_intelligent_claim_count: int = Field(default=0)
+    intelligent_provider_status: str | None = Field(default=None)
+
+    failure_code: str | None = Field(default=None)
+    failure_message: str | None = Field(default=None)
+    report_json: str | None = Field(default=None)
+
+    started_at: datetime | None = Field(default=None)
+    completed_at: datetime | None = Field(default=None)
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+
 class EvidenceRow(SQLModel, table=True):
     """Persist one traceable extracted fact."""
 

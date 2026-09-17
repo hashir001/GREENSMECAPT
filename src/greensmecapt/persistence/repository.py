@@ -1,12 +1,15 @@
 """Transactional persistence for GREENSMECAPT domain records."""
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
 from greensmecapt.domain import (
     SME,
+    DocumentProcessingState,
+    DocumentProcessingStatus,
     DocumentType,
     EvidenceItem,
     EvidenceValidationStatus,
@@ -15,6 +18,7 @@ from greensmecapt.domain import (
 )
 from greensmecapt.persistence.tables import (
     AuditEventRow,
+    DocumentProcessingRow,
     DocumentRow,
     EvidenceRow,
     SMERow,
@@ -27,6 +31,14 @@ class PersistenceConflictError(ValueError):
 
 class PersistenceNotFoundError(LookupError):
     """Raised when a requested persistent entity is absent."""
+
+
+@dataclass(frozen=True)
+class StoredDocumentRegistration:
+    """Join source metadata to its opaque storage reference."""
+
+    document: SourceDocument
+    storage_key: str
 
 
 class GreenSMERepository:
@@ -94,6 +106,20 @@ class GreenSMERepository:
 
             row.storage_key = storage_key
             self._session.add(row)
+
+            processing_row = self._session.get(
+                DocumentProcessingRow,
+                document.document_id,
+            )
+
+            if processing_row is None:
+                self._session.add(
+                    DocumentProcessingRow(
+                        document_id=document.document_id,
+                        sme_id=document.sme_id,
+                    )
+                )
+
             self._session.add(
                 AuditEventRow(
                     sme_id=document.sme_id,
@@ -116,6 +142,309 @@ class GreenSMERepository:
             raise
 
         return document
+
+    def get_stored_document(
+        self,
+        document_id: str,
+    ) -> StoredDocumentRegistration:
+        """Return document metadata and its storage reference."""
+
+        row = self._session.get(DocumentRow, document_id)
+
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"Document {document_id!r} was not found."
+            )
+
+        if row.storage_key is None:
+            raise PersistenceNotFoundError(
+                f"Document {document_id!r} has no stored content."
+            )
+
+        return StoredDocumentRegistration(
+            document=_document_from_row(row),
+            storage_key=row.storage_key,
+        )
+
+    def get_document_processing_state(
+        self,
+        document_id: str,
+    ) -> DocumentProcessingState:
+        """Return durable processing progress for one document."""
+
+        document = self._session.get(DocumentRow, document_id)
+
+        if document is None:
+            raise PersistenceNotFoundError(
+                f"Document {document_id!r} was not found."
+            )
+
+        row = self._session.get(
+            DocumentProcessingRow,
+            document_id,
+        )
+
+        if row is None:
+            return _processing_state_from_row(
+                DocumentProcessingRow(
+                    document_id=document.document_id,
+                    sme_id=document.sme_id,
+                    updated_at=document.created_at,
+                )
+            )
+
+        return _processing_state_from_row(row)
+
+    def begin_document_processing(
+        self,
+        *,
+        document_id: str,
+        actor_id: str,
+    ) -> DocumentProcessingState:
+        """Start or retry processing without duplicating completed work."""
+
+        document = self._session.get(DocumentRow, document_id)
+
+        if document is None:
+            raise PersistenceNotFoundError(
+                f"Document {document_id!r} was not found."
+            )
+
+        row = self._session.get(
+            DocumentProcessingRow,
+            document_id,
+        )
+
+        if row is None:
+            row = DocumentProcessingRow(
+                document_id=document.document_id,
+                sme_id=document.sme_id,
+            )
+
+        current_status = DocumentProcessingStatus(row.status)
+
+        if current_status is DocumentProcessingStatus.COMPLETED:
+            return _processing_state_from_row(row)
+
+        if current_status is DocumentProcessingStatus.PROCESSING:
+            raise PersistenceConflictError(
+                f"Document {document_id!r} is already being processed."
+            )
+
+        started_at = datetime.now(UTC)
+        row.status = DocumentProcessingStatus.PROCESSING.value
+        row.attempt_count += 1
+        row.evidence_count = 0
+        row.deterministic_evidence_count = 0
+        row.intelligent_evidence_count = 0
+        row.rejected_intelligent_claim_count = 0
+        row.intelligent_provider_status = None
+        row.failure_code = None
+        row.failure_message = None
+        row.report_json = None
+        row.started_at = started_at
+        row.completed_at = None
+        row.updated_at = started_at
+
+        try:
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=document.sme_id,
+                    entity_type="document",
+                    entity_id=document.document_id,
+                    action="document_processing_started",
+                    actor_id=actor_id,
+                    new_value_json=json.dumps(
+                        {
+                            "attempt_count": row.attempt_count,
+                            "status": row.status,
+                        }
+                    ),
+                )
+            )
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _processing_state_from_row(row)
+
+    def complete_document_processing(
+        self,
+        *,
+        document_id: str,
+        evidence_items: tuple[EvidenceItem, ...],
+        deterministic_evidence_count: int,
+        intelligent_evidence_count: int,
+        rejected_intelligent_claim_count: int,
+        intelligent_provider_status: str,
+        report_json: str,
+        actor_id: str,
+    ) -> DocumentProcessingState:
+        """Persist extracted evidence and mark processing complete."""
+
+        row = self._require_processing_row(document_id)
+
+        if (
+            DocumentProcessingStatus(row.status)
+            is not DocumentProcessingStatus.PROCESSING
+        ):
+            raise PersistenceConflictError(
+                "Only an active processing attempt can be completed."
+            )
+
+        for evidence in evidence_items:
+            if (
+                evidence.document_id != row.document_id
+                or evidence.sme_id != row.sme_id
+            ):
+                raise PersistenceConflictError(
+                    "Extracted evidence does not belong to the "
+                    "processing document."
+                )
+
+        completed_at = datetime.now(UTC)
+
+        try:
+            for evidence in evidence_items:
+                self._save_evidence(evidence)
+
+            row.status = DocumentProcessingStatus.COMPLETED.value
+            row.evidence_count = len(evidence_items)
+            row.deterministic_evidence_count = (
+                deterministic_evidence_count
+            )
+            row.intelligent_evidence_count = intelligent_evidence_count
+            row.rejected_intelligent_claim_count = (
+                rejected_intelligent_claim_count
+            )
+            row.intelligent_provider_status = intelligent_provider_status
+            row.failure_code = None
+            row.failure_message = None
+            row.report_json = report_json
+            row.completed_at = completed_at
+            row.updated_at = completed_at
+
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=row.sme_id,
+                    entity_type="document",
+                    entity_id=row.document_id,
+                    action="document_processing_completed",
+                    actor_id=actor_id,
+                    new_value_json=json.dumps(
+                        {
+                            "evidence_count": len(evidence_items),
+                            "status": row.status,
+                        }
+                    ),
+                )
+            )
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _processing_state_from_row(row)
+
+    def fail_document_processing(
+        self,
+        *,
+        document_id: str,
+        failure_code: str,
+        failure_message: str,
+        actor_id: str,
+    ) -> DocumentProcessingState:
+        """Record a controlled failure while keeping the file retryable."""
+
+        row = self._require_processing_row(document_id)
+
+        if (
+            DocumentProcessingStatus(row.status)
+            is DocumentProcessingStatus.COMPLETED
+        ):
+            return _processing_state_from_row(row)
+
+        if (
+            DocumentProcessingStatus(row.status)
+            is not DocumentProcessingStatus.PROCESSING
+        ):
+            raise PersistenceConflictError(
+                "Only an active processing attempt can fail."
+            )
+
+        completed_at = datetime.now(UTC)
+        row.status = DocumentProcessingStatus.FAILED.value
+        row.failure_code = failure_code
+        row.failure_message = failure_message
+        row.completed_at = completed_at
+        row.updated_at = completed_at
+
+        try:
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=row.sme_id,
+                    entity_type="document",
+                    entity_id=row.document_id,
+                    action="document_processing_failed",
+                    actor_id=actor_id,
+                    reason=failure_message,
+                    new_value_json=json.dumps(
+                        {
+                            "failure_code": failure_code,
+                            "status": row.status,
+                        }
+                    ),
+                )
+            )
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _processing_state_from_row(row)
+
+    def get_document_processing_report(
+        self,
+        document_id: str,
+    ) -> str | None:
+        """Return the stored semantic diagnostics JSON, when available."""
+
+        row = self._session.get(
+            DocumentProcessingRow,
+            document_id,
+        )
+
+        if row is None:
+            self.get_stored_document(document_id)
+            return None
+
+        return row.report_json
+
+    def list_document_evidence(
+        self,
+        document_id: str,
+    ) -> tuple[EvidenceItem, ...]:
+        """Return evidence from one document in stable order."""
+
+        if self._session.get(DocumentRow, document_id) is None:
+            raise PersistenceNotFoundError(
+                f"Document {document_id!r} was not found."
+            )
+
+        rows = self._session.exec(
+            select(EvidenceRow)
+            .where(EvidenceRow.document_id == document_id)
+            .order_by(EvidenceRow.evidence_id)
+        ).all()
+
+        return tuple(_evidence_from_row(row) for row in rows)
 
     def get_sme(self, sme_id: str) -> SME:
         """Return one SME or raise a controlled error."""
@@ -351,6 +680,22 @@ class GreenSMERepository:
                 "different data."
             )
 
+    def _require_processing_row(
+        self,
+        document_id: str,
+    ) -> DocumentProcessingRow:
+        row = self._session.get(
+            DocumentProcessingRow,
+            document_id,
+        )
+
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"Document {document_id!r} has no processing state."
+            )
+
+        return row
+
 
 def _sme_row(sme: SME) -> SMERow:
     return SMERow(
@@ -472,4 +817,29 @@ def _evidence_signature(
         row.extractor_version,
         row.confidence,
         row.validation_status,
+    )
+
+
+def _processing_state_from_row(
+    row: DocumentProcessingRow,
+) -> DocumentProcessingState:
+    return DocumentProcessingState(
+        document_id=row.document_id,
+        sme_id=row.sme_id,
+        status=DocumentProcessingStatus(row.status),
+        attempt_count=row.attempt_count,
+        evidence_count=row.evidence_count,
+        deterministic_evidence_count=(
+            row.deterministic_evidence_count
+        ),
+        intelligent_evidence_count=row.intelligent_evidence_count,
+        rejected_intelligent_claim_count=(
+            row.rejected_intelligent_claim_count
+        ),
+        intelligent_provider_status=row.intelligent_provider_status,
+        failure_code=row.failure_code,
+        failure_message=row.failure_message,
+        started_at=row.started_at,
+        completed_at=row.completed_at,
+        updated_at=row.updated_at,
     )
