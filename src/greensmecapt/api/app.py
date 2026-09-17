@@ -20,6 +20,8 @@ from fastapi import (
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
+from greensmecapt.api.assessment import build_assessment_router
+from greensmecapt.assessment.workflow import AssessmentWorkflow
 from greensmecapt.domain import (
     SME,
     DocumentType,
@@ -140,10 +142,18 @@ def create_app(
     app.state.token_verifier = verifier
     app.state.document_storage = storage_backend
     app.state.document_processor = processing_service
+    app.state.assessment_workflow = AssessmentWorkflow.from_environment()
 
     def get_session() -> Iterator[Session]:
         with database.session() as session:
             yield session
+
+    app.include_router(
+        build_assessment_router(
+            get_session=get_session,
+            workflow=app.state.assessment_workflow,
+        )
+    )
 
     @app.get("/health")
     def health() -> dict[str, str]:
