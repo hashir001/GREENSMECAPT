@@ -55,6 +55,68 @@ class GreenSMERepository:
             self._session.rollback()
             raise
 
+    def attach_document(
+        self,
+        *,
+        document: SourceDocument,
+        storage_key: str,
+        actor_id: str,
+    ) -> SourceDocument:
+        """Persist uploaded metadata and its storage reference."""
+
+        if self._session.get(SMERow, document.sme_id) is None:
+            raise PersistenceNotFoundError(
+                f"SME {document.sme_id!r} was not found."
+            )
+
+        try:
+            self._save_document(document)
+            self._session.flush()
+
+            row = self._session.get(
+                DocumentRow,
+                document.document_id,
+            )
+
+            if row is None:
+                raise PersistenceNotFoundError(
+                    "Uploaded document could not be persisted."
+                )
+
+            if (
+                row.storage_key is not None
+                and row.storage_key != storage_key
+            ):
+                raise PersistenceConflictError(
+                    "Document already references another "
+                    "stored object."
+                )
+
+            row.storage_key = storage_key
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=document.sme_id,
+                    entity_type="document",
+                    entity_id=document.document_id,
+                    action="document_uploaded",
+                    actor_id=actor_id,
+                    reason=document.file_name,
+                    new_value_json=json.dumps(
+                        {
+                            "storage_key": storage_key,
+                            "sha256": document.sha256,
+                        }
+                    ),
+                )
+            )
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return document
+
     def get_sme(self, sme_id: str) -> SME:
         """Return one SME or raise a controlled error."""
 

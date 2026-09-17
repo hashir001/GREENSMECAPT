@@ -1,13 +1,20 @@
 """FastAPI application for GREENSMECAPT."""
 
+import os
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from hashlib import sha256
+from pathlib import Path
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import (
     Depends,
     FastAPI,
+    File,
+    Form,
     HTTPException,
+    UploadFile,
     status,
 )
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,8 +22,10 @@ from sqlmodel import Session
 
 from greensmecapt.domain import (
     SME,
+    DocumentType,
     EvidenceItem,
     EvidenceValidationStatus,
+    SourceDocument,
     StructuredInvestmentRecord,
 )
 from greensmecapt.persistence import (
@@ -24,6 +33,30 @@ from greensmecapt.persistence import (
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
+)
+from greensmecapt.security import (
+    ApplicationRole,
+    AuthPrincipal,
+    TokenVerifier,
+    get_current_principal,
+    require_roles,
+    verifier_from_environment,
+)
+from greensmecapt.storage import (
+    DocumentStorage,
+    DocumentStorageError,
+    LocalDocumentStorage,
+)
+
+_MAXIMUM_UPLOAD_BYTES = 20 * 1024 * 1024
+_ALLOWED_MIME_TYPES = frozenset(
+    {
+        "application/pdf",
+        "text/plain",
+        "image/jpeg",
+        "image/png",
+        "image/tiff",
+    }
 )
 
 
@@ -36,20 +69,47 @@ class EvidenceValidationRequest(BaseModel):
     )
 
     status: EvidenceValidationStatus
-    actor_id: str = Field(min_length=1)
     reason: str | None = Field(
         default=None,
         min_length=1,
     )
 
 
+class DocumentUploadResponse(BaseModel):
+    """Return registered metadata for an uploaded document."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+    document: SourceDocument
+    storage_key: str = Field(min_length=1)
+    processing_status: str = "stored"
+
+
 def create_app(
     *,
     database_url: str | None = None,
+    token_verifier: TokenVerifier | None = None,
+    document_storage: DocumentStorage | None = None,
 ) -> FastAPI:
-    """Create a database-bound application."""
+    """Create a secured database-bound application."""
 
     database = Database(database_url)
+    verifier = (
+        token_verifier
+        or verifier_from_environment()
+    )
+    storage_backend = (
+        document_storage
+        or LocalDocumentStorage(
+            os.environ.get(
+                "GREENSMECAPT_STORAGE_ROOT",
+                "./data/documents",
+            )
+        )
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -58,7 +118,7 @@ def create_app(
 
     app = FastAPI(
         title="GREENSMECAPT API",
-        version="0.1.0",
+        version="0.2.0",
         description=(
             "Evidence-aware assessment and decision-support "
             "platform for green SMEs."
@@ -66,17 +126,15 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.database = database
+    app.state.token_verifier = verifier
+    app.state.document_storage = storage_backend
 
     def get_session() -> Iterator[Session]:
         with database.session() as session:
             yield session
 
-    
-
     @app.get("/health")
     def health() -> dict[str, str]:
-        """Report API availability."""
-
         return {"status": "ready"}
 
     @app.post(
@@ -86,10 +144,17 @@ def create_app(
     )
     def create_sme(
         sme: SME,
-        session: Annotated[Session, Depends(get_session)],
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_roles(ApplicationRole.ADMIN)
+            ),
+        ],
     ) -> SME:
-        """Persist one SME."""
-
         repository = GreenSMERepository(session)
 
         try:
@@ -109,13 +174,24 @@ def create_app(
         response_model=tuple[SME, ...],
     )
     def list_smes(
-        session: Annotated[Session, Depends(get_session)],
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
     ) -> tuple[SME, ...]:
-        """List registered SMEs."""
-
-        return GreenSMERepository(
+        smes = GreenSMERepository(
             session
         ).list_smes()
+
+        return tuple(
+            sme
+            for sme in smes
+            if principal.can_access_sme(sme.sme_id)
+        )
 
     @app.get(
         "/smes/{sme_id}",
@@ -123,9 +199,16 @@ def create_app(
     )
     def get_sme(
         sme_id: str,
-        session: Annotated[Session, Depends(get_session)],
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
     ) -> SME:
-        """Return one SME."""
+        _require_sme_access(principal, sme_id)
 
         try:
             return GreenSMERepository(
@@ -143,9 +226,16 @@ def create_app(
     )
     def get_record(
         sme_id: str,
-        session: Annotated[Session, Depends(get_session)],
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
     ) -> StructuredInvestmentRecord:
-        """Return documents and evidence for one SME."""
+        _require_sme_access(principal, sme_id)
 
         try:
             return GreenSMERepository(
@@ -157,6 +247,121 @@ def create_app(
                 detail=str(error),
             ) from error
 
+    @app.post(
+        "/smes/{sme_id}/documents",
+        response_model=DocumentUploadResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def upload_document(
+        sme_id: str,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_roles(
+                    ApplicationRole.ADMIN,
+                    ApplicationRole.REVIEWER,
+                    ApplicationRole.SME_USER,
+                )
+            ),
+        ],
+        file: Annotated[UploadFile, File()],
+        document_type: Annotated[
+            DocumentType,
+            Form(),
+        ] = DocumentType.UNKNOWN,
+    ) -> DocumentUploadResponse:
+        _require_sme_access(principal, sme_id)
+
+        repository = GreenSMERepository(session)
+
+        try:
+            repository.get_sme(sme_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+        mime_type = file.content_type or ""
+
+        if mime_type not in _ALLOWED_MIME_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail=(
+                    f"Unsupported document MIME type: "
+                    f"{mime_type!r}."
+                ),
+            )
+
+        content = await file.read(
+            _MAXIMUM_UPLOAD_BYTES + 1
+        )
+
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded document is empty.",
+            )
+
+        if len(content) > _MAXIMUM_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="Uploaded document exceeds 20 MiB.",
+            )
+
+        original_name = (
+            file.filename or "uploaded-document"
+        )
+        safe_name = Path(
+            original_name.replace("\\", "/")
+        ).name
+
+        if not safe_name:
+            safe_name = "uploaded-document"
+
+        document = SourceDocument(
+            document_id=f"doc_{uuid4().hex}",
+            sme_id=sme_id,
+            file_name=safe_name,
+            mime_type=mime_type,
+            sha256=sha256(content).hexdigest(),
+            document_type=document_type,
+        )
+
+        try:
+            storage_key = storage_backend.save(
+                sme_id=sme_id,
+                document_id=document.document_id,
+                sha256=document.sha256,
+                content=content,
+            )
+
+            repository.attach_document(
+                document=document,
+                storage_key=storage_key,
+                actor_id=principal.user_id,
+            )
+        except (
+            DocumentStorageError,
+            PersistenceConflictError,
+        ) as error:
+            if "storage_key" in locals():
+                storage_backend.delete(storage_key)
+
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+
+        return DocumentUploadResponse(
+            document=document,
+            storage_key=storage_key,
+        )
+
     @app.patch(
         "/evidence/{evidence_id}/validation",
         response_model=EvidenceItem,
@@ -164,17 +369,36 @@ def create_app(
     def validate_evidence(
         evidence_id: str,
         request: EvidenceValidationRequest,
-        session: Annotated[Session, Depends(get_session)],
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_roles(
+                    ApplicationRole.ADMIN,
+                    ApplicationRole.REVIEWER,
+                )
+            ),
+        ],
     ) -> EvidenceItem:
-        """Accept or reject extracted evidence."""
-
         try:
+            evidence = GreenSMERepository(
+                session
+            ).get_evidence(evidence_id)
+
+            _require_sme_access(
+                principal,
+                evidence.sme_id,
+            )
+
             return GreenSMERepository(
                 session
             ).set_evidence_validation(
                 evidence_id=evidence_id,
                 status=request.status,
-                actor_id=request.actor_id,
+                actor_id=principal.user_id,
                 reason=request.reason,
             )
         except PersistenceNotFoundError as error:
@@ -184,6 +408,21 @@ def create_app(
             ) from error
 
     return app
+
+
+def _require_sme_access(
+    principal: AuthPrincipal,
+    sme_id: str,
+) -> None:
+    """Reject access outside an SME user's assignment."""
+
+    if not principal.can_access_sme(sme_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "The authenticated user cannot access this SME."
+            ),
+        )
 
 
 app = create_app()

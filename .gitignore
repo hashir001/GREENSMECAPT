@@ -14,6 +14,14 @@ htmlcov/
 
 # Local environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Local databases and uploaded documents
+*.db
+*.db-shm
+*.db-wal
+data/documents/
 
 # Operating-system-generated files
 .DS_Store
@@ -33,13 +41,3 @@ data/processed/*
 *.egg-info/
 build/
 dist/
-
-# Local project data
-data/raw/*
-!data/raw/.gitkeep
-
-data/interim/*
-!data/interim/.gitkeep
-
-data/processed/*
-!data/processed/.gitkeep
