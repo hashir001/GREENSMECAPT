@@ -18,11 +18,14 @@ from greensmecapt.assessment.profiles import AssessmentContext
 from greensmecapt.assessment.workflow import (
     AssessmentWorkflow,
     AssessmentWorkflowError,
-    CohortAssessmentResult,
     PreparedAssessment,
 )
 from greensmecapt.persistence import (
+    AssessmentRunRecord,
+    AssessmentRunRepository,
+    AssessmentRunSummary,
     GreenSMERepository,
+    PersistenceConflictError,
     PersistenceNotFoundError,
 )
 from greensmecapt.security import (
@@ -53,6 +56,7 @@ class CohortAssessmentRequest(BaseModel):
         str_strip_whitespace=True,
     )
 
+    run_id: str = Field(min_length=1)
     cohort_id: str = Field(min_length=1)
     version: str = Field(min_length=1)
     minimum_shared_criteria: int = Field(default=2, ge=1)
@@ -73,10 +77,18 @@ def build_assessment_router(
 ) -> APIRouter:
     """Build assessment routes with application-owned dependencies."""
 
-    router = APIRouter(prefix="/assessments", tags=["assessments"])
+    router = APIRouter(
+        prefix="/assessments",
+        tags=["assessments"],
+    )
     reviewer_dependency = require_roles(
         ApplicationRole.ADMIN,
         ApplicationRole.REVIEWER,
+    )
+    results_dependency = require_roles(
+        ApplicationRole.ADMIN,
+        ApplicationRole.REVIEWER,
+        ApplicationRole.INVESTOR,
     )
 
     @router.post(
@@ -97,7 +109,10 @@ def build_assessment_router(
         repository = GreenSMERepository(session)
 
         try:
-            record = repository.get_record(submission.context.sme_id)
+            record = repository.get_record(
+                submission.context.sme_id
+            )
+
             return workflow.prepare(
                 record=record,
                 context=submission.context,
@@ -108,7 +123,10 @@ def build_assessment_router(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
             ) from error
-        except (AssessmentWorkflowError, ValueError) as error:
+        except (
+            AssessmentWorkflowError,
+            ValueError,
+        ) as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(error),
@@ -116,7 +134,7 @@ def build_assessment_router(
 
     @router.post(
         "/compare",
-        response_model=CohortAssessmentResult,
+        response_model=AssessmentRunRecord,
     )
     def compare_assessments(
         request: CohortAssessmentRequest,
@@ -125,10 +143,9 @@ def build_assessment_router(
             AuthPrincipal,
             Depends(reviewer_dependency),
         ],
-    ) -> CohortAssessmentResult:
-        """Prepare and compare SMEs from one consistent policy snapshot."""
+    ) -> AssessmentRunRecord:
+        """Prepare, compare and persist SMEs using one policy snapshot."""
 
-        del principal
         repository = GreenSMERepository(session)
 
         try:
@@ -143,7 +160,7 @@ def build_assessment_router(
                 for submission in request.submissions
             )
 
-            return workflow.compare(
+            result = workflow.compare(
                 preparations,
                 CohortConfiguration(
                     cohort_id=request.cohort_id,
@@ -156,9 +173,20 @@ def build_assessment_router(
                     ),
                 ),
             )
+
+            return AssessmentRunRepository(session).save(
+                run_id=request.run_id,
+                result=result,
+                actor_id=principal.user_id,
+            )
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
         except (
@@ -170,6 +198,46 @@ def build_assessment_router(
         ) as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+    @router.get(
+        "/runs",
+        response_model=tuple[AssessmentRunSummary, ...],
+    )
+    def list_assessment_runs(
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(results_dependency),
+        ],
+    ) -> tuple[AssessmentRunSummary, ...]:
+        """List completed comparisons without returning large matrices."""
+
+        del principal
+        return AssessmentRunRepository(session).list()
+
+    @router.get(
+        "/runs/{run_id}",
+        response_model=AssessmentRunRecord,
+    )
+    def get_assessment_run(
+        run_id: str,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(results_dependency),
+        ],
+    ) -> AssessmentRunRecord:
+        """Return a complete immutable comparison for inspection."""
+
+        del principal
+
+        try:
+            return AssessmentRunRepository(session).get(run_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
             ) from error
 

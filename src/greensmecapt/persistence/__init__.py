@@ -1,5 +1,11 @@
 """Persistent storage for GREENSMECAPT."""
 
+from greensmecapt.persistence.assessment_runs import (
+    AssessmentRunRecord,
+    AssessmentRunRepository,
+    AssessmentRunRow,
+    AssessmentRunSummary,
+)
 from greensmecapt.persistence.database import Database
 from greensmecapt.persistence.repository import (
     GreenSMERepository,
@@ -16,10 +22,14 @@ from greensmecapt.persistence.tables import (
 )
 
 __all__ = [
+    "AssessmentRunRecord",
+    "AssessmentRunRepository",
+    "AssessmentRunRow",
+    "AssessmentRunSummary",
     "AuditEventRow",
     "Database",
-    "DocumentRow",
     "DocumentProcessingRow",
+    "DocumentRow",
     "EvidenceRow",
     "GreenSMERepository",
     "PersistenceConflictError",
