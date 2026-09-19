@@ -13,8 +13,12 @@ from greensmecapt.assessment.cohort import (
 )
 from greensmecapt.assessment.electre_iii import ElectreIIIError
 from greensmecapt.assessment.fuzzy_topsis import FuzzyTopsisError
+from greensmecapt.assessment.normalization import NormalizationPolicy
 from greensmecapt.assessment.observations import CriterionResponse
-from greensmecapt.assessment.profiles import AssessmentContext
+from greensmecapt.assessment.profiles import (
+    AssessmentContext,
+    AssessmentPolicy,
+)
 from greensmecapt.assessment.workflow import (
     AssessmentWorkflow,
     AssessmentWorkflowError,
@@ -70,6 +74,18 @@ class CohortAssessmentRequest(BaseModel):
     )
 
 
+class AssessmentConfigurationResponse(BaseModel):
+    """Return the exact versioned policies that drive assessment forms."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+    assessment_policy: AssessmentPolicy
+    normalization_policy: NormalizationPolicy
+
+
 def build_assessment_router(
     *,
     get_session: Callable[[], Iterator[Session]],
@@ -77,10 +93,7 @@ def build_assessment_router(
 ) -> APIRouter:
     """Build assessment routes with application-owned dependencies."""
 
-    router = APIRouter(
-        prefix="/assessments",
-        tags=["assessments"],
-    )
+    router = APIRouter(prefix="/assessments", tags=["assessments"])
     reviewer_dependency = require_roles(
         ApplicationRole.ADMIN,
         ApplicationRole.REVIEWER,
@@ -90,6 +103,24 @@ def build_assessment_router(
         ApplicationRole.REVIEWER,
         ApplicationRole.INVESTOR,
     )
+
+    @router.get(
+        "/configuration",
+        response_model=AssessmentConfigurationResponse,
+    )
+    def get_assessment_configuration(
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(reviewer_dependency),
+        ],
+    ) -> AssessmentConfigurationResponse:
+        """Describe the authoritative questions, criteria and rating scale."""
+
+        del principal
+        return AssessmentConfigurationResponse(
+            assessment_policy=workflow.assessment_policy,
+            normalization_policy=workflow.normalization_policy,
+        )
 
     @router.post(
         "/prepare",
@@ -109,10 +140,7 @@ def build_assessment_router(
         repository = GreenSMERepository(session)
 
         try:
-            record = repository.get_record(
-                submission.context.sme_id
-            )
-
+            record = repository.get_record(submission.context.sme_id)
             return workflow.prepare(
                 record=record,
                 context=submission.context,
@@ -123,10 +151,7 @@ def build_assessment_router(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
             ) from error
-        except (
-            AssessmentWorkflowError,
-            ValueError,
-        ) as error:
+        except (AssessmentWorkflowError, ValueError) as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(error),
@@ -144,7 +169,7 @@ def build_assessment_router(
             Depends(reviewer_dependency),
         ],
     ) -> AssessmentRunRecord:
-        """Prepare, compare and persist SMEs using one policy snapshot."""
+        """Prepare and compare SMEs from one consistent policy snapshot."""
 
         repository = GreenSMERepository(session)
 

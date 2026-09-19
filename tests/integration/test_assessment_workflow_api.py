@@ -12,13 +12,8 @@ from greensmecapt.security import (
 )
 from greensmecapt.storage import LocalDocumentStorage
 
-ADMIN_HEADERS = {
-    "Authorization": "Bearer admin-token",
-}
-
-INVESTOR_HEADERS = {
-    "Authorization": "Bearer investor-token",
-}
+ADMIN_HEADERS = {"Authorization": "Bearer admin-token"}
+INVESTOR_HEADERS = {"Authorization": "Bearer investor-token"}
 
 
 class FakeTokenVerifier:
@@ -41,8 +36,6 @@ class FakeTokenVerifier:
 
 
 def _client(tmp_path: Path) -> TestClient:
-    """Create an isolated API client."""
-
     return TestClient(
         create_app(
             database_url=(
@@ -60,8 +53,6 @@ def _create_sme(
     client: TestClient,
     sme_id: str,
 ) -> None:
-    """Create one SME used by an assessment test."""
-
     response = client.post(
         "/smes",
         headers=ADMIN_HEADERS,
@@ -76,18 +67,11 @@ def _create_sme(
     assert response.status_code == 201
 
 
-def _submission(
-    sme_id: str,
-    rating: str,
-) -> dict:
-    """Build one reviewer-controlled assessment submission."""
-
+def _submission(sme_id: str, rating: str) -> dict:
     return {
         "context": {
             "sme_id": sme_id,
-            "activity_description": (
-                "Environmental service provider."
-            ),
+            "activity_description": "Environmental service provider.",
             "facts": {
                 "manufactures_or_processes": False,
                 "burns_fuel_on_site": False,
@@ -118,9 +102,7 @@ def _submission(
     }
 
 
-def test_compare_smes_through_api(
-    tmp_path: Path,
-) -> None:
+def test_compare_smes_through_api(tmp_path: Path) -> None:
     """The API should return all configured comparison methods."""
 
     with _client(tmp_path) as client:
@@ -136,62 +118,43 @@ def test_compare_smes_through_api(
                 "version": "1.0",
                 "minimum_shared_criteria": 1,
                 "submissions": [
-                    _submission(
-                        "sme_strong",
-                        "very_high",
-                    ),
-                    _submission(
-                        "sme_weaker",
-                        "low",
-                    ),
+                    _submission("sme_strong", "very_high"),
+                    _submission("sme_weaker", "low"),
                 ],
             },
         )
 
     assert response.status_code == 200
-
     record = response.json()
     result = record["result"]
-
     assert record["run_id"] == "run_001"
     assert (
         result["comparable_topsis"]["topsis_result"]
         ["ranking"][0]["sme_id"]
         == "sme_strong"
     )
-    assert (
-        result["fuzzy_topsis"]["ranking"][0]["sme_id"]
-        == "sme_strong"
+    assert result["fuzzy_topsis"]["ranking"][0]["sme_id"] == (
+        "sme_strong"
     )
-    assert (
-        result["electre_iii"]["rank_levels"][0]["sme_ids"]
-        == ["sme_strong"]
-    )
+    assert result["electre_iii"]["rank_levels"][0]["sme_ids"] == [
+        "sme_strong"
+    ]
 
 
-def test_retrieve_persisted_assessment_run(
-    tmp_path: Path,
-) -> None:
+def test_retrieve_persisted_assessment_run(tmp_path: Path) -> None:
     """Completed runs should remain available to investor accounts."""
 
     with _client(tmp_path) as client:
         _create_sme(client, "sme_strong")
         _create_sme(client, "sme_weaker")
-
         request = {
             "run_id": "run_saved",
             "cohort_id": "cohort_001",
             "version": "1.0",
             "minimum_shared_criteria": 1,
             "submissions": [
-                _submission(
-                    "sme_strong",
-                    "very_high",
-                ),
-                _submission(
-                    "sme_weaker",
-                    "low",
-                ),
+                _submission("sme_strong", "very_high"),
+                _submission("sme_weaker", "low"),
             ],
         }
 
@@ -211,21 +174,15 @@ def test_retrieve_persisted_assessment_run(
 
     assert create_response.status_code == 200
     assert list_response.status_code == 200
-    assert (
-        list_response.json()[0]["run_id"]
-        == "run_saved"
-    )
+    assert list_response.json()[0]["run_id"] == "run_saved"
     assert retrieve_response.status_code == 200
-    assert (
-        retrieve_response.json()
-        == create_response.json()
-    )
+    assert retrieve_response.json() == create_response.json()
 
 
 def test_investor_cannot_supply_assessment_inputs(
     tmp_path: Path,
 ) -> None:
-    """Read-oriented investors must not control scoring inputs."""
+    """Read-oriented investor accounts must not control scoring inputs."""
 
     with _client(tmp_path) as client:
         _create_sme(client, "sme_001")
@@ -233,10 +190,34 @@ def test_investor_cannot_supply_assessment_inputs(
         response = client.post(
             "/assessments/prepare",
             headers=INVESTOR_HEADERS,
-            json=_submission(
-                "sme_001",
-                "very_high",
-            ),
+            json=_submission("sme_001", "very_high"),
         )
 
     assert response.status_code == 403
+
+
+def test_reviewer_can_retrieve_versioned_assessment_configuration(
+    tmp_path: Path,
+) -> None:
+    """The frontend should render forms from backend-owned policy."""
+
+    with _client(tmp_path) as client:
+        response = client.get(
+            "/assessments/configuration",
+            headers=ADMIN_HEADERS,
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert (
+        payload["assessment_policy"]["policy_id"]
+        == "greensmecapt_activity_profiles"
+    )
+    assert (
+        payload["normalization_policy"]["policy_id"]
+        == "greensmecapt_normalization"
+    )
+    assert "very_high" in (
+        payload["normalization_policy"]
+        ["default_linguistic_scale"]
+    )

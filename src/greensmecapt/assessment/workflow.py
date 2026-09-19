@@ -104,6 +104,18 @@ class AssessmentWorkflow:
         )
         self._calibration_manifest = calibration_manifest
 
+    @property
+    def assessment_policy(self) -> AssessmentPolicy:
+        """Expose the immutable policy snapshot used by this workflow."""
+
+        return self._assessment_policy
+
+    @property
+    def normalization_policy(self) -> NormalizationPolicy:
+        """Expose the immutable normalization policy used by this workflow."""
+
+        return self._normalization_policy
+
     @classmethod
     def from_environment(
         cls,
