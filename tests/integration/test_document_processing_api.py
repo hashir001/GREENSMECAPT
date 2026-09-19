@@ -201,6 +201,10 @@ def test_queue_document_processing_and_poll_durable_job(
             f"/smes/sme_001/documents/{document_id}/processing",
             headers=SME_HEADERS,
         )
+        batches = client.get(
+            f"{jobs_path}/{job_id}/batches",
+            headers=SME_HEADERS,
+        )
 
     assert queued.status_code == 202
     assert queued.json()["status"] == "queued"
@@ -209,6 +213,10 @@ def test_queue_document_processing_and_poll_durable_job(
     assert polled.json()["attempt_count"] == 1
     assert processing.json()["state"]["status"] == "completed"
     assert processing.json()["state"]["evidence_count"] == 1
+    assert batches.status_code == 200
+    assert len(batches.json()) == 1
+    assert batches.json()[0]["status"] == "completed"
+    assert batches.json()[0]["page_numbers"] == [1]
 
 
 def test_failed_processing_job_can_be_retried_with_same_identity(

@@ -394,3 +394,72 @@ class ExtractedDocument(BaseModel):
             )
 
         return self
+
+
+class ExtractedPageBatch(BaseModel):
+    """Represent one bounded read that may contain unreadable pages."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+    )
+
+    document_id: str = Field(min_length=1)
+    total_pages: int = Field(ge=1)
+    requested_pages: tuple[int, ...] = Field(min_length=1)
+    pages: tuple[ExtractedPage, ...] = ()
+    unreadable_pages: tuple[int, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_batch_coverage(self) -> Self:
+        """Require one readable or unreadable outcome per requested page."""
+
+        requested = self.requested_pages
+        readable = tuple(page.page_number for page in self.pages)
+        unreadable = self.unreadable_pages
+
+        if requested != tuple(sorted(set(requested))):
+            raise ValueError(
+                "Requested batch pages must be unique and ordered."
+            )
+
+        if readable != tuple(sorted(set(readable))):
+            raise ValueError(
+                "Readable batch pages must be unique and ordered."
+            )
+
+        if unreadable != tuple(sorted(set(unreadable))):
+            raise ValueError(
+                "Unreadable batch pages must be unique and ordered."
+            )
+
+        if any(page > self.total_pages for page in requested):
+            raise ValueError("Requested page exceeds document length.")
+
+        if set(readable) & set(unreadable):
+            raise ValueError(
+                "A batch page cannot be readable and unreadable."
+            )
+
+        if set(requested) != set(readable) | set(unreadable):
+            raise ValueError(
+                "Every requested page requires a recorded outcome."
+            )
+
+        return self
+
+    def as_extracted_document(self) -> ExtractedDocument:
+        """Convert a readable batch for standard semantic extraction."""
+
+        if not self.pages:
+            raise ValueError(
+                "An entirely unreadable batch has no semantic document."
+            )
+
+        return ExtractedDocument(
+            document_id=self.document_id,
+            pages=self.pages,
+            total_pages=self.total_pages,
+            unreadable_pages=self.unreadable_pages,
+        )

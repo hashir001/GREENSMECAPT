@@ -13,6 +13,7 @@ from greensmecapt.document_intelligence.models import (
     BoundingBox,
     ExtractedDocument,
     ExtractedPage,
+    ExtractedPageBatch,
     ExtractedTable,
     ExtractedTableCell,
     ExtractedTextBlock,
@@ -58,6 +59,7 @@ class PdfTextDocumentReader:
             pages, unreadable_pages = self._read_pages(
                 content=content,
                 reader=reader,
+                selected_pages=None,
             )
 
         except (
@@ -87,11 +89,94 @@ class PdfTextDocumentReader:
             unreadable_pages=tuple(unreadable_pages),
         )
 
+    def page_count(
+        self,
+        document: SourceDocument,
+        content: bytes,
+    ) -> int:
+        """Return PDF page count without extracting page content."""
+
+        self._require_supported(document)
+
+        try:
+            reader = PdfReader(BytesIO(content))
+
+            if reader.is_encrypted:
+                raise DocumentReadError(
+                    "Encrypted PDFs are not supported by this reader."
+                )
+
+            return len(reader.pages)
+        except (PyPdfError, ValueError, TypeError, OSError) as error:
+            if isinstance(error, DocumentReadError):
+                raise
+
+            raise DocumentReadError(
+                "PDF page count could not be read."
+            ) from error
+
+    def read_page_batch(
+        self,
+        document: SourceDocument,
+        content: bytes,
+        page_numbers: tuple[int, ...],
+    ) -> ExtractedPageBatch:
+        """Extract native content only from requested PDF pages."""
+
+        self._require_supported(document)
+
+        try:
+            reader = PdfReader(BytesIO(content))
+
+            if reader.is_encrypted:
+                raise DocumentReadError(
+                    "Encrypted PDFs are not supported by this reader."
+                )
+
+            total_pages = len(reader.pages)
+            selected = _validated_page_numbers(
+                page_numbers,
+                total_pages=total_pages,
+            )
+            pages, unreadable_pages = self._read_pages(
+                content=content,
+                reader=reader,
+                selected_pages=set(selected),
+            )
+        except (
+            PDFSyntaxError,
+            PyPdfError,
+            ValueError,
+            TypeError,
+            OSError,
+        ) as error:
+            if isinstance(error, DocumentReadError):
+                raise
+
+            raise DocumentReadError(
+                "PDF text and layout could not be read."
+            ) from error
+
+        return ExtractedPageBatch(
+            document_id=document.document_id,
+            total_pages=total_pages,
+            requested_pages=selected,
+            pages=tuple(pages),
+            unreadable_pages=tuple(unreadable_pages),
+        )
+
+    def _require_supported(self, document: SourceDocument) -> None:
+        if document.mime_type not in self.supported_mime_types:
+            raise UnsupportedMimeTypeError(
+                f"Unsupported MIME type: {document.mime_type}"
+            )
+
     def _read_pages(
         self,
         *,
         content: bytes,
         reader: PdfReader,
+        selected_pages: set[int] | None,
     ) -> tuple[list[ExtractedPage], list[int]]:
         """Combine pypdf text with optional pdfplumber layout."""
 
@@ -105,6 +190,12 @@ class PdfTextDocumentReader:
                 reader.pages
             ):
                 page_number = page_index + 1
+
+                if (
+                    selected_pages is not None
+                    and page_number not in selected_pages
+                ):
+                    continue
 
                 layout_page = (
                     layout_pages[page_index]
@@ -173,6 +264,24 @@ class PdfTextDocumentReader:
                 )
 
         return pages, unreadable_pages
+
+
+def _validated_page_numbers(
+    page_numbers: tuple[int, ...],
+    *,
+    total_pages: int,
+) -> tuple[int, ...]:
+    """Normalize a non-empty, in-range page request."""
+
+    selected = tuple(sorted(set(page_numbers)))
+
+    if not selected:
+        raise DocumentReadError("At least one PDF page must be requested.")
+
+    if selected[0] < 1 or selected[-1] > total_pages:
+        raise DocumentReadError("Requested PDF page is outside the document.")
+
+    return selected
 
 
 def _extract_tables(

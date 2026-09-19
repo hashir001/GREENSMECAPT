@@ -44,10 +44,12 @@ class DocumentProcessingJobService:
             return job
 
         try:
-            self._processor.process(
+            self._processor.process_in_batches(
                 repository=repository,
                 document_id=job.document_id,
                 actor_id=job.requested_by,
+                job_id=job.job_id,
+                worker_id=worker_id,
             )
         except DocumentProcessingError as error:
             return repository.fail_document_processing_job(

@@ -273,6 +273,31 @@ def test_process_mixed_pdf_page_by_page() -> None:
     )
 
 
+def test_read_only_requested_pdf_pages() -> None:
+    """A page batch must not render or OCR pages outside its boundary."""
+
+    content = _make_pdf(
+        (
+            "This first page has sufficient embedded report text.",
+            None,
+            "This third page also has sufficient embedded report text.",
+        )
+    )
+    parser = FakeStructuredParser()
+    batch = AdaptivePdfDocumentReader(
+        structured_parser=parser
+    ).read_page_batch(
+        document=_make_document(content),
+        content=content,
+        page_numbers=(2,),
+    )
+
+    assert batch.total_pages == 3
+    assert batch.requested_pages == (2,)
+    assert tuple(page.page_number for page in batch.pages) == (2,)
+    assert parser.page_numbers == [2]
+
+
 def test_hybrid_processing_adds_missing_table() -> None:
     """A table-oriented page may combine native and visual data."""
 

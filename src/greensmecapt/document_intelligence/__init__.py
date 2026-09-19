@@ -6,6 +6,7 @@ from greensmecapt.document_intelligence.extractors import (
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
+    ExtractedPageBatch,
     ExtractedVisualRegion,
     TextSource,
     VisualRegionKind,
@@ -21,6 +22,7 @@ from greensmecapt.document_intelligence.orchestration import (
 from greensmecapt.document_intelligence.ports import (
     DocumentReader,
     EvidenceExtractor,
+    PagedDocumentReader,
 )
 from greensmecapt.document_intelligence.readers import (
     DocumentReadError,
@@ -54,6 +56,7 @@ __all__ = [
     "EvidenceExtractor",
     "ExtractedDocument",
     "ExtractedPage",
+    "ExtractedPageBatch",
     "ExtractedVisualRegion",
     "ExtractionConsistencyError",
     "HybridPdfDocumentReader",
@@ -62,6 +65,7 @@ __all__ = [
     "OcrEngine",
     "OcrError",
     "PageContentKind",
+    "PagedDocumentReader",
     "PdfTextDocumentReader",
     "PlainTextDocumentReader",
     "ProductionReaderConfiguration",

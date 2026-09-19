@@ -25,6 +25,7 @@ from greensmecapt.api.assessment import build_assessment_router
 from greensmecapt.assessment.workflow import AssessmentWorkflow
 from greensmecapt.domain import (
     SME,
+    DocumentBatchCheckpoint,
     DocumentJobStatus,
     DocumentProcessingJob,
     DocumentType,
@@ -540,6 +541,44 @@ def create_app(
                 job.job_id,
             )
         return job
+
+    @app.get(
+        "/smes/{sme_id}/documents/{document_id}/processing-jobs/{job_id}/batches",
+        response_model=tuple[DocumentBatchCheckpoint, ...],
+    )
+    def list_document_processing_batches(
+        sme_id: str,
+        document_id: str,
+        job_id: str,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> tuple[DocumentBatchCheckpoint, ...]:
+        """Return durable page progress for one authorized job."""
+
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+
+        try:
+            job = repository.get_document_processing_job(job_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+        if job.document_id != document_id or job.sme_id != sme_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document processing job was not found.",
+            )
+
+        return repository.list_document_batch_checkpoints(job_id)
 
     @app.get(
         "/smes/{sme_id}/documents/{document_id}/processing-jobs/{job_id}",

@@ -634,6 +634,27 @@ class GreenSMERepository:
                 checkpoint_row.updated_at = effective_now
                 self._session.add(checkpoint_row)
 
+            processing_row = self._session.get(
+                DocumentProcessingRow,
+                row.document_id,
+            )
+
+            if (
+                processing_row is not None
+                and DocumentProcessingStatus(processing_row.status)
+                is DocumentProcessingStatus.PROCESSING
+            ):
+                processing_row.status = (
+                    DocumentProcessingStatus.FAILED.value
+                )
+                processing_row.failure_code = "worker_lease_expired"
+                processing_row.failure_message = (
+                    "The processing worker stopped before completion."
+                )
+                processing_row.completed_at = effective_now
+                processing_row.updated_at = effective_now
+                self._session.add(processing_row)
+
             recovered.append(_document_job_from_row(row))
 
         if recovered:

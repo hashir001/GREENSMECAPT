@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
+    ExtractedPageBatch,
     ExtractedTable,
     ExtractedTextBlock,
     TextSource,
@@ -92,6 +93,20 @@ class AdaptivePdfReadResult(BaseModel):
     ] = Field(min_length=1)
 
 
+class AdaptivePdfBatchReadResult(BaseModel):
+    """Return one bounded PDF read with routing diagnostics."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+    batch: ExtractedPageBatch
+    processing_records: tuple[PageProcessingRecord, ...] = Field(
+        min_length=1
+    )
+
+
 class AdaptivePdfDocumentReader:
     """Route each PDF page through the appropriate reader."""
 
@@ -141,6 +156,88 @@ class AdaptivePdfDocumentReader:
     ) -> AdaptivePdfReadResult:
         """Read a PDF and retain every routing decision."""
 
+        result = self._read_page_batch_with_diagnostics(
+            document=document,
+            content=content,
+            page_numbers=None,
+        )
+
+        if not result.batch.pages:
+            raise DocumentReadError(
+                "No PDF page produced readable content."
+            )
+
+        return AdaptivePdfReadResult(
+            document=ExtractedDocument(
+                document_id=document.document_id,
+                pages=result.batch.pages,
+                total_pages=result.batch.total_pages,
+                unreadable_pages=(
+                    result.batch.unreadable_pages
+                ),
+            ),
+            processing_records=result.processing_records,
+        )
+
+    def page_count(
+        self,
+        document: SourceDocument,
+        content: bytes,
+    ) -> int:
+        """Return PDF page count without rendering or OCR."""
+
+        if document.mime_type not in self.supported_mime_types:
+            raise UnsupportedMimeTypeError(
+                f"Unsupported MIME type: {document.mime_type}"
+            )
+
+        try:
+            with pymupdf.open(
+                stream=content,
+                filetype="pdf",
+            ) as pdf:
+                if pdf.needs_pass:
+                    raise DocumentReadError(
+                        "Encrypted PDFs are not supported."
+                    )
+
+                return pdf.page_count
+        except (
+            pymupdf.FileDataError,
+            RuntimeError,
+            ValueError,
+            OSError,
+        ) as error:
+            if isinstance(error, DocumentReadError):
+                raise
+
+            raise DocumentReadError(
+                "PDF content could not be opened."
+            ) from error
+
+    def read_page_batch(
+        self,
+        document: SourceDocument,
+        content: bytes,
+        page_numbers: tuple[int, ...],
+    ) -> ExtractedPageBatch:
+        """Process only requested pages through native reading or OCR."""
+
+        return self._read_page_batch_with_diagnostics(
+            document=document,
+            content=content,
+            page_numbers=page_numbers,
+        ).batch
+
+    def _read_page_batch_with_diagnostics(
+        self,
+        *,
+        document: SourceDocument,
+        content: bytes,
+        page_numbers: tuple[int, ...] | None,
+    ) -> AdaptivePdfBatchReadResult:
+        """Read selected PDF pages and retain routing decisions."""
+
         if document.mime_type not in self.supported_mime_types:
             raise UnsupportedMimeTypeError(
                 f"Unsupported MIME type: {document.mime_type}"
@@ -170,6 +267,23 @@ class AdaptivePdfDocumentReader:
             native_pages = self._read_native_pages(
                 document=document,
                 content=content,
+                page_numbers=(
+                    tuple(range(1, pdf.page_count + 1))
+                    if page_numbers is None
+                    else _validated_page_numbers(
+                        page_numbers,
+                        total_pages=pdf.page_count,
+                    )
+                ),
+            )
+
+            selected_pages = (
+                tuple(range(1, pdf.page_count + 1))
+                if page_numbers is None
+                else _validated_page_numbers(
+                    page_numbers,
+                    total_pages=pdf.page_count,
+                )
             )
 
             extracted_pages: list[ExtractedPage] = []
@@ -178,8 +292,8 @@ class AdaptivePdfDocumentReader:
                 PageProcessingRecord
             ] = []
 
-            for page_index in range(pdf.page_count):
-                page_number = page_index + 1
+            for page_number in selected_pages:
+                page_index = page_number - 1
                 pdf_page = pdf.load_page(page_index)
                 native_page = native_pages.get(page_number)
 
@@ -319,17 +433,13 @@ class AdaptivePdfDocumentReader:
                             )
                         )
 
-            if not extracted_pages:
-                raise DocumentReadError(
-                    "No PDF page produced readable content."
-                )
-
             extracted_pages.sort(
                 key=lambda page: page.page_number
             )
 
-            extracted_document = ExtractedDocument(
+            extracted_batch = ExtractedPageBatch(
                 document_id=document.document_id,
+                requested_pages=selected_pages,
                 pages=tuple(extracted_pages),
                 total_pages=pdf.page_count,
                 unreadable_pages=tuple(
@@ -337,8 +447,8 @@ class AdaptivePdfDocumentReader:
                 ),
             )
 
-            return AdaptivePdfReadResult(
-                document=extracted_document,
+            return AdaptivePdfBatchReadResult(
+                batch=extracted_batch,
                 processing_records=tuple(
                     processing_records
                 ),
@@ -352,13 +462,15 @@ class AdaptivePdfDocumentReader:
         *,
         document: SourceDocument,
         content: bytes,
+        page_numbers: tuple[int, ...],
     ) -> dict[int, ExtractedPage]:
         """Recover any pages readable through native extraction."""
 
         try:
-            extracted = self._native_reader.read(
+            extracted = self._native_reader.read_page_batch(
                 document=document,
                 content=content,
+                page_numbers=page_numbers,
             )
         except DocumentReadError:
             return {}
@@ -448,6 +560,24 @@ def _page_signals(
             and image_coverage == 0
         ),
     )
+
+
+def _validated_page_numbers(
+    page_numbers: tuple[int, ...],
+    *,
+    total_pages: int,
+) -> tuple[int, ...]:
+    """Normalize a non-empty, in-range PDF page request."""
+
+    selected = tuple(sorted(set(page_numbers)))
+
+    if not selected:
+        raise DocumentReadError("At least one PDF page must be requested.")
+
+    if selected[0] < 1 or selected[-1] > total_pages:
+        raise DocumentReadError("Requested PDF page is outside the document.")
+
+    return selected
 
 
 def _image_coverage(
