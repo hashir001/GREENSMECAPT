@@ -1,6 +1,8 @@
 """Ground intelligent semantic claims in document evidence."""
 
+import re
 from hashlib import sha256
+from math import isclose
 
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
@@ -22,7 +24,14 @@ from greensmecapt.document_intelligence.semantics.models import (
     MetricDefinition,
     UnitRule,
 )
-from greensmecapt.domain import EvidenceItem, SourceDocument
+from greensmecapt.domain import (
+    EvidenceItem,
+    SourceDocument,
+)
+
+_WRITTEN_NUMBER_PATTERN = re.compile(
+    r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?(?![\w.])"
+)
 
 
 class IntelligentSemanticExtractionService:
@@ -56,7 +65,9 @@ class IntelligentSemanticExtractionService:
             extracted_document=extracted_document,
             catalog=catalog,
         )
-        provider_output = self._provider.extract(request)
+        provider_output = self._provider.extract(
+            request
+        )
 
         segments = {
             segment.segment_id: segment
@@ -68,7 +79,9 @@ class IntelligentSemanticExtractionService:
         }
 
         evidence_items: list[EvidenceItem] = []
-        rejected_claims: list[RejectedSemanticClaim] = []
+        rejected_claims: list[
+            RejectedSemanticClaim
+        ] = []
 
         for claim_index, claim in enumerate(
             provider_output.claims
@@ -78,7 +91,9 @@ class IntelligentSemanticExtractionService:
                 document=document,
                 segments=segments,
                 metrics=metrics,
-                provider_name=self._provider.provider_name,
+                provider_name=(
+                    self._provider.provider_name
+                ),
                 provider_version=(
                     self._provider.provider_version
                 ),
@@ -91,20 +106,26 @@ class IntelligentSemanticExtractionService:
                 rejected_claims.append(
                     RejectedSemanticClaim(
                         claim_index=claim_index,
-                        indicator_id=claim.indicator_id,
+                        indicator_id=(
+                            claim.indicator_id
+                        ),
                         segment_id=claim.segment_id,
                         reason=result,
                     )
                 )
 
         return IntelligentExtractionReport(
-            provider_name=self._provider.provider_name,
+            provider_name=(
+                self._provider.provider_name
+            ),
             provider_version=(
                 self._provider.provider_version
             ),
             model_name=self._provider.model_name,
             evidence_items=tuple(evidence_items),
-            rejected_claims=tuple(rejected_claims),
+            rejected_claims=tuple(
+                rejected_claims
+            ),
         )
 
 
@@ -113,7 +134,7 @@ def _build_request(
     extracted_document: ExtractedDocument,
     catalog: MetricCatalog,
 ) -> SemanticExtractionRequest:
-    """Build a bounded request from structured document regions."""
+    """Build a bounded request from structured regions."""
 
     segments = tuple(
         segment
@@ -144,7 +165,9 @@ def _build_request(
     )
 
     return SemanticExtractionRequest(
-        document_id=extracted_document.document_id,
+        document_id=(
+            extracted_document.document_id
+        ),
         catalog_id=catalog.catalog_id,
         catalog_version=catalog.version,
         metrics=metrics,
@@ -199,7 +222,8 @@ def _page_segments(
                 SemanticSourceSegment(
                     segment_id=(
                         f"page_{page.page_number}_"
-                        f"table_{table_index}_row_{row_index}"
+                        f"table_{table_index}_"
+                        f"row_{row_index}"
                     ),
                     page_number=page.page_number,
                     locator=(
@@ -214,9 +238,13 @@ def _page_segments(
     if not segments:
         segments.append(
             SemanticSourceSegment(
-                segment_id=f"page_{page.page_number}_text",
+                segment_id=(
+                    f"page_{page.page_number}_text"
+                ),
                 page_number=page.page_number,
-                locator=f"page {page.page_number}",
+                locator=(
+                    f"page {page.page_number}"
+                ),
                 text=page.text,
             )
         )
@@ -228,8 +256,14 @@ def _ground_claim(
     *,
     claim: SemanticClaimPayload,
     document: SourceDocument,
-    segments: dict[str, SemanticSourceSegment],
-    metrics: dict[str, MetricDefinition],
+    segments: dict[
+        str,
+        SemanticSourceSegment,
+    ],
+    metrics: dict[
+        str,
+        MetricDefinition,
+    ],
     provider_name: str,
     provider_version: str,
     model_name: str,
@@ -239,20 +273,26 @@ def _ground_claim(
     segment = segments.get(claim.segment_id)
 
     if segment is None:
-        return "The claim references an unknown source segment."
+        return (
+            "The claim references an unknown "
+            "source segment."
+        )
 
     metric = metrics.get(claim.indicator_id)
 
     if metric is None:
-        return "The claim references an unconfigured indicator."
+        return (
+            "The claim references an unconfigured "
+            "indicator."
+        )
 
     if not _contains_text(
         segment.text,
         claim.source_quote,
     ):
         return (
-            "The source quote does not occur in the referenced "
-            "segment."
+            "The source quote does not occur in the "
+            "referenced segment."
         )
 
     if not _contains_text(
@@ -260,7 +300,8 @@ def _ground_claim(
         claim.raw_value,
     ):
         return (
-            "The raw value does not occur in the source quote."
+            "The raw value does not occur in the "
+            "source quote."
         )
 
     if not _contains_text(
@@ -268,7 +309,8 @@ def _ground_claim(
         claim.raw_unit,
     ):
         return (
-            "The raw unit does not occur in the raw value."
+            "The raw unit does not occur in the "
+            "raw value."
         )
 
     unit_rule = _find_unit_rule(
@@ -278,7 +320,8 @@ def _ground_claim(
 
     if unit_rule is None:
         return (
-            "The raw unit is not allowed for this indicator."
+            "The raw unit is not allowed for this "
+            "indicator."
         )
 
     normalized_value = (
@@ -290,7 +333,8 @@ def _ground_claim(
         and normalized_value < metric.minimum
     ):
         return (
-            "The normalized value is below the metric minimum."
+            "The normalized value is below the "
+            "metric minimum."
         )
 
     if (
@@ -298,7 +342,17 @@ def _ground_claim(
         and normalized_value > metric.maximum
     ):
         return (
-            "The normalized value exceeds the metric maximum."
+            "The normalized value exceeds the "
+            "metric maximum."
+        )
+
+    if not _raw_number_occurs_in_value(
+        claim.raw_number,
+        claim.raw_value,
+    ):
+        return (
+            "The structured raw number does not match "
+            "the number written in the raw value."
         )
 
     fingerprint = sha256(
@@ -315,7 +369,9 @@ def _ground_claim(
     ).hexdigest()[:20]
 
     return EvidenceItem(
-        evidence_id=f"evidence_{fingerprint}",
+        evidence_id=(
+            f"evidence_{fingerprint}"
+        ),
         sme_id=document.sme_id,
         document_id=document.document_id,
         indicator_id=metric.indicator_id,
@@ -342,16 +398,46 @@ def _find_unit_rule(
 ) -> UnitRule | None:
     """Resolve a provider unit using configured aliases."""
 
-    normalized_unit = _normalize_text(raw_unit)
+    normalized_unit = _normalize_text(
+        raw_unit
+    )
 
     for unit_rule in metric.units:
         if any(
-            _normalize_text(alias) == normalized_unit
+            _normalize_text(alias)
+            == normalized_unit
             for alias in unit_rule.aliases
         ):
             return unit_rule
 
     return None
+
+
+def _raw_number_occurs_in_value(
+    raw_number: float,
+    raw_value: str,
+) -> bool:
+    """Require the provider number to occur in its raw value."""
+
+    for match in _WRITTEN_NUMBER_PATTERN.finditer(
+        raw_value
+    ):
+        try:
+            written_number = float(
+                match.group(0).replace(",", "")
+            )
+        except ValueError:
+            continue
+
+        if isclose(
+            written_number,
+            raw_number,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            return True
+
+    return False
 
 
 def _contains_text(
@@ -360,12 +446,17 @@ def _contains_text(
 ) -> bool:
     """Compare text despite harmless spacing differences."""
 
-    return _normalize_text(candidate) in _normalize_text(
-        container
+    return (
+        _normalize_text(candidate)
+        in _normalize_text(container)
     )
 
 
-def _normalize_text(value: str) -> str:
+def _normalize_text(
+    value: str,
+) -> str:
     """Normalize spacing and case without changing meaning."""
 
-    return " ".join(value.casefold().split())
+    return " ".join(
+        value.casefold().split()
+    )
