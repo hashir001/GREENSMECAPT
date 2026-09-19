@@ -15,6 +15,7 @@ from greensmecapt.persistence.repository import (
 )
 from greensmecapt.persistence.tables import (
     AuditEventRow,
+    DocumentProcessingJobRow,
     DocumentProcessingRow,
     DocumentRow,
     EvidenceRow,
@@ -28,8 +29,9 @@ __all__ = [
     "AssessmentRunSummary",
     "AuditEventRow",
     "Database",
-    "DocumentProcessingRow",
     "DocumentRow",
+    "DocumentProcessingJobRow",
+    "DocumentProcessingRow",
     "EvidenceRow",
     "GreenSMERepository",
     "PersistenceConflictError",

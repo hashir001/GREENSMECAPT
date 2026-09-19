@@ -172,6 +172,127 @@ def test_processing_is_idempotent_through_api(tmp_path: Path) -> None:
     assert second.json()["evidence_items"] == first.json()["evidence_items"]
 
 
+def test_queue_document_processing_and_poll_durable_job(
+    tmp_path: Path,
+) -> None:
+    """Heavy processing should expose a durable polling handle."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        document_id = _upload(
+            client,
+            b"Renewable energy share: 72 percent.",
+        )
+        jobs_path = (
+            f"/smes/sme_001/documents/{document_id}"
+            "/processing-jobs"
+        )
+
+        queued = client.post(
+            jobs_path,
+            headers=SME_HEADERS,
+        )
+        job_id = queued.json()["job_id"]
+        polled = client.get(
+            f"{jobs_path}/{job_id}",
+            headers=SME_HEADERS,
+        )
+        processing = client.get(
+            f"/smes/sme_001/documents/{document_id}/processing",
+            headers=SME_HEADERS,
+        )
+
+    assert queued.status_code == 202
+    assert queued.json()["status"] == "queued"
+    assert polled.status_code == 200
+    assert polled.json()["status"] == "completed"
+    assert polled.json()["attempt_count"] == 1
+    assert processing.json()["state"]["status"] == "completed"
+    assert processing.json()["state"]["evidence_count"] == 1
+
+
+def test_failed_processing_job_can_be_retried_with_same_identity(
+    tmp_path: Path,
+) -> None:
+    """A failed job should keep diagnostics and bounded retry history."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        document_id = _upload(client, b"\xff\xfe")
+        jobs_path = (
+            f"/smes/sme_001/documents/{document_id}"
+            "/processing-jobs"
+        )
+
+        queued = client.post(jobs_path, headers=SME_HEADERS)
+        job_id = queued.json()["job_id"]
+        first_failure = client.get(
+            f"{jobs_path}/{job_id}",
+            headers=SME_HEADERS,
+        )
+        retried = client.post(
+            f"{jobs_path}/{job_id}/retry",
+            headers=SME_HEADERS,
+        )
+        second_failure = client.get(
+            f"{jobs_path}/{job_id}",
+            headers=SME_HEADERS,
+        )
+
+    assert first_failure.json()["status"] == "failed"
+    assert first_failure.json()["failure_code"] == "unreadable_document"
+    assert retried.status_code == 202
+    assert second_failure.json()["job_id"] == job_id
+    assert second_failure.json()["status"] == "failed"
+    assert second_failure.json()["attempt_count"] == 2
+
+
+def test_completed_processing_job_cannot_be_retried(
+    tmp_path: Path,
+) -> None:
+    """Retry must not duplicate work that already completed."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        document_id = _upload(
+            client,
+            b"Renewable energy share: 72 percent.",
+        )
+        jobs_path = (
+            f"/smes/sme_001/documents/{document_id}"
+            "/processing-jobs"
+        )
+        queued = client.post(jobs_path, headers=SME_HEADERS)
+        job_id = queued.json()["job_id"]
+
+        response = client.post(
+            f"{jobs_path}/{job_id}/retry",
+            headers=SME_HEADERS,
+        )
+
+    assert response.status_code == 409
+
+
+def test_investor_cannot_queue_document_processing(
+    tmp_path: Path,
+) -> None:
+    """Read-only investors must not create background work."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        document_id = _upload(
+            client,
+            b"Renewable energy share: 72 percent.",
+        )
+
+        response = client.post(
+            f"/smes/sme_001/documents/{document_id}/processing-jobs",
+            headers=INVESTOR_HEADERS,
+        )
+
+    assert response.status_code == 403
+
+
 def test_investor_cannot_start_document_processing(
     tmp_path: Path,
 ) -> None:

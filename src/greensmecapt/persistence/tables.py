@@ -74,6 +74,32 @@ class DocumentProcessingRow(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utc_now)
 
 
+class DocumentProcessingJobRow(SQLModel, table=True):
+    """Persist one retryable request to process a document."""
+
+    __tablename__ = "document_processing_jobs"
+
+    job_id: str = Field(primary_key=True)
+    document_id: str = Field(
+        foreign_key="documents.document_id",
+        index=True,
+    )
+    sme_id: str = Field(
+        foreign_key="smes.sme_id",
+        index=True,
+    )
+    requested_by: str = Field(index=True)
+    status: str = Field(default="queued", index=True)
+    attempt_count: int = Field(default=0)
+    max_attempts: int = Field(default=3)
+    failure_code: str | None = Field(default=None)
+    failure_message: str | None = Field(default=None)
+    created_at: datetime = Field(default_factory=_utc_now)
+    started_at: datetime | None = Field(default=None)
+    completed_at: datetime | None = Field(default=None)
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+
 class EvidenceRow(SQLModel, table=True):
     """Persist one traceable extracted fact."""
 

@@ -1,5 +1,8 @@
 """Application services for GREENSMECAPT."""
 
+from greensmecapt.services.document_jobs import (
+    DocumentProcessingJobService,
+)
 from greensmecapt.services.document_processing import (
     DocumentProcessingError,
     DocumentProcessingResult,
@@ -13,6 +16,7 @@ from greensmecapt.services.factory import (
 __all__ = [
     "DocumentProcessingConfigurationError",
     "DocumentProcessingError",
+    "DocumentProcessingJobService",
     "DocumentProcessingResult",
     "StoredDocumentProcessingService",
     "build_document_processing_service",

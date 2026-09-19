@@ -9,6 +9,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import (
+    BackgroundTasks,
     Depends,
     FastAPI,
     File,
@@ -24,6 +25,8 @@ from greensmecapt.api.assessment import build_assessment_router
 from greensmecapt.assessment.workflow import AssessmentWorkflow
 from greensmecapt.domain import (
     SME,
+    DocumentJobStatus,
+    DocumentProcessingJob,
     DocumentType,
     EvidenceItem,
     EvidenceValidationStatus,
@@ -46,6 +49,7 @@ from greensmecapt.security import (
 )
 from greensmecapt.services import (
     DocumentProcessingError,
+    DocumentProcessingJobService,
     DocumentProcessingResult,
     StoredDocumentProcessingService,
     build_document_processing_service,
@@ -147,6 +151,17 @@ def create_app(
     def get_session() -> Iterator[Session]:
         with database.session() as session:
             yield session
+
+    def run_document_job(job_id: str) -> None:
+        """Execute queued work in an independent database session."""
+
+        with database.session() as worker_session:
+            DocumentProcessingJobService(
+                processing_service
+            ).run(
+                repository=GreenSMERepository(worker_session),
+                job_id=job_id,
+            )
 
     app.include_router(
         build_assessment_router(
@@ -473,6 +488,165 @@ def create_app(
                     "message": error.message,
                 },
             ) from error
+
+    @app.post(
+        "/smes/{sme_id}/documents/{document_id}/processing-jobs",
+        response_model=DocumentProcessingJob,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def queue_document_processing(
+        sme_id: str,
+        document_id: str,
+        background_tasks: BackgroundTasks,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_roles(
+                    ApplicationRole.ADMIN,
+                    ApplicationRole.REVIEWER,
+                    ApplicationRole.SME_USER,
+                )
+            ),
+        ],
+    ) -> DocumentProcessingJob:
+        """Queue heavy processing and return a durable polling handle."""
+
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+        _require_document_for_sme(
+            repository=repository,
+            document_id=document_id,
+            sme_id=sme_id,
+        )
+
+        try:
+            job = repository.enqueue_document_processing(
+                document_id=document_id,
+                actor_id=principal.user_id,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+        if job.status is not DocumentJobStatus.RUNNING:
+            background_tasks.add_task(
+                run_document_job,
+                job.job_id,
+            )
+        return job
+
+    @app.get(
+        "/smes/{sme_id}/documents/{document_id}/processing-jobs/{job_id}",
+        response_model=DocumentProcessingJob,
+    )
+    def get_document_processing_job(
+        sme_id: str,
+        document_id: str,
+        job_id: str,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> DocumentProcessingJob:
+        """Return durable progress for one background job."""
+
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+        _require_document_for_sme(
+            repository=repository,
+            document_id=document_id,
+            sme_id=sme_id,
+        )
+
+        try:
+            job = repository.get_document_processing_job(job_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+        if job.document_id != document_id or job.sme_id != sme_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document processing job was not found.",
+            )
+
+        return job
+
+    @app.post(
+        "/smes/{sme_id}/documents/{document_id}/processing-jobs/{job_id}/retry",
+        response_model=DocumentProcessingJob,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def retry_document_processing_job(
+        sme_id: str,
+        document_id: str,
+        job_id: str,
+        background_tasks: BackgroundTasks,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_roles(
+                    ApplicationRole.ADMIN,
+                    ApplicationRole.REVIEWER,
+                    ApplicationRole.SME_USER,
+                )
+            ),
+        ],
+    ) -> DocumentProcessingJob:
+        """Retry failed work without creating an unbounded job chain."""
+
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+
+        try:
+            job = repository.get_document_processing_job(job_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+        if job.document_id != document_id or job.sme_id != sme_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document processing job was not found.",
+            )
+
+        if job.status is not DocumentJobStatus.FAILED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only a failed document processing job can be retried.",
+            )
+
+        if (
+            job.attempt_count >= job.max_attempts
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Document processing job exhausted its retry limit.",
+            )
+
+        background_tasks.add_task(
+            run_document_job,
+            job.job_id,
+        )
+        return job
 
     @app.patch(
         "/evidence/{evidence_id}/validation",

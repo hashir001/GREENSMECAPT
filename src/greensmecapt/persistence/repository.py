@@ -3,11 +3,14 @@
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from sqlmodel import Session, select
 
 from greensmecapt.domain import (
     SME,
+    DocumentJobStatus,
+    DocumentProcessingJob,
     DocumentProcessingState,
     DocumentProcessingStatus,
     DocumentType,
@@ -18,6 +21,7 @@ from greensmecapt.domain import (
 )
 from greensmecapt.persistence.tables import (
     AuditEventRow,
+    DocumentProcessingJobRow,
     DocumentProcessingRow,
     DocumentRow,
     EvidenceRow,
@@ -165,6 +169,219 @@ class GreenSMERepository:
             document=_document_from_row(row),
             storage_key=row.storage_key,
         )
+
+    def enqueue_document_processing(
+        self,
+        *,
+        document_id: str,
+        actor_id: str,
+        max_attempts: int = 3,
+    ) -> DocumentProcessingJob:
+        """Persist a job, reusing any active job for the document."""
+
+        document = self._session.get(DocumentRow, document_id)
+
+        if document is None or document.storage_key is None:
+            raise PersistenceNotFoundError(
+                f"Stored document {document_id!r} was not found."
+            )
+
+        latest = self._session.exec(
+            select(DocumentProcessingJobRow)
+            .where(DocumentProcessingJobRow.document_id == document_id)
+            .order_by(DocumentProcessingJobRow.created_at.desc())
+        ).first()
+
+        if latest is not None:
+            latest_status = DocumentJobStatus(latest.status)
+
+            if latest_status in {
+                DocumentJobStatus.QUEUED,
+                DocumentJobStatus.RUNNING,
+            } or (
+                latest_status is DocumentJobStatus.FAILED
+                and latest.attempt_count < latest.max_attempts
+            ):
+                return _document_job_from_row(latest)
+
+        now = datetime.now(UTC)
+        row = DocumentProcessingJobRow(
+            job_id=f"job_{uuid4().hex}",
+            document_id=document.document_id,
+            sme_id=document.sme_id,
+            requested_by=actor_id,
+            max_attempts=max_attempts,
+            created_at=now,
+            updated_at=now,
+        )
+
+        try:
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=document.sme_id,
+                    entity_type="document_processing_job",
+                    entity_id=row.job_id,
+                    action="document_processing_queued",
+                    actor_id=actor_id,
+                    new_value_json=json.dumps(
+                        {
+                            "document_id": document_id,
+                            "max_attempts": max_attempts,
+                        }
+                    ),
+                )
+            )
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_job_from_row(row)
+
+    def get_document_processing_job(
+        self,
+        job_id: str,
+    ) -> DocumentProcessingJob:
+        """Return one durable processing job."""
+
+        row = self._session.get(DocumentProcessingJobRow, job_id)
+
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"Document processing job {job_id!r} was not found."
+            )
+
+        return _document_job_from_row(row)
+
+    def start_document_processing_job(
+        self,
+        *,
+        job_id: str,
+    ) -> DocumentProcessingJob:
+        """Claim queued or retryable failed work exactly once."""
+
+        row = self._require_document_job_row(job_id)
+        status = DocumentJobStatus(row.status)
+
+        if status is DocumentJobStatus.COMPLETED:
+            return _document_job_from_row(row)
+
+        if status is DocumentJobStatus.RUNNING:
+            raise PersistenceConflictError(
+                f"Processing job {job_id!r} is already running."
+            )
+
+        if row.attempt_count >= row.max_attempts:
+            raise PersistenceConflictError(
+                f"Processing job {job_id!r} exhausted its retry limit."
+            )
+
+        now = datetime.now(UTC)
+        row.status = DocumentJobStatus.RUNNING.value
+        row.attempt_count += 1
+        row.failure_code = None
+        row.failure_message = None
+        row.started_at = now
+        row.completed_at = None
+        row.updated_at = now
+
+        try:
+            self._session.add(row)
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_job_from_row(row)
+
+    def complete_document_processing_job(
+        self,
+        *,
+        job_id: str,
+    ) -> DocumentProcessingJob:
+        """Mark claimed work complete."""
+
+        row = self._require_document_job_row(job_id)
+
+        if DocumentJobStatus(row.status) is not DocumentJobStatus.RUNNING:
+            raise PersistenceConflictError(
+                "Only a running processing job can be completed."
+            )
+
+        now = datetime.now(UTC)
+        row.status = DocumentJobStatus.COMPLETED.value
+        row.failure_code = None
+        row.failure_message = None
+        row.completed_at = now
+        row.updated_at = now
+
+        try:
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=row.sme_id,
+                    entity_type="document_processing_job",
+                    entity_id=row.job_id,
+                    action="document_processing_job_completed",
+                    actor_id=row.requested_by,
+                )
+            )
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_job_from_row(row)
+
+    def fail_document_processing_job(
+        self,
+        *,
+        job_id: str,
+        failure_code: str,
+        failure_message: str,
+    ) -> DocumentProcessingJob:
+        """Persist controlled failure details so the job can be retried."""
+
+        row = self._require_document_job_row(job_id)
+
+        if DocumentJobStatus(row.status) is not DocumentJobStatus.RUNNING:
+            raise PersistenceConflictError(
+                "Only a running processing job can fail."
+            )
+
+        now = datetime.now(UTC)
+        row.status = DocumentJobStatus.FAILED.value
+        row.failure_code = failure_code
+        row.failure_message = failure_message
+        row.completed_at = now
+        row.updated_at = now
+
+        try:
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=row.sme_id,
+                    entity_type="document_processing_job",
+                    entity_id=row.job_id,
+                    action="document_processing_job_failed",
+                    actor_id=row.requested_by,
+                    reason=failure_message,
+                    new_value_json=json.dumps(
+                        {"failure_code": failure_code}
+                    ),
+                )
+            )
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_job_from_row(row)
 
     def get_document_processing_state(
         self,
@@ -696,6 +913,19 @@ class GreenSMERepository:
 
         return row
 
+    def _require_document_job_row(
+        self,
+        job_id: str,
+    ) -> DocumentProcessingJobRow:
+        row = self._session.get(DocumentProcessingJobRow, job_id)
+
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"Document processing job {job_id!r} was not found."
+            )
+
+        return row
+
 
 def _sme_row(sme: SME) -> SMERow:
     return SMERow(
@@ -839,6 +1069,26 @@ def _processing_state_from_row(
         intelligent_provider_status=row.intelligent_provider_status,
         failure_code=row.failure_code,
         failure_message=row.failure_message,
+        started_at=row.started_at,
+        completed_at=row.completed_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _document_job_from_row(
+    row: DocumentProcessingJobRow,
+) -> DocumentProcessingJob:
+    return DocumentProcessingJob(
+        job_id=row.job_id,
+        document_id=row.document_id,
+        sme_id=row.sme_id,
+        requested_by=row.requested_by,
+        status=DocumentJobStatus(row.status),
+        attempt_count=row.attempt_count,
+        max_attempts=row.max_attempts,
+        failure_code=row.failure_code,
+        failure_message=row.failure_message,
+        created_at=row.created_at,
         started_at=row.started_at,
         completed_at=row.completed_at,
         updated_at=row.updated_at,
