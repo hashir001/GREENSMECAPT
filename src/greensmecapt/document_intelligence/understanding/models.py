@@ -4,6 +4,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from greensmecapt.document_intelligence.orchestration import (
+    DocumentProcessingManifest,
+)
 from greensmecapt.document_intelligence.reconciliation import (
     EvidenceReconciliationReport,
 )
@@ -49,6 +52,7 @@ class DocumentUnderstandingReport(UnderstandingModel):
     """Summarize semantic extraction for one document."""
 
     document_id: str = Field(min_length=1)
+    processing_manifest: DocumentProcessingManifest | None = None
     deterministic_evidence_ids: tuple[str, ...] = ()
     intelligent_evidence_ids: tuple[str, ...] = ()
     rejected_intelligent_claim_count: int = Field(

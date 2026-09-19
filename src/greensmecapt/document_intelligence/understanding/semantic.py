@@ -3,6 +3,9 @@
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
 )
+from greensmecapt.document_intelligence.orchestration import (
+    DocumentProcessingPlanner,
+)
 from greensmecapt.document_intelligence.semantics import (
     MetricCatalog,
     SemanticMetricExtractor,
@@ -82,6 +85,7 @@ class HybridSemanticExtractor:
         if self._intelligent_service is None:
             return _result(
                 document=document,
+                extracted_document=extracted_document,
                 deterministic=deterministic,
                 intelligent=(),
                 provider_status=(
@@ -109,6 +113,7 @@ class HybridSemanticExtractor:
 
             return _result(
                 document=document,
+                extracted_document=extracted_document,
                 deterministic=deterministic,
                 intelligent=(),
                 provider_status=(
@@ -119,6 +124,7 @@ class HybridSemanticExtractor:
 
         return _result(
             document=document,
+            extracted_document=extracted_document,
             deterministic=deterministic,
             intelligent=(
                 intelligent_report.evidence_items
@@ -135,6 +141,7 @@ class HybridSemanticExtractor:
 def _result(
     *,
     document: SourceDocument,
+    extracted_document: ExtractedDocument,
     deterministic: tuple[EvidenceItem, ...],
     intelligent: tuple[EvidenceItem, ...],
     provider_status: IntelligentProviderStatus,
@@ -173,6 +180,11 @@ def _result(
         evidence_items=evidence_items,
         report=DocumentUnderstandingReport(
             document_id=document.document_id,
+            processing_manifest=(
+                DocumentProcessingPlanner().plan(
+                    extracted_document
+                )
+            ),
             deterministic_evidence_ids=tuple(
                 evidence.evidence_id
                 for evidence in deterministic

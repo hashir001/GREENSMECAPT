@@ -16,8 +16,10 @@ from greensmecapt.document_intelligence.models import (
     ExtractedTable,
     ExtractedTableCell,
     ExtractedTextBlock,
+    ExtractedVisualRegion,
     TextBlockKind,
     TextSource,
+    VisualRegionKind,
 )
 
 
@@ -354,6 +356,11 @@ class PaddleStructuredPageParser:
             page_height=height,
         )
 
+        visual_regions = _convert_visual_regions(
+            raw_parsing_results=raw_parsing_results,
+            page_number=page_number,
+        )
+
         text = _compose_page_text(
             text_blocks=text_blocks,
             tables=tables,
@@ -373,6 +380,7 @@ class PaddleStructuredPageParser:
             page_height=height,
             text_blocks=text_blocks,
             tables=tables,
+            visual_regions=visual_regions,
         )
 
     def _create_pipeline(self) -> object:
@@ -631,6 +639,54 @@ def _convert_tables(
     return tuple(tables)
 
 
+def _convert_visual_regions(
+    *,
+    raw_parsing_results: Sequence[Mapping[str, Any]],
+    page_number: int,
+) -> tuple[ExtractedVisualRegion, ...]:
+    """Preserve chart, diagram and image regions for later routing."""
+
+    regions: list[ExtractedVisualRegion] = []
+
+    for raw_block in raw_parsing_results:
+        label = str(
+            raw_block.get("block_label", "")
+        ).strip().lower()
+        kind = _visual_region_kind(label)
+
+        if kind is None:
+            continue
+
+        bounding_box = _bounding_box(
+            raw_block.get("block_bbox")
+        )
+
+        if bounding_box is None:
+            continue
+
+        caption = " ".join(
+            str(
+                raw_block.get("block_content", "")
+            ).split()
+        ) or None
+        region_number = len(regions) + 1
+
+        regions.append(
+            ExtractedVisualRegion(
+                region_id=(
+                    f"paddle_page_{page_number}_visual_"
+                    f"{region_number}"
+                ),
+                kind=kind,
+                bounding_box=bounding_box,
+                caption=caption,
+                confidence=None,
+            )
+        )
+
+    return tuple(regions)
+
+
 def _position_html_cells(
     rows: Sequence[Sequence[_HTMLCell]],
 ) -> tuple[
@@ -866,6 +922,26 @@ def _block_kind(label: str) -> TextBlockKind:
     }
 
     return mapping.get(label, TextBlockKind.OTHER)
+
+
+def _visual_region_kind(
+    label: str,
+) -> VisualRegionKind | None:
+    """Map Paddle layout labels to stable visual categories."""
+
+    mapping = {
+        "chart": VisualRegionKind.CHART,
+        "chart_body": VisualRegionKind.CHART,
+        "diagram": VisualRegionKind.DIAGRAM,
+        "flowchart": VisualRegionKind.DIAGRAM,
+        "figure": VisualRegionKind.OTHER,
+        "image": VisualRegionKind.OTHER,
+        "picture": VisualRegionKind.PHOTOGRAPH,
+        "photograph": VisualRegionKind.PHOTOGRAPH,
+        "logo": VisualRegionKind.LOGO,
+    }
+
+    return mapping.get(label)
 
 
 def _mapping_sequence(

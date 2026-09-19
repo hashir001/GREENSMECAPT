@@ -57,6 +57,11 @@ def _payload() -> dict[str, object]:
                 "block_content": "",
                 "block_bbox": [20, 120, 700, 360],
             },
+            {
+                "block_label": "chart",
+                "block_content": "Renewable energy trend",
+                "block_bbox": [20, 400, 700, 760],
+            },
         ],
         "table_res_list": [
             {
@@ -99,6 +104,10 @@ def test_convert_paddle_blocks_and_tables() -> None:
     )
     assert page.tables[0].header_row_indices == (0,)
     assert page.tables[0].cells[0].confidence == pytest.approx(0.99)
+    assert page.visual_regions[0].kind == "chart"
+    assert page.visual_regions[0].caption == (
+        "Renewable energy trend"
+    )
     assert "Renewable energy | 72%" in page.text
 
 

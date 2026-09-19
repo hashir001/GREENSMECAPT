@@ -28,6 +28,16 @@ class TextBlockKind(StrEnum):
     OTHER = "other"
 
 
+class VisualRegionKind(StrEnum):
+    """Describe a non-table visual region recovered from a page."""
+
+    CHART = "chart"
+    DIAGRAM = "diagram"
+    PHOTOGRAPH = "photograph"
+    LOGO = "logo"
+    OTHER = "other"
+
+
 class BoundingBox(BaseModel):
     """Locate content using top-left page coordinates."""
 
@@ -209,6 +219,27 @@ class ExtractedTable(BaseModel):
         return tuple(tuple(row) for row in rows)
 
 
+class ExtractedVisualRegion(BaseModel):
+    """Preserve one positioned visual for selective interpretation."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+        allow_inf_nan=False,
+    )
+
+    region_id: str = Field(min_length=1)
+    kind: VisualRegionKind
+    bounding_box: BoundingBox
+    caption: str | None = Field(default=None, min_length=1)
+    confidence: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+    )
+
+
 class ExtractedPage(BaseModel):
     """Represent structured content recovered from one document page."""
 
@@ -228,6 +259,7 @@ class ExtractedPage(BaseModel):
 
     text_blocks: tuple[ExtractedTextBlock, ...] = ()
     tables: tuple[ExtractedTable, ...] = ()
+    visual_regions: tuple[ExtractedVisualRegion, ...] = ()
 
     @model_validator(mode="after")
     def validate_page_structure(self) -> Self:
@@ -246,6 +278,9 @@ class ExtractedPage(BaseModel):
         table_ids = [
             table.table_id for table in self.tables
         ]
+        visual_region_ids = [
+            region.region_id for region in self.visual_regions
+        ]
         reading_orders = [
             block.reading_order for block in self.text_blocks
         ]
@@ -258,6 +293,13 @@ class ExtractedPage(BaseModel):
         if len(table_ids) != len(set(table_ids)):
             raise ValueError(
                 "Table IDs must be unique within a page."
+            )
+
+        if len(visual_region_ids) != len(
+            set(visual_region_ids)
+        ):
+            raise ValueError(
+                "Visual-region IDs must be unique within a page."
             )
 
         if len(reading_orders) != len(set(reading_orders)):

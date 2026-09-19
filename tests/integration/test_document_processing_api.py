@@ -131,6 +131,14 @@ def test_process_uploaded_document_and_persist_evidence(
     assert processing_result["report"][
         "intelligent_provider_status"
     ] == "disabled"
+    assert processing_result["report"][
+        "processing_manifest"
+    ]["execution_mode"] == "immediate"
+    assert processing_result["report"][
+        "processing_manifest"
+    ]["page_profiles"][0]["content_kinds"] == [
+        "digital_text"
+    ]
     assert processing_result["evidence_items"][0][
         "normalized_value"
     ] == 72.0
