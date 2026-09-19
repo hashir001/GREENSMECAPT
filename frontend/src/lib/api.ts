@@ -9,6 +9,12 @@ import type {
   SME,
   StructuredInvestmentRecord,
 } from '../types/api'
+import type {
+  DocumentBatchCheckpoint,
+  DocumentJobExecution,
+  DocumentJobProgress,
+  DocumentProcessingJob,
+} from '../types/jobs'
 import {
   createPreviewAssessment,
   getPreviewAssessmentRun,
@@ -23,10 +29,16 @@ import {
 } from './previewData'
 import { isPreviewMode, supabase } from './supabase'
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+const apiBaseUrl = (
+  import.meta.env.VITE_API_BASE_URL || '/api'
+).replace(/\/$/, '')
+
+const jobPollIntervalMs = 750
+const maximumJobPolls = 800
 
 export class ApiError extends Error {
   readonly status: number
+
   constructor(message: string, status: number) {
     super(message)
     this.name = 'ApiError'
@@ -35,55 +47,493 @@ export class ApiError extends Error {
 }
 
 async function accessToken(): Promise<string> {
-  if (!supabase) throw new ApiError('Supabase authentication is not configured.', 401)
+  if (!supabase) {
+    throw new ApiError(
+      'Supabase authentication is not configured.',
+      401,
+    )
+  }
+
   const { data, error } = await supabase.auth.getSession()
-  if (error || !data.session?.access_token) throw new ApiError('Your session has expired. Please sign in again.', 401)
+
+  if (error || !data.session?.access_token) {
+    throw new ApiError(
+      'Your session has expired. Please sign in again.',
+      401,
+    )
+  }
+
   return data.session.access_token
 }
 
-async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function apiRequest<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const token = await accessToken()
   const headers = new Headers(options.headers)
+
   headers.set('Authorization', `Bearer ${token}`)
-  if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
-  const response = await fetch(`${apiBaseUrl}${path}`, { ...options, headers })
+
+  if (
+    options.body
+    && !(options.body instanceof FormData)
+  ) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  const response = await fetch(
+    `${apiBaseUrl}${path}`,
+    {
+      ...options,
+      headers,
+    },
+  )
+
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}.`
+    let message =
+      `Request failed with status ${response.status}.`
+
     try {
-      const payload = (await response.json()) as { detail?: string | { message?: string } }
-      if (typeof payload.detail === 'string') message = payload.detail
-      else if (payload.detail?.message) message = payload.detail.message
-    } catch { /* Keep fallback for non-JSON responses. */ }
+      const payload = await response.json() as {
+        detail?: string | {
+          message?: string
+        }
+      }
+
+      if (typeof payload.detail === 'string') {
+        message = payload.detail
+      } else if (payload.detail?.message) {
+        message = payload.detail.message
+      }
+    } catch {
+      // Retain the fallback for non-JSON responses.
+    }
+
     throw new ApiError(message, response.status)
   }
+
   return response.json() as Promise<T>
 }
 
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds)
+  })
+}
+
+function previewJob(
+  smeId: string,
+  documentId: string,
+  status: DocumentProcessingJob['status'],
+): DocumentProcessingJob {
+  const now = new Date().toISOString()
+
+  return {
+    job_id: `preview_job_${documentId}`,
+    document_id: documentId,
+    sme_id: smeId,
+    requested_by: 'preview_user',
+    status,
+    attempt_count: status === 'queued' ? 0 : 1,
+    max_attempts: 3,
+    failure_code: null,
+    failure_message: null,
+    worker_id:
+      status === 'running'
+        ? 'preview_worker'
+        : null,
+    lease_expires_at:
+      status === 'running'
+        ? now
+        : null,
+    last_heartbeat_at:
+      status === 'running'
+        ? now
+        : null,
+    created_at: now,
+    started_at:
+      status === 'queued'
+        ? null
+        : now,
+    completed_at:
+      status === 'completed'
+      || status === 'failed'
+        ? now
+        : null,
+    updated_at: now,
+  }
+}
+
+async function pollDocumentJob(
+  smeId: string,
+  documentId: string,
+  initialJob: DocumentProcessingJob,
+  onProgress?: (
+    progress: DocumentJobProgress
+  ) => void,
+  minimumPolls = 0,
+): Promise<DocumentJobExecution> {
+  let job = initialJob
+  let batches: DocumentBatchCheckpoint[] = []
+
+  onProgress?.({
+    job,
+    batches,
+  })
+
+  for (
+    let poll = 0;
+    poll < maximumJobPolls;
+    poll += 1
+  ) {
+    if (
+      poll >= minimumPolls
+      && job.status === 'completed'
+    ) {
+      const result =
+        await apiRequest<DocumentProcessingResult>(
+          `/smes/${
+            encodeURIComponent(smeId)
+          }/documents/${
+            encodeURIComponent(documentId)
+          }/processing`,
+        )
+
+      return {
+        job,
+        batches,
+        result,
+      }
+    }
+
+    if (
+      poll >= minimumPolls
+      && job.status === 'failed'
+    ) {
+      return {
+        job,
+        batches,
+        result: null,
+      }
+    }
+
+    await wait(jobPollIntervalMs)
+
+    const jobsPath =
+      `/smes/${
+        encodeURIComponent(smeId)
+      }/documents/${
+        encodeURIComponent(documentId)
+      }/processing-jobs/${
+        encodeURIComponent(job.job_id)
+      }`
+
+    const nextProgress = await Promise.all([
+      apiRequest<DocumentProcessingJob>(
+        jobsPath,
+      ),
+      apiRequest<DocumentBatchCheckpoint[]>(
+        `${jobsPath}/batches`,
+      ),
+    ])
+
+    job = nextProgress[0]
+    batches = nextProgress[1]
+
+    onProgress?.({
+      job,
+      batches,
+    })
+  }
+
+  throw new ApiError(
+    'Document processing did not finish within ten minutes.',
+    408,
+  )
+}
+
+async function runPreviewDocumentJob(
+  smeId: string,
+  documentId: string,
+  onProgress?: (
+    progress: DocumentJobProgress
+  ) => void,
+): Promise<DocumentJobExecution> {
+  onProgress?.({
+    job: previewJob(
+      smeId,
+      documentId,
+      'queued',
+    ),
+    batches: [],
+  })
+
+  const result = await processPreviewDocument(
+    smeId,
+    documentId,
+  )
+
+  const job = previewJob(
+    smeId,
+    documentId,
+    'completed',
+  )
+
+  onProgress?.({
+    job,
+    batches: [],
+  })
+
+  return {
+    job,
+    batches: [],
+    result,
+  }
+}
+
 export const api = {
-  listSMEs: () => isPreviewMode ? Promise.resolve(structuredClone(previewSMEs)) : apiRequest<SME[]>('/smes'),
-  getSMERecord: (smeId: string) => isPreviewMode ? getPreviewRecord(smeId) : apiRequest<StructuredInvestmentRecord>(`/smes/${encodeURIComponent(smeId)}/record`),
-  uploadDocument: (smeId: string, file: File, documentType: string) => {
-    if (isPreviewMode) return uploadPreviewDocument(smeId, file, documentType)
+  listSMEs: () => (
+    isPreviewMode
+      ? Promise.resolve(
+          structuredClone(previewSMEs)
+        )
+      : apiRequest<SME[]>('/smes')
+  ),
+
+  getSMERecord: (smeId: string) => (
+    isPreviewMode
+      ? getPreviewRecord(smeId)
+      : apiRequest<StructuredInvestmentRecord>(
+          `/smes/${
+            encodeURIComponent(smeId)
+          }/record`,
+        )
+  ),
+
+  uploadDocument: (
+    smeId: string,
+    file: File,
+    documentType: string,
+  ) => {
+    if (isPreviewMode) {
+      return uploadPreviewDocument(
+        smeId,
+        file,
+        documentType,
+      )
+    }
+
     const form = new FormData()
+
     form.set('file', file)
-    form.set('document_type', documentType)
-    return apiRequest<DocumentUploadResponse>(`/smes/${encodeURIComponent(smeId)}/documents`, { method: 'POST', body: form })
+    form.set(
+      'document_type',
+      documentType,
+    )
+
+    return apiRequest<DocumentUploadResponse>(
+      `/smes/${
+        encodeURIComponent(smeId)
+      }/documents`,
+      {
+        method: 'POST',
+        body: form,
+      },
+    )
   },
-  getDocumentProcessing: (smeId: string, documentId: string) => isPreviewMode
-    ? getPreviewDocumentProcessing(smeId, documentId)
-    : apiRequest<DocumentProcessingResult>(`/smes/${encodeURIComponent(smeId)}/documents/${encodeURIComponent(documentId)}/processing`),
-  processDocument: (smeId: string, documentId: string) => isPreviewMode
-    ? processPreviewDocument(smeId, documentId)
-    : apiRequest<DocumentProcessingResult>(`/smes/${encodeURIComponent(smeId)}/documents/${encodeURIComponent(documentId)}/process`, { method: 'POST' }),
-  validateEvidence: (evidenceId: string, status: EvidenceItem['validation_status'], reason?: string) => isPreviewMode
-    ? validatePreviewEvidence(evidenceId, status)
-    : apiRequest<EvidenceItem>(`/evidence/${encodeURIComponent(evidenceId)}/validation`, { method: 'PATCH', body: JSON.stringify({ status, reason: reason || null }) }),
-  getAssessmentConfiguration: () => isPreviewMode
-    ? Promise.resolve(structuredClone(previewAssessmentConfiguration))
-    : apiRequest<AssessmentConfiguration>('/assessments/configuration'),
-  createAssessment: (request: CohortAssessmentRequest) => isPreviewMode
-    ? createPreviewAssessment(request)
-    : apiRequest<AssessmentRunRecord>('/assessments/compare', { method: 'POST', body: JSON.stringify(request) }),
-  listAssessmentRuns: () => isPreviewMode ? Promise.resolve(structuredClone(previewRuns)) : apiRequest<AssessmentRunSummary[]>('/assessments/runs'),
-  getAssessmentRun: (runId: string) => isPreviewMode ? getPreviewAssessmentRun(runId) : apiRequest<AssessmentRunRecord>(`/assessments/runs/${encodeURIComponent(runId)}`),
+
+  getDocumentProcessing: (
+    smeId: string,
+    documentId: string,
+  ) => (
+    isPreviewMode
+      ? getPreviewDocumentProcessing(
+          smeId,
+          documentId,
+        )
+      : apiRequest<DocumentProcessingResult>(
+          `/smes/${
+            encodeURIComponent(smeId)
+          }/documents/${
+            encodeURIComponent(documentId)
+          }/processing`,
+        )
+  ),
+
+  processDocument: (
+    smeId: string,
+    documentId: string,
+  ) => (
+    isPreviewMode
+      ? processPreviewDocument(
+          smeId,
+          documentId,
+        )
+      : apiRequest<DocumentProcessingResult>(
+          `/smes/${
+            encodeURIComponent(smeId)
+          }/documents/${
+            encodeURIComponent(documentId)
+          }/process`,
+          {
+            method: 'POST',
+          },
+        )
+  ),
+
+  runDocumentProcessingJob: async (
+    smeId: string,
+    documentId: string,
+    onProgress?: (
+      progress: DocumentJobProgress
+    ) => void,
+  ) => {
+    if (isPreviewMode) {
+      return runPreviewDocumentJob(
+        smeId,
+        documentId,
+        onProgress,
+      )
+    }
+
+    const jobsPath =
+      `/smes/${
+        encodeURIComponent(smeId)
+      }/documents/${
+        encodeURIComponent(documentId)
+      }/processing-jobs`
+
+    const job =
+      await apiRequest<DocumentProcessingJob>(
+        jobsPath,
+        {
+          method: 'POST',
+        },
+      )
+
+    return pollDocumentJob(
+      smeId,
+      documentId,
+      job,
+      onProgress,
+      1,
+    )
+  },
+
+  retryDocumentProcessingJob: async (
+    smeId: string,
+    documentId: string,
+    jobId: string,
+    onProgress?: (
+      progress: DocumentJobProgress
+    ) => void,
+  ) => {
+    if (isPreviewMode) {
+      return runPreviewDocumentJob(
+        smeId,
+        documentId,
+        onProgress,
+      )
+    }
+
+    const jobsPath =
+      `/smes/${
+        encodeURIComponent(smeId)
+      }/documents/${
+        encodeURIComponent(documentId)
+      }/processing-jobs/${
+        encodeURIComponent(jobId)
+      }`
+
+    const job =
+      await apiRequest<DocumentProcessingJob>(
+        `${jobsPath}/retry`,
+        {
+          method: 'POST',
+        },
+      )
+
+    return pollDocumentJob(
+      smeId,
+      documentId,
+      job,
+      onProgress,
+      1,
+    )
+  },
+
+  validateEvidence: (
+    evidenceId: string,
+    status: EvidenceItem[
+      'validation_status'
+    ],
+    reason?: string,
+  ) => (
+    isPreviewMode
+      ? validatePreviewEvidence(
+          evidenceId,
+          status,
+        )
+      : apiRequest<EvidenceItem>(
+          `/evidence/${
+            encodeURIComponent(evidenceId)
+          }/validation`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              status,
+              reason: reason || null,
+            }),
+          },
+        )
+  ),
+
+  getAssessmentConfiguration: () => (
+    isPreviewMode
+      ? Promise.resolve(
+          structuredClone(
+            previewAssessmentConfiguration,
+          ),
+        )
+      : apiRequest<AssessmentConfiguration>(
+          '/assessments/configuration',
+        )
+  ),
+
+  createAssessment: (
+    request: CohortAssessmentRequest,
+  ) => (
+    isPreviewMode
+      ? createPreviewAssessment(request)
+      : apiRequest<AssessmentRunRecord>(
+          '/assessments/compare',
+          {
+            method: 'POST',
+            body: JSON.stringify(request),
+          },
+        )
+  ),
+
+  listAssessmentRuns: () => (
+    isPreviewMode
+      ? Promise.resolve(
+          structuredClone(previewRuns)
+        )
+      : apiRequest<AssessmentRunSummary[]>(
+          '/assessments/runs',
+        )
+  ),
+
+  getAssessmentRun: (
+    runId: string,
+  ) => (
+    isPreviewMode
+      ? getPreviewAssessmentRun(runId)
+      : apiRequest<AssessmentRunRecord>(
+          `/assessments/runs/${
+            encodeURIComponent(runId)
+          }`,
+        )
+  ),
 }
