@@ -94,6 +94,37 @@ class DocumentProcessingJobRow(SQLModel, table=True):
     max_attempts: int = Field(default=3)
     failure_code: str | None = Field(default=None)
     failure_message: str | None = Field(default=None)
+    worker_id: str | None = Field(default=None, index=True)
+    lease_expires_at: datetime | None = Field(default=None, index=True)
+    last_heartbeat_at: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=_utc_now)
+    started_at: datetime | None = Field(default=None)
+    completed_at: datetime | None = Field(default=None)
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+
+class DocumentBatchCheckpointRow(SQLModel, table=True):
+    """Persist resumable output for one bounded group of pages."""
+
+    __tablename__ = "document_batch_checkpoints"
+
+    checkpoint_id: str = Field(primary_key=True)
+    job_id: str = Field(
+        foreign_key="document_processing_jobs.job_id",
+        index=True,
+    )
+    document_id: str = Field(
+        foreign_key="documents.document_id",
+        index=True,
+    )
+    batch_id: str = Field(index=True)
+    page_numbers_json: str
+    status: str = Field(default="planned", index=True)
+    attempt_count: int = Field(default=0)
+    max_attempts: int = Field(default=3)
+    worker_id: str | None = Field(default=None, index=True)
+    failure_message: str | None = Field(default=None)
+    result_json: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utc_now)
     started_at: datetime | None = Field(default=None)
     completed_at: datetime | None = Field(default=None)

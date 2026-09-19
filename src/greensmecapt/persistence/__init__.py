@@ -15,6 +15,7 @@ from greensmecapt.persistence.repository import (
 )
 from greensmecapt.persistence.tables import (
     AuditEventRow,
+    DocumentBatchCheckpointRow,
     DocumentProcessingJobRow,
     DocumentProcessingRow,
     DocumentRow,
@@ -29,6 +30,7 @@ __all__ = [
     "AssessmentRunSummary",
     "AuditEventRow",
     "Database",
+    "DocumentBatchCheckpointRow",
     "DocumentRow",
     "DocumentProcessingJobRow",
     "DocumentProcessingRow",

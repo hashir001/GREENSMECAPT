@@ -1,14 +1,17 @@
 """Transactional persistence for GREENSMECAPT domain records."""
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlmodel import Session, select
 
 from greensmecapt.domain import (
     SME,
+    DocumentBatchCheckpoint,
+    DocumentBatchStatus,
     DocumentJobStatus,
     DocumentProcessingJob,
     DocumentProcessingState,
@@ -21,6 +24,7 @@ from greensmecapt.domain import (
 )
 from greensmecapt.persistence.tables import (
     AuditEventRow,
+    DocumentBatchCheckpointRow,
     DocumentProcessingJobRow,
     DocumentProcessingRow,
     DocumentRow,
@@ -186,6 +190,8 @@ class GreenSMERepository:
                 f"Stored document {document_id!r} was not found."
             )
 
+        self.recover_stale_document_processing_jobs()
+
         latest = self._session.exec(
             select(DocumentProcessingJobRow)
             .where(DocumentProcessingJobRow.document_id == document_id)
@@ -255,12 +261,243 @@ class GreenSMERepository:
 
         return _document_job_from_row(row)
 
+    def initialize_document_batch_checkpoints(
+        self,
+        *,
+        job_id: str,
+        checkpoints: Sequence[DocumentBatchCheckpoint],
+    ) -> tuple[DocumentBatchCheckpoint, ...]:
+        """Persist a complete, non-overlapping page plan idempotently."""
+
+        job = self._require_document_job_row(job_id)
+
+        if not checkpoints:
+            raise ValueError("At least one page checkpoint is required.")
+
+        checkpoint_ids = [item.checkpoint_id for item in checkpoints]
+        batch_ids = [item.batch_id for item in checkpoints]
+        page_numbers = [
+            page_number
+            for item in checkpoints
+            for page_number in item.page_numbers
+        ]
+
+        if len(checkpoint_ids) != len(set(checkpoint_ids)):
+            raise PersistenceConflictError(
+                "Checkpoint IDs must be unique within a job."
+            )
+
+        if len(batch_ids) != len(set(batch_ids)):
+            raise PersistenceConflictError(
+                "Batch IDs must be unique within a job."
+            )
+
+        if len(page_numbers) != len(set(page_numbers)):
+            raise PersistenceConflictError(
+                "A source page may belong to only one checkpoint."
+            )
+
+        try:
+            for checkpoint in checkpoints:
+                if (
+                    checkpoint.job_id != job.job_id
+                    or checkpoint.document_id != job.document_id
+                    or checkpoint.status
+                    is not DocumentBatchStatus.PLANNED
+                ):
+                    raise PersistenceConflictError(
+                        "Checkpoint plan does not match its processing job."
+                    )
+
+                candidate = _document_batch_row(checkpoint)
+                existing = self._session.get(
+                    DocumentBatchCheckpointRow,
+                    checkpoint.checkpoint_id,
+                )
+
+                if existing is None:
+                    self._session.add(candidate)
+                elif _document_batch_signature(existing) != (
+                    _document_batch_signature(candidate)
+                ):
+                    raise PersistenceConflictError(
+                        "Checkpoint ID already represents different pages."
+                    )
+
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return self.list_document_batch_checkpoints(job_id)
+
+    def list_document_batch_checkpoints(
+        self,
+        job_id: str,
+    ) -> tuple[DocumentBatchCheckpoint, ...]:
+        """Return all page checkpoints in source order."""
+
+        self._require_document_job_row(job_id)
+        rows = self._session.exec(
+            select(DocumentBatchCheckpointRow).where(
+                DocumentBatchCheckpointRow.job_id == job_id
+            )
+        ).all()
+        rows.sort(
+            key=lambda row: min(
+                json.loads(row.page_numbers_json)
+            )
+        )
+        return tuple(
+            _document_batch_from_row(row)
+            for row in rows
+        )
+
+    def start_document_batch_checkpoint(
+        self,
+        *,
+        checkpoint_id: str,
+        worker_id: str,
+    ) -> DocumentBatchCheckpoint:
+        """Claim one unfinished page batch for the job's active worker."""
+
+        row = self._require_document_batch_row(checkpoint_id)
+        status = DocumentBatchStatus(row.status)
+
+        if status is DocumentBatchStatus.COMPLETED:
+            return _document_batch_from_row(row)
+
+        if status is DocumentBatchStatus.RUNNING:
+            if row.worker_id == worker_id:
+                return _document_batch_from_row(row)
+
+            raise PersistenceConflictError(
+                "Page checkpoint is owned by another worker."
+            )
+
+        if row.attempt_count >= row.max_attempts:
+            raise PersistenceConflictError(
+                "Page checkpoint exhausted its retry limit."
+            )
+
+        job = self._require_document_job_row(row.job_id)
+
+        if (
+            DocumentJobStatus(job.status) is not DocumentJobStatus.RUNNING
+            or job.worker_id != worker_id
+        ):
+            raise PersistenceConflictError(
+                "The active job worker must own every page checkpoint."
+            )
+
+        now = datetime.now(UTC)
+        row.status = DocumentBatchStatus.RUNNING.value
+        row.attempt_count += 1
+        row.worker_id = worker_id
+        row.failure_message = None
+        row.result_json = None
+        row.started_at = now
+        row.completed_at = None
+        row.updated_at = now
+
+        try:
+            self._session.add(row)
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_batch_from_row(row)
+
+    def complete_document_batch_checkpoint(
+        self,
+        *,
+        checkpoint_id: str,
+        worker_id: str,
+        result_json: str,
+    ) -> DocumentBatchCheckpoint:
+        """Save one successful page-batch output as a durable checkpoint."""
+
+        if not result_json.strip():
+            raise ValueError("Checkpoint output JSON must not be blank.")
+
+        row = self._require_document_batch_row(checkpoint_id)
+
+        if (
+            DocumentBatchStatus(row.status) is not DocumentBatchStatus.RUNNING
+            or row.worker_id != worker_id
+        ):
+            raise PersistenceConflictError(
+                "Only the active worker can complete a page checkpoint."
+            )
+
+        now = datetime.now(UTC)
+        row.status = DocumentBatchStatus.COMPLETED.value
+        row.worker_id = None
+        row.failure_message = None
+        row.result_json = result_json
+        row.completed_at = now
+        row.updated_at = now
+
+        try:
+            self._session.add(row)
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_batch_from_row(row)
+
+    def fail_document_batch_checkpoint(
+        self,
+        *,
+        checkpoint_id: str,
+        worker_id: str,
+        failure_message: str,
+    ) -> DocumentBatchCheckpoint:
+        """Keep a failed batch retryable without discarding other output."""
+
+        row = self._require_document_batch_row(checkpoint_id)
+
+        if (
+            DocumentBatchStatus(row.status) is not DocumentBatchStatus.RUNNING
+            or row.worker_id != worker_id
+        ):
+            raise PersistenceConflictError(
+                "Only the active worker can fail a page checkpoint."
+            )
+
+        now = datetime.now(UTC)
+        row.status = DocumentBatchStatus.FAILED.value
+        row.worker_id = None
+        row.failure_message = failure_message
+        row.result_json = None
+        row.completed_at = now
+        row.updated_at = now
+
+        try:
+            self._session.add(row)
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_batch_from_row(row)
+
     def start_document_processing_job(
         self,
         *,
         job_id: str,
+        worker_id: str,
+        lease_seconds: int = 300,
     ) -> DocumentProcessingJob:
         """Claim queued or retryable failed work exactly once."""
+
+        if lease_seconds < 1:
+            raise ValueError("Job lease duration must be positive.")
 
         row = self._require_document_job_row(job_id)
         status = DocumentJobStatus(row.status)
@@ -269,9 +506,13 @@ class GreenSMERepository:
             return _document_job_from_row(row)
 
         if status is DocumentJobStatus.RUNNING:
-            raise PersistenceConflictError(
-                f"Processing job {job_id!r} is already running."
-            )
+            if row.worker_id == worker_id:
+                return _document_job_from_row(row)
+
+            if not _lease_expired(row.lease_expires_at):
+                raise PersistenceConflictError(
+                    f"Processing job {job_id!r} is already running."
+                )
 
         if row.attempt_count >= row.max_attempts:
             raise PersistenceConflictError(
@@ -283,6 +524,12 @@ class GreenSMERepository:
         row.attempt_count += 1
         row.failure_code = None
         row.failure_message = None
+        row.worker_id = worker_id
+        row.lease_expires_at = _seconds_after(
+            now,
+            lease_seconds,
+        )
+        row.last_heartbeat_at = now
         row.started_at = now
         row.completed_at = None
         row.updated_at = now
@@ -297,24 +544,132 @@ class GreenSMERepository:
 
         return _document_job_from_row(row)
 
+    def heartbeat_document_processing_job(
+        self,
+        *,
+        job_id: str,
+        worker_id: str,
+        lease_seconds: int = 300,
+    ) -> DocumentProcessingJob:
+        """Extend a running job lease owned by the calling worker."""
+
+        if lease_seconds < 1:
+            raise ValueError("Job lease duration must be positive.")
+
+        row = self._require_document_job_row(job_id)
+
+        if (
+            DocumentJobStatus(row.status) is not DocumentJobStatus.RUNNING
+            or row.worker_id != worker_id
+        ):
+            raise PersistenceConflictError(
+                "Only the active worker may heartbeat a running job."
+            )
+
+        now = datetime.now(UTC)
+        row.last_heartbeat_at = now
+        row.lease_expires_at = _seconds_after(now, lease_seconds)
+        row.updated_at = now
+
+        try:
+            self._session.add(row)
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return _document_job_from_row(row)
+
+    def recover_stale_document_processing_jobs(
+        self,
+        *,
+        as_of: datetime | None = None,
+    ) -> tuple[DocumentProcessingJob, ...]:
+        """Fail abandoned running jobs so their bounded retry can resume."""
+
+        effective_now = as_of or datetime.now(UTC)
+        rows = self._session.exec(
+            select(DocumentProcessingJobRow).where(
+                DocumentProcessingJobRow.status
+                == DocumentJobStatus.RUNNING.value
+            )
+        ).all()
+        recovered: list[DocumentProcessingJob] = []
+
+        for row in rows:
+            if not _lease_expired(
+                row.lease_expires_at,
+                as_of=effective_now,
+            ):
+                continue
+
+            row.status = DocumentJobStatus.FAILED.value
+            row.failure_code = "worker_lease_expired"
+            row.failure_message = (
+                "The processing worker stopped before completing the job."
+            )
+            row.worker_id = None
+            row.lease_expires_at = None
+            row.last_heartbeat_at = None
+            row.completed_at = effective_now
+            row.updated_at = effective_now
+            self._session.add(row)
+
+            checkpoint_rows = self._session.exec(
+                select(DocumentBatchCheckpointRow).where(
+                    DocumentBatchCheckpointRow.job_id == row.job_id,
+                    DocumentBatchCheckpointRow.status
+                    == DocumentBatchStatus.RUNNING.value,
+                )
+            ).all()
+
+            for checkpoint_row in checkpoint_rows:
+                checkpoint_row.status = DocumentBatchStatus.FAILED.value
+                checkpoint_row.worker_id = None
+                checkpoint_row.failure_message = (
+                    "The processing worker lease expired."
+                )
+                checkpoint_row.completed_at = effective_now
+                checkpoint_row.updated_at = effective_now
+                self._session.add(checkpoint_row)
+
+            recovered.append(_document_job_from_row(row))
+
+        if recovered:
+            try:
+                self._session.commit()
+            except Exception:
+                self._session.rollback()
+                raise
+
+        return tuple(recovered)
+
     def complete_document_processing_job(
         self,
         *,
         job_id: str,
+        worker_id: str,
     ) -> DocumentProcessingJob:
         """Mark claimed work complete."""
 
         row = self._require_document_job_row(job_id)
 
-        if DocumentJobStatus(row.status) is not DocumentJobStatus.RUNNING:
+        if (
+            DocumentJobStatus(row.status) is not DocumentJobStatus.RUNNING
+            or row.worker_id != worker_id
+        ):
             raise PersistenceConflictError(
-                "Only a running processing job can be completed."
+                "Only the active worker can complete a running job."
             )
 
         now = datetime.now(UTC)
         row.status = DocumentJobStatus.COMPLETED.value
         row.failure_code = None
         row.failure_message = None
+        row.worker_id = None
+        row.lease_expires_at = None
+        row.last_heartbeat_at = None
         row.completed_at = now
         row.updated_at = now
 
@@ -341,6 +696,7 @@ class GreenSMERepository:
         self,
         *,
         job_id: str,
+        worker_id: str,
         failure_code: str,
         failure_message: str,
     ) -> DocumentProcessingJob:
@@ -348,15 +704,21 @@ class GreenSMERepository:
 
         row = self._require_document_job_row(job_id)
 
-        if DocumentJobStatus(row.status) is not DocumentJobStatus.RUNNING:
+        if (
+            DocumentJobStatus(row.status) is not DocumentJobStatus.RUNNING
+            or row.worker_id != worker_id
+        ):
             raise PersistenceConflictError(
-                "Only a running processing job can fail."
+                "Only the active worker can fail a running job."
             )
 
         now = datetime.now(UTC)
         row.status = DocumentJobStatus.FAILED.value
         row.failure_code = failure_code
         row.failure_message = failure_message
+        row.worker_id = None
+        row.lease_expires_at = None
+        row.last_heartbeat_at = None
         row.completed_at = now
         row.updated_at = now
 
@@ -926,6 +1288,22 @@ class GreenSMERepository:
 
         return row
 
+    def _require_document_batch_row(
+        self,
+        checkpoint_id: str,
+    ) -> DocumentBatchCheckpointRow:
+        row = self._session.get(
+            DocumentBatchCheckpointRow,
+            checkpoint_id,
+        )
+
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"Document batch checkpoint {checkpoint_id!r} was not found."
+            )
+
+        return row
+
 
 def _sme_row(sme: SME) -> SMERow:
     return SMERow(
@@ -1075,6 +1453,32 @@ def _processing_state_from_row(
     )
 
 
+def _seconds_after(value: datetime, seconds: int) -> datetime:
+    return value + timedelta(seconds=seconds)
+
+
+def _lease_expired(
+    value: datetime | None,
+    *,
+    as_of: datetime | None = None,
+) -> bool:
+    if value is None:
+        return True
+
+    normalized = (
+        value.replace(tzinfo=UTC)
+        if value.tzinfo is None
+        else value.astimezone(UTC)
+    )
+    effective_now = as_of or datetime.now(UTC)
+    effective_now = (
+        effective_now.replace(tzinfo=UTC)
+        if effective_now.tzinfo is None
+        else effective_now.astimezone(UTC)
+    )
+    return normalized <= effective_now
+
+
 def _document_job_from_row(
     row: DocumentProcessingJobRow,
 ) -> DocumentProcessingJob:
@@ -1088,8 +1492,69 @@ def _document_job_from_row(
         max_attempts=row.max_attempts,
         failure_code=row.failure_code,
         failure_message=row.failure_message,
+        worker_id=row.worker_id,
+        lease_expires_at=row.lease_expires_at,
+        last_heartbeat_at=row.last_heartbeat_at,
         created_at=row.created_at,
         started_at=row.started_at,
         completed_at=row.completed_at,
         updated_at=row.updated_at,
+    )
+
+
+def _document_batch_row(
+    checkpoint: DocumentBatchCheckpoint,
+) -> DocumentBatchCheckpointRow:
+    return DocumentBatchCheckpointRow(
+        checkpoint_id=checkpoint.checkpoint_id,
+        job_id=checkpoint.job_id,
+        document_id=checkpoint.document_id,
+        batch_id=checkpoint.batch_id,
+        page_numbers_json=json.dumps(checkpoint.page_numbers),
+        status=checkpoint.status.value,
+        attempt_count=checkpoint.attempt_count,
+        max_attempts=checkpoint.max_attempts,
+        worker_id=checkpoint.worker_id,
+        failure_message=checkpoint.failure_message,
+        result_json=checkpoint.result_json,
+        created_at=checkpoint.created_at,
+        started_at=checkpoint.started_at,
+        completed_at=checkpoint.completed_at,
+        updated_at=checkpoint.updated_at,
+    )
+
+
+def _document_batch_from_row(
+    row: DocumentBatchCheckpointRow,
+) -> DocumentBatchCheckpoint:
+    return DocumentBatchCheckpoint(
+        checkpoint_id=row.checkpoint_id,
+        job_id=row.job_id,
+        document_id=row.document_id,
+        batch_id=row.batch_id,
+        page_numbers=tuple(json.loads(row.page_numbers_json)),
+        status=DocumentBatchStatus(row.status),
+        attempt_count=row.attempt_count,
+        max_attempts=row.max_attempts,
+        worker_id=row.worker_id,
+        failure_message=row.failure_message,
+        result_json=row.result_json,
+        created_at=row.created_at,
+        started_at=row.started_at,
+        completed_at=row.completed_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _document_batch_signature(
+    row: DocumentBatchCheckpointRow,
+) -> tuple[object, ...]:
+    return (
+        row.job_id,
+        row.document_id,
+        row.batch_id,
+        row.page_numbers_json,
+        row.status,
+        row.attempt_count,
+        row.max_attempts,
     )

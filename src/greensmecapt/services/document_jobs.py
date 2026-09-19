@@ -1,5 +1,7 @@
 """Execute durable document-processing jobs."""
 
+from uuid import uuid4
+
 from greensmecapt.domain import (
     DocumentJobStatus,
     DocumentProcessingJob,
@@ -28,8 +30,13 @@ class DocumentProcessingJobService:
     ) -> DocumentProcessingJob:
         """Run one queued or retryable failed job."""
 
+        worker_id = f"worker_{uuid4().hex}"
+
         try:
-            job = repository.start_document_processing_job(job_id=job_id)
+            job = repository.start_document_processing_job(
+                job_id=job_id,
+                worker_id=worker_id,
+            )
         except PersistenceConflictError:
             return repository.get_document_processing_job(job_id)
 
@@ -45,12 +52,14 @@ class DocumentProcessingJobService:
         except DocumentProcessingError as error:
             return repository.fail_document_processing_job(
                 job_id=job.job_id,
+                worker_id=worker_id,
                 failure_code=error.code,
                 failure_message=error.message,
             )
         except Exception:
             return repository.fail_document_processing_job(
                 job_id=job.job_id,
+                worker_id=worker_id,
                 failure_code="internal_job_error",
                 failure_message=(
                     "Document processing failed unexpectedly."
@@ -58,5 +67,6 @@ class DocumentProcessingJobService:
             )
 
         return repository.complete_document_processing_job(
-            job_id=job.job_id
+            job_id=job.job_id,
+            worker_id=worker_id,
         )

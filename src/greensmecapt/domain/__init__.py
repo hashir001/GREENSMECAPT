@@ -2,6 +2,8 @@
 
 from greensmecapt.domain.criterion import Criterion, CriterionDirection
 from greensmecapt.domain.document_job import (
+    DocumentBatchCheckpoint,
+    DocumentBatchStatus,
     DocumentJobStatus,
     DocumentProcessingJob,
 )
@@ -20,6 +22,8 @@ from greensmecapt.domain.source_document import DocumentType, SourceDocument
 __all__ = [
     "Criterion",
     "CriterionDirection",
+    "DocumentBatchCheckpoint",
+    "DocumentBatchStatus",
     "DocumentJobStatus",
     "DocumentProcessingJob",
     "DocumentProcessingState",
