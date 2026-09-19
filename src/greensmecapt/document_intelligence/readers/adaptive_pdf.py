@@ -16,6 +16,7 @@ from greensmecapt.document_intelligence.models import (
     ExtractedPageBatch,
     ExtractedTable,
     ExtractedTextBlock,
+    ExtractedVisualRegion,
     TextSource,
 )
 from greensmecapt.document_intelligence.readers.pdf import (
@@ -228,6 +229,69 @@ class AdaptivePdfDocumentReader:
             content=content,
             page_numbers=page_numbers,
         ).batch
+
+    def render_visual_region(
+        self,
+        document: SourceDocument,
+        content: bytes,
+        page: ExtractedPage,
+        region: ExtractedVisualRegion,
+    ) -> bytes:
+        """Render one detected PDF region as bounded PNG content."""
+
+        if document.mime_type not in self.supported_mime_types:
+            raise UnsupportedMimeTypeError(
+                f"Unsupported MIME type: {document.mime_type}"
+            )
+
+        if page.page_width is None or page.page_height is None:
+            raise DocumentReadError(
+                "Visual-region rendering requires page dimensions."
+            )
+
+        try:
+            with pymupdf.open(
+                stream=content,
+                filetype="pdf",
+            ) as pdf:
+                if not 1 <= page.page_number <= pdf.page_count:
+                    raise DocumentReadError(
+                        "Visual region references an invalid PDF page."
+                    )
+
+                source_page = pdf.load_page(page.page_number - 1)
+                box = region.bounding_box
+                scale_x = source_page.rect.width / page.page_width
+                scale_y = source_page.rect.height / page.page_height
+                clip = pymupdf.Rect(
+                    box.x0 * scale_x,
+                    box.top * scale_y,
+                    box.x1 * scale_x,
+                    box.bottom * scale_y,
+                ) & source_page.rect
+
+                if clip.is_empty or clip.width <= 0 or clip.height <= 0:
+                    raise DocumentReadError(
+                        "Visual region falls outside the source page."
+                    )
+
+                return source_page.get_pixmap(
+                    dpi=self._render_dpi,
+                    alpha=False,
+                    clip=clip,
+                ).tobytes("png")
+        except (
+            pymupdf.FileDataError,
+            RuntimeError,
+            ValueError,
+            OSError,
+        ) as error:
+            if isinstance(error, DocumentReadError):
+                raise
+
+            raise DocumentReadError(
+                "Visual PDF region could not be rendered."
+            ) from error
 
     def _read_page_batch_with_diagnostics(
         self,
@@ -691,7 +755,30 @@ def _merge_pages(
         ),
         text_blocks=merged_blocks,
         tables=merged_tables,
+        visual_regions=_merge_visual_regions(
+            native_page.visual_regions,
+            structured_page.visual_regions,
+        ),
     )
+
+
+def _merge_visual_regions(
+    native_regions: tuple[ExtractedVisualRegion, ...],
+    structured_regions: tuple[ExtractedVisualRegion, ...],
+) -> tuple[ExtractedVisualRegion, ...]:
+    """Retain unique visual regions from native and structured parsing."""
+
+    merged: list[ExtractedVisualRegion] = []
+    region_ids: set[str] = set()
+
+    for region in (*native_regions, *structured_regions):
+        if region.region_id in region_ids:
+            continue
+
+        region_ids.add(region.region_id)
+        merged.append(region)
+
+    return tuple(merged)
 
 
 def _merge_text(

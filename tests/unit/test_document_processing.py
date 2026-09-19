@@ -5,6 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from greensmecapt.document_intelligence.models import (
+    BoundingBox,
+    ExtractedDocument,
+    ExtractedPage,
+    ExtractedVisualRegion,
+    TextSource,
+    VisualRegionKind,
+)
 from greensmecapt.document_intelligence.readers import (
     PlainTextDocumentReader,
 )
@@ -14,6 +22,11 @@ from greensmecapt.document_intelligence.semantics import (
 )
 from greensmecapt.document_intelligence.understanding import (
     HybridSemanticExtractor,
+)
+from greensmecapt.document_intelligence.vision import (
+    VisualMetricClaim,
+    VisualProviderOutput,
+    VisualUnderstandingService,
 )
 from greensmecapt.domain import (
     SME,
@@ -31,6 +44,72 @@ from greensmecapt.storage import LocalDocumentStorage
 CATALOG = load_metric_catalog(
     Path("config/metric_catalog.development.json")
 )
+
+
+class VisualReader:
+    """Read one synthetic visual page and render its chart."""
+
+    def read(
+        self,
+        document: SourceDocument,
+        content: bytes,
+    ) -> ExtractedDocument:
+        return ExtractedDocument(
+            document_id=document.document_id,
+            pages=(
+                ExtractedPage(
+                    page_number=1,
+                    text="Environmental performance chart.",
+                    text_source=TextSource.OCR,
+                    page_width=600,
+                    page_height=800,
+                    visual_regions=(
+                        ExtractedVisualRegion(
+                            region_id="page_1_chart_1",
+                            kind=VisualRegionKind.CHART,
+                            bounding_box=BoundingBox(
+                                x0=10,
+                                top=20,
+                                x1=200,
+                                bottom=160,
+                            ),
+                            caption="Renewable energy share",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+    def render_visual_region(
+        self,
+        document,
+        content,
+        page,
+        region,
+    ) -> bytes:
+        return b"visual-crop"
+
+
+class VisualProvider:
+    """Return one explicit chart value."""
+
+    provider_name = "test_visual_provider"
+    provider_version = "1.0"
+    model_name = "test_visual_model"
+
+    def interpret(self, request):
+        return VisualProviderOutput(
+            summary="One explicit metric found.",
+            claims=(
+                VisualMetricClaim(
+                    indicator_id="renewable_energy_percentage",
+                    raw_value="72 percent",
+                    raw_number=72,
+                    raw_unit="percent",
+                    source_description="Value printed above chart bar.",
+                ),
+            ),
+        )
 
 
 def _prepare_document(
@@ -174,6 +253,43 @@ def test_complete_document_without_recognized_metrics(
     assert result.state.evidence_count == 0
     assert result.evidence_items == ()
     assert result.reconciliation is None
+
+
+def test_synchronous_processing_includes_visual_evidence(
+    tmp_path: Path,
+) -> None:
+    """The direct processing path should not omit visual understanding."""
+
+    database, storage, document = _prepare_document(
+        tmp_path,
+        b"synthetic visual source",
+    )
+    service = StoredDocumentProcessingService(
+        storage=storage,
+        reader=VisualReader(),
+        semantic_extractor=HybridSemanticExtractor(
+            deterministic_extractor=SemanticMetricExtractor(CATALOG),
+            catalog=CATALOG,
+        ),
+        visual_service=VisualUnderstandingService(
+            catalog=CATALOG,
+            provider=VisualProvider(),
+        ),
+    )
+
+    with database.session() as session:
+        result = service.process(
+            repository=GreenSMERepository(session),
+            document_id=document.document_id,
+            actor_id="sme-user-001",
+        )
+
+    assert len(result.evidence_items) == 1
+    assert result.report is not None
+    assert result.report.visual_evidence_ids == (
+        result.evidence_items[0].evidence_id,
+    )
+    assert result.report.visual_understanding is not None
 
 
 def test_record_failure_and_allow_retry(tmp_path: Path) -> None:

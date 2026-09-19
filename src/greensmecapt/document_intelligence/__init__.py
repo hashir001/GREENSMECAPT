@@ -23,6 +23,7 @@ from greensmecapt.document_intelligence.ports import (
     DocumentReader,
     EvidenceExtractor,
     PagedDocumentReader,
+    VisualRegionRenderer,
 )
 from greensmecapt.document_intelligence.readers import (
     DocumentReadError,
@@ -77,5 +78,6 @@ __all__ = [
     "TextSource",
     "UnsupportedMimeTypeError",
     "VisualRegionKind",
+    "VisualRegionRenderer",
     "build_production_document_reader",
 ]

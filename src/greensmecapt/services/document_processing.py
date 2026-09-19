@@ -16,6 +16,7 @@ from greensmecapt.document_intelligence.orchestration import (
 from greensmecapt.document_intelligence.ports import (
     DocumentReader,
     PagedDocumentReader,
+    VisualRegionRenderer,
 )
 from greensmecapt.document_intelligence.readers import DocumentReadError
 from greensmecapt.document_intelligence.reconciliation import (
@@ -33,6 +34,11 @@ from greensmecapt.document_intelligence.understanding import (
     HybridSemanticExtractor,
     HybridSemanticResult,
     IntelligentProviderStatus,
+)
+from greensmecapt.document_intelligence.vision import (
+    VisualUnderstandingReport,
+    VisualUnderstandingResult,
+    VisualUnderstandingService,
 )
 from greensmecapt.domain import (
     DocumentBatchCheckpoint,
@@ -86,6 +92,7 @@ class DocumentBatchProcessingResult(BaseModel):
 
     page_batch: ExtractedPageBatch
     semantic_result: HybridSemanticResult | None = None
+    visual_result: VisualUnderstandingResult | None = None
 
 
 class StoredDocumentProcessingService:
@@ -99,6 +106,7 @@ class StoredDocumentProcessingService:
         semantic_extractor: HybridSemanticExtractor,
         reconciliation_service: EvidenceReconciliationService | None = None,
         long_document_policy: LongDocumentPolicy | None = None,
+        visual_service: VisualUnderstandingService | None = None,
     ) -> None:
         self._storage = storage
         self._reader = reader
@@ -109,6 +117,7 @@ class StoredDocumentProcessingService:
         self._long_document_policy = (
             long_document_policy or LongDocumentPolicy()
         )
+        self._visual_service = visual_service
 
     def process(
         self,
@@ -153,6 +162,29 @@ class StoredDocumentProcessingService:
             if report is None:
                 raise ExtractionConsistencyError(
                     "Semantic extraction produced no diagnostics."
+                )
+
+            if (
+                self._visual_service is not None
+                and isinstance(self._reader, VisualRegionRenderer)
+                and capturing_extractor.extracted_document is not None
+            ):
+                visual_result = self._visual_service.analyze(
+                    document=registration.document,
+                    pages=capturing_extractor.extracted_document.pages,
+                    render_region=lambda page, region: (
+                        self._reader.render_visual_region(
+                            registration.document,
+                            content,
+                            page,
+                            region,
+                        )
+                    ),
+                )
+                evidence_items, report = _append_visual_result(
+                    evidence_items=evidence_items,
+                    report=report,
+                    visual_result=visual_result,
                 )
 
             reconciliation = self._reconcile_with_existing_evidence(
@@ -324,9 +356,32 @@ class StoredDocumentProcessingService:
                         if page_batch.pages
                         else None
                     )
+                    visual_result = (
+                        self._visual_service.analyze(
+                            document=registration.document,
+                            pages=page_batch.pages,
+                            render_region=lambda page, region: (
+                                self._reader.render_visual_region(
+                                    registration.document,
+                                    content,
+                                    page,
+                                    region,
+                                )
+                            ),
+                        )
+                        if (
+                            self._visual_service is not None
+                            and isinstance(
+                                self._reader,
+                                VisualRegionRenderer,
+                            )
+                        )
+                        else None
+                    )
                     batch_result = DocumentBatchProcessingResult(
                         page_batch=page_batch,
                         semantic_result=semantic_result,
+                        visual_result=visual_result,
                     )
                     repository.complete_document_batch_checkpoint(
                         checkpoint_id=active.checkpoint_id,
@@ -425,18 +480,45 @@ class _CapturingSemanticExtractor:
     def __init__(self, extractor: HybridSemanticExtractor) -> None:
         self._extractor = extractor
         self.report: DocumentUnderstandingReport | None = None
+        self.extracted_document: ExtractedDocument | None = None
 
     def extract(
         self,
         document: SourceDocument,
         extracted_document,
     ) -> tuple[EvidenceItem, ...]:
+        self.extracted_document = extracted_document
         result = self._extractor.extract_with_diagnostics(
             document=document,
             extracted_document=extracted_document,
         )
         self.report = result.report
         return result.evidence_items
+
+
+def _append_visual_result(
+    *,
+    evidence_items: tuple[EvidenceItem, ...],
+    report: DocumentUnderstandingReport,
+    visual_result: VisualUnderstandingResult,
+) -> tuple[tuple[EvidenceItem, ...], DocumentUnderstandingReport]:
+    """Attach visual results while preserving semantic diagnostics."""
+
+    combined = (*evidence_items, *visual_result.evidence_items)
+    evidence_ids = tuple(item.evidence_id for item in combined)
+
+    if len(evidence_ids) != len(set(evidence_ids)):
+        raise ExtractionConsistencyError(
+            "Semantic and visual extraction produced duplicate evidence IDs."
+        )
+
+    return combined, report.model_copy(
+        update={
+            "visual_evidence_ids": visual_result.report.evidence_ids,
+            "visual_understanding": visual_result.report,
+            "evidence_ids": evidence_ids,
+        }
+    )
 
 
 def _reconcile(
@@ -576,6 +658,17 @@ def _merge_semantic_results(
         for result in semantic_results
         for evidence in result.evidence_items
     )
+    visual_results = tuple(
+        result.visual_result
+        for result in results
+        if result.visual_result is not None
+    )
+    visual_evidence = tuple(
+        evidence
+        for result in visual_results
+        for evidence in result.evidence_items
+    )
+    evidence_items = (*evidence_items, *visual_evidence)
     evidence_ids = tuple(
         evidence.evidence_id
         for evidence in evidence_items
@@ -595,6 +688,10 @@ def _merge_semantic_results(
         evidence_id
         for result in semantic_results
         for evidence_id in result.report.intelligent_evidence_ids
+    )
+    visual_ids = tuple(
+        evidence.evidence_id
+        for evidence in visual_evidence
     )
     statuses = {
         result.report.intelligent_provider_status
@@ -622,6 +719,19 @@ def _merge_semantic_results(
         ),
         deterministic_evidence_ids=deterministic_ids,
         intelligent_evidence_ids=intelligent_ids,
+        visual_evidence_ids=visual_ids,
+        visual_understanding=(
+            VisualUnderstandingReport(
+                document_id=document.document_id,
+                decisions=tuple(
+                    decision
+                    for result in visual_results
+                    for decision in result.report.decisions
+                ),
+            )
+            if visual_results
+            else None
+        ),
         rejected_intelligent_claim_count=sum(
             result.report.rejected_intelligent_claim_count
             for result in semantic_results

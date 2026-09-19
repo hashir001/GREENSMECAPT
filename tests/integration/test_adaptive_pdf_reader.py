@@ -1,8 +1,10 @@
 """Integration tests for adaptive PDF processing."""
 
 from hashlib import sha256
+from io import BytesIO
 
 import pymupdf
+from PIL import Image as PILImage
 from PIL.Image import Image
 
 from greensmecapt.document_intelligence.models import (
@@ -10,7 +12,9 @@ from greensmecapt.document_intelligence.models import (
     ExtractedPage,
     ExtractedTable,
     ExtractedTableCell,
+    ExtractedVisualRegion,
     TextSource,
+    VisualRegionKind,
 )
 from greensmecapt.document_intelligence.readers.adaptive_pdf import (
     AdaptivePdfDocumentReader,
@@ -121,6 +125,37 @@ class TableStructuredParser:
                         bottom=300,
                     ),
                     header_row_indices=(0,),
+                ),
+            ),
+        )
+
+
+class VisualStructuredParser:
+    """Return one detected chart from structured parsing."""
+
+    def parse(
+        self,
+        image: Image,
+        *,
+        page_number: int,
+    ) -> ExtractedPage:
+        return ExtractedPage(
+            page_number=page_number,
+            text="Renewable energy share chart.",
+            text_source=TextSource.OCR,
+            page_width=float(image.width),
+            page_height=float(image.height),
+            visual_regions=(
+                ExtractedVisualRegion(
+                    region_id=f"page_{page_number}_chart_1",
+                    kind=VisualRegionKind.CHART,
+                    bounding_box=BoundingBox(
+                        x0=100,
+                        top=100,
+                        x1=300,
+                        bottom=250,
+                    ),
+                    caption="Renewable energy share",
                 ),
             ),
         )
@@ -355,4 +390,55 @@ def test_fallback_ocr_after_structured_failure() -> None:
         result.processing_records[0]
         .used_fallback_ocr
         is True
+    )
+
+
+def test_preserve_and_render_detected_visual_region() -> None:
+    """A structured chart should survive reading and yield an exact crop."""
+
+    content = _make_pdf((None,))
+    document = _make_document(content)
+    reader = AdaptivePdfDocumentReader(
+        structured_parser=VisualStructuredParser(),
+    )
+    extracted = reader.read(document, content)
+    page = extracted.pages[0]
+
+    assert len(page.visual_regions) == 1
+    png = reader.render_visual_region(
+        document,
+        content,
+        page,
+        page.visual_regions[0],
+    )
+
+    with PILImage.open(BytesIO(png)) as image:
+        assert image.format == "PNG"
+        assert 195 <= image.width <= 205
+        assert 145 <= image.height <= 155
+
+
+def test_hybrid_merge_preserves_structured_visual_regions() -> None:
+    """Native text must not erase charts found by structured parsing."""
+
+    content = _make_pdf(
+        (
+            "Environmental metrics for 2024 include energy, "
+            "emissions, waste and water totals.",
+        )
+    )
+    result = AdaptivePdfDocumentReader(
+        structured_parser=VisualStructuredParser(),
+    ).read_with_diagnostics(
+        document=_make_document(
+            content,
+            document_type=DocumentType.SUSTAINABILITY_REPORT,
+        ),
+        content=content,
+    )
+
+    assert result.document.pages[0].text_source is TextSource.HYBRID
+    assert (
+        result.document.pages[0].visual_regions[0].region_id
+        == "page_1_chart_1"
     )

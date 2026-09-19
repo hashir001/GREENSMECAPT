@@ -25,6 +25,10 @@ from greensmecapt.document_intelligence.understanding import (
     HybridSemanticConfiguration,
     HybridSemanticExtractor,
 )
+from greensmecapt.document_intelligence.vision import (
+    OpenAICompatibleVisualProvider,
+    VisualUnderstandingService,
+)
 from greensmecapt.services.document_processing import (
     StoredDocumentProcessingService,
 )
@@ -98,6 +102,12 @@ def build_document_processing_service(
                         )
                     )
                 )
+            ),
+        ),
+        visual_service=VisualUnderstandingService(
+            catalog=catalog,
+            provider=_visual_provider_from_environment(
+                configured_environment
             ),
         ),
     )
@@ -249,6 +259,44 @@ def _intelligent_service_from_environment(
 
     return IntelligentSemanticExtractionService(
         provider
+    )
+
+
+def _visual_provider_from_environment(
+    environment: Mapping[str, str],
+) -> OpenAICompatibleVisualProvider | None:
+    endpoint = environment.get(
+        "GREENSMECAPT_VISUAL_ENDPOINT"
+    )
+    model = environment.get(
+        "GREENSMECAPT_VISUAL_MODEL"
+    )
+
+    if endpoint is None and model is None:
+        return None
+
+    if not endpoint or not model:
+        raise DocumentProcessingConfigurationError(
+            "Visual interpretation requires both "
+            "GREENSMECAPT_VISUAL_ENDPOINT and "
+            "GREENSMECAPT_VISUAL_MODEL."
+        )
+
+    return OpenAICompatibleVisualProvider(
+        OpenAICompatibleProviderConfiguration(
+            endpoint=endpoint,
+            model=model,
+            api_key_environment_variable=(
+                environment.get(
+                    "GREENSMECAPT_VISUAL_API_KEY_ENV"
+                )
+            ),
+            allow_remote=_environment_boolean(
+                environment,
+                "GREENSMECAPT_VISUAL_ALLOW_REMOTE",
+                default=False,
+            ),
+        )
     )
 
 

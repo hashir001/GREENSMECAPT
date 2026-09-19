@@ -7,6 +7,7 @@ from PIL import Image, UnidentifiedImageError
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
+    ExtractedVisualRegion,
     TextSource,
 )
 from greensmecapt.document_intelligence.readers.ocr import OcrEngine
@@ -110,3 +111,37 @@ class StructuredImageDocumentReader:
             page_width=float(image.width),
             page_height=float(image.height),
         )
+
+    def render_visual_region(
+        self,
+        document: SourceDocument,
+        content: bytes,
+        page: ExtractedPage,
+        region: ExtractedVisualRegion,
+    ) -> bytes:
+        """Crop one detected region from a standalone source image."""
+
+        if page.page_number != 1:
+            raise DocumentReadError(
+                "Image documents contain exactly one source page."
+            )
+
+        try:
+            with Image.open(BytesIO(content)) as image:
+                source = image.convert("RGB")
+                box = region.bounding_box
+                crop = source.crop(
+                    (
+                        int(box.x0),
+                        int(box.top),
+                        int(box.x1),
+                        int(box.bottom),
+                    )
+                )
+                output = BytesIO()
+                crop.save(output, format="PNG")
+                return output.getvalue()
+        except (UnidentifiedImageError, OSError, ValueError) as error:
+            raise DocumentReadError(
+                "Visual image region could not be rendered."
+            ) from error

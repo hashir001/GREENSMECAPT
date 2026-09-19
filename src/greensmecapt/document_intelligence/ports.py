@@ -4,7 +4,9 @@ from typing import Protocol, runtime_checkable
 
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
+    ExtractedPage,
     ExtractedPageBatch,
+    ExtractedVisualRegion,
 )
 from greensmecapt.domain import EvidenceItem, SourceDocument
 
@@ -40,6 +42,21 @@ class PagedDocumentReader(Protocol):
         page_numbers: tuple[int, ...],
     ) -> ExtractedPageBatch:
         """Read exactly the requested source pages."""
+        ...
+
+
+@runtime_checkable
+class VisualRegionRenderer(Protocol):
+    """Render the exact source pixels represented by a visual region."""
+
+    def render_visual_region(
+        self,
+        document: SourceDocument,
+        content: bytes,
+        page: ExtractedPage,
+        region: ExtractedVisualRegion,
+    ) -> bytes:
+        """Return one visual region as PNG bytes."""
         ...
 
 

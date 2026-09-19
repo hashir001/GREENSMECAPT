@@ -4,11 +4,14 @@ from collections.abc import Mapping
 
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
+    ExtractedPage,
     ExtractedPageBatch,
+    ExtractedVisualRegion,
 )
 from greensmecapt.document_intelligence.ports import (
     DocumentReader,
     PagedDocumentReader,
+    VisualRegionRenderer,
 )
 from greensmecapt.document_intelligence.readers.plain_text import (
     UnsupportedMimeTypeError,
@@ -106,3 +109,26 @@ class RoutingDocumentReader:
             )
 
         return reader
+
+    def render_visual_region(
+        self,
+        document: SourceDocument,
+        content: bytes,
+        page: ExtractedPage,
+        region: ExtractedVisualRegion,
+    ) -> bytes:
+        """Delegate exact-region rendering to a capable reader."""
+
+        reader = self._reader_for(document)
+
+        if not isinstance(reader, VisualRegionRenderer):
+            raise UnsupportedMimeTypeError(
+                "The selected reader cannot render visual regions."
+            )
+
+        return reader.render_visual_region(
+            document,
+            content,
+            page,
+            region,
+        )
