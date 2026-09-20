@@ -1,6 +1,5 @@
 """FastAPI application for GREENSMECAPT."""
 
-import os
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from hashlib import sha256
@@ -18,10 +17,12 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
 from greensmecapt.api.assessment import build_assessment_router
+from greensmecapt.api.configuration import cors_origins_from_environment
 from greensmecapt.assessment.workflow import AssessmentWorkflow
 from greensmecapt.domain import (
     SME,
@@ -58,7 +59,7 @@ from greensmecapt.services import (
 from greensmecapt.storage import (
     DocumentStorage,
     DocumentStorageError,
-    LocalDocumentStorage,
+    storage_from_environment,
 )
 
 _MAXIMUM_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -117,12 +118,7 @@ def create_app(
     )
     storage_backend = (
         document_storage
-        or LocalDocumentStorage(
-            os.environ.get(
-                "GREENSMECAPT_STORAGE_ROOT",
-                "./data/documents",
-            )
-        )
+        or storage_from_environment()
     )
     processing_service = (
         document_processor
@@ -143,6 +139,25 @@ def create_app(
         ),
         lifespan=lifespan,
     )
+    cors_origins = cors_origins_from_environment()
+
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(cors_origins),
+            allow_credentials=False,
+            allow_methods=[
+                "GET",
+                "POST",
+                "PATCH",
+                "DELETE",
+                "OPTIONS",
+            ],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+            ],
+        )
     app.state.database = database
     app.state.token_verifier = verifier
     app.state.document_storage = storage_backend

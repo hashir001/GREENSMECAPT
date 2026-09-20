@@ -114,6 +114,33 @@ def test_health_endpoint_is_public(tmp_path: Path) -> None:
     }
 
 
+def test_allow_configured_browser_origin(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Configured frontend origins should pass CORS preflight."""
+
+    monkeypatch.setenv(
+        "GREENSMECAPT_CORS_ORIGINS",
+        "https://app.example.com",
+    )
+
+    with _client(tmp_path) as client:
+        response = client.options(
+            "/smes",
+            headers={
+                "Origin": "https://app.example.com",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "Authorization",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == (
+        "https://app.example.com"
+    )
+
+
 def test_reject_missing_access_token(tmp_path: Path) -> None:
     """Protected API operations must require an access token."""
 
