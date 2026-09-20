@@ -3,8 +3,10 @@ import type {
   AssessmentRunRecord,
   AssessmentRunSummary,
   CohortAssessmentRequest,
+  DocumentProcessingManifest,
   DocumentProcessingResult,
   DocumentProcessingState,
+  DocumentUnderstandingReport,
   DocumentUploadResponse,
   EvidenceItem,
   SME,
@@ -189,6 +191,111 @@ function processingState(documentId: string, smeId: string, status: DocumentProc
   }
 }
 
+function previewManifest(
+  documentId: string,
+  mimeType: string,
+  totalPages: number,
+): DocumentProcessingManifest {
+  const scanned = mimeType.startsWith('image/')
+  const pdf = mimeType === 'application/pdf'
+  const batches = Array.from(
+    { length: Math.ceil(totalPages / 5) },
+    (_, index) => {
+      const firstPage = index * 5 + 1
+      return {
+        batch_id: `${documentId}_batch_${index + 1}`,
+        page_numbers: Array.from(
+          { length: Math.min(5, totalPages - firstPage + 1) },
+          (__, offset) => firstPage + offset,
+        ),
+        status: 'completed' as const,
+        attempt_count: 1,
+        maximum_attempts: 3,
+        failure_message: null,
+      }
+    },
+  )
+
+  return {
+    document_id: documentId,
+    total_pages: totalPages,
+    execution_mode: totalPages > 10 ? 'background' : 'immediate',
+    page_profiles: Array.from({ length: totalPages }, (_, index) => ({
+      page_number: index + 1,
+      text_source: scanned ? 'ocr' : pdf ? 'pdf_embedded' : 'plain_text',
+      content_kinds: [
+        scanned ? 'scanned_text' as const : 'digital_text' as const,
+        ...(pdf && (index + 1) % 4 === 0 ? ['table' as const] : []),
+        ...(pdf && (index + 1) % 6 === 0 ? ['chart' as const] : []),
+      ],
+      required_capabilities: [
+        scanned ? 'ocr' as const : 'native_reading' as const,
+        ...(pdf && (index + 1) % 4 === 0
+          ? ['table_structure' as const]
+          : []),
+        ...(pdf && (index + 1) % 6 === 0
+          ? ['multimodal_interpretation' as const]
+          : []),
+      ],
+      table_count: pdf && (index + 1) % 4 === 0 ? 1 : 0,
+      visual_region_count: pdf && (index + 1) % 6 === 0 ? 1 : 0,
+      reasons: [
+        scanned
+          ? 'Page text was recovered through OCR.'
+          : pdf
+            ? 'Embedded PDF text was recovered directly.'
+            : 'Born-digital text was decoded directly.',
+      ],
+    })),
+    batches,
+    unreadable_pages: [],
+    table_page_count: pdf ? Math.floor(totalPages / 4) : 0,
+    visual_page_count: pdf ? Math.floor(totalPages / 6) : 0,
+    multimodal_page_count: pdf ? Math.floor(totalPages / 6) : 0,
+    review_required_page_count: 0,
+  }
+}
+
+function previewReport(
+  document: StructuredInvestmentRecord['documents'][number],
+  evidenceIds: string[],
+): DocumentUnderstandingReport {
+  const totalPages = document.mime_type === 'application/pdf' ? 14 : 1
+  const manifest = previewManifest(
+    document.document_id,
+    document.mime_type,
+    totalPages,
+  )
+  const decisions = manifest.page_profiles
+    .filter((profile) => profile.visual_region_count > 0)
+    .map((profile) => ({
+      page_number: profile.page_number,
+      region_id: `page_${profile.page_number}_chart_1`,
+      relevance: 'relevant' as const,
+      relevance_reason: 'The chart is adjacent to environmental performance data.',
+      provider_status: 'disabled' as const,
+      provider_summary: null,
+      evidence_ids: [],
+      rejected_claims: [],
+      issue: 'Visual provider is not configured in presentation preview.',
+    }))
+
+  return {
+    document_id: document.document_id,
+    processing_manifest: manifest,
+    deterministic_evidence_ids: evidenceIds,
+    intelligent_evidence_ids: [],
+    visual_evidence_ids: [],
+    visual_understanding: decisions.length
+      ? { document_id: document.document_id, decisions }
+      : null,
+    rejected_intelligent_claim_count: 0,
+    intelligent_provider_status: 'disabled',
+    intelligent_provider_error: null,
+    evidence_ids: evidenceIds,
+  }
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value)
 }
@@ -197,6 +304,20 @@ function requirePreviewRecord(smeId: string): StructuredInvestmentRecord {
   const record = previewRecords[smeId]
   if (!record) throw new Error(`SME ${smeId} was not found.`)
   return record
+}
+
+export async function createPreviewSME(sme: SME): Promise<SME> {
+  if (previewRecords[sme.sme_id]) {
+    throw new Error(`SME ${sme.sme_id} already exists.`)
+  }
+
+  previewSMEs.push(sme)
+  previewRecords[sme.sme_id] = {
+    sme,
+    documents: [],
+    evidence_items: [],
+  }
+  return clone(sme)
 }
 
 function buildPreviewReconciliation(smeId: string) {
@@ -235,7 +356,7 @@ for (const record of Object.values(previewRecords)) {
     const ids = documentEvidence.map((item) => item.evidence_id)
     previewProcessing[document.document_id] = {
       state: processingState(document.document_id, document.sme_id, status, ids.length),
-      report: status === 'completed' ? { document_id: document.document_id, deterministic_evidence_ids: ids, intelligent_evidence_ids: [], rejected_intelligent_claim_count: 0, intelligent_provider_status: 'disabled', intelligent_provider_error: null, evidence_ids: ids } : null,
+      report: status === 'completed' ? previewReport(document, ids) : null,
       evidence_items: documentEvidence,
       reconciliation: buildPreviewReconciliation(record.sme.sme_id),
     }
@@ -285,7 +406,7 @@ export async function processPreviewDocument(smeId: string, documentId: string):
   const ids = documentEvidence.map((item) => item.evidence_id)
   const result: DocumentProcessingResult = {
     state: processingState(documentId, smeId, 'completed', ids.length),
-    report: { document_id: documentId, deterministic_evidence_ids: ids, intelligent_evidence_ids: [], rejected_intelligent_claim_count: 0, intelligent_provider_status: 'disabled', intelligent_provider_error: null, evidence_ids: ids },
+    report: previewReport(document, ids),
     evidence_items: documentEvidence,
     reconciliation: buildPreviewReconciliation(smeId),
   }

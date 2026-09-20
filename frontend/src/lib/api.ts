@@ -16,6 +16,7 @@ import type {
   DocumentProcessingJob,
 } from '../types/jobs'
 import {
+  createPreviewSME,
   createPreviewAssessment,
   getPreviewAssessmentRun,
   getPreviewDocumentProcessing,
@@ -70,6 +71,14 @@ async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const response = await authenticatedRequest(path, options)
+  return response.json() as Promise<T>
+}
+
+async function authenticatedRequest(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
   let token = await accessToken()
   const headers = new Headers(options.headers)
 
@@ -132,7 +141,7 @@ async function apiRequest<T>(
     throw new ApiError(message, response.status)
   }
 
-  return response.json() as Promise<T>
+  return response
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -288,10 +297,61 @@ async function runPreviewDocumentJob(
     batches: [],
   })
 
+  await wait(250)
+
   const result = await processPreviewDocument(
     smeId,
     documentId,
   )
+
+  const manifestBatches = result.report?.processing_manifest?.batches ?? []
+  let batches: DocumentBatchCheckpoint[] = manifestBatches.map((batch) => ({
+    checkpoint_id: `checkpoint_${batch.batch_id}`,
+    job_id: `preview_job_${documentId}`,
+    document_id: documentId,
+    batch_id: batch.batch_id,
+    page_numbers: batch.page_numbers,
+    status: 'planned',
+    attempt_count: 0,
+    max_attempts: batch.maximum_attempts,
+    worker_id: null,
+    failure_message: null,
+    result_json: null,
+    created_at: new Date().toISOString(),
+    started_at: null,
+    completed_at: null,
+    updated_at: new Date().toISOString(),
+  }))
+
+  for (let index = 0; index < batches.length; index += 1) {
+    batches = batches.map((batch, batchIndex) => ({
+      ...batch,
+      status: batchIndex < index
+        ? 'completed'
+        : batchIndex === index
+          ? 'running'
+          : 'planned',
+      attempt_count: batchIndex <= index ? 1 : 0,
+      worker_id: batchIndex === index ? 'preview_worker' : null,
+      started_at: batchIndex <= index ? new Date().toISOString() : null,
+      completed_at: batchIndex < index ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    }))
+    onProgress?.({
+      job: previewJob(smeId, documentId, 'running'),
+      batches,
+    })
+    await wait(220)
+  }
+
+  batches = batches.map((batch) => ({
+    ...batch,
+    status: 'completed',
+    attempt_count: 1,
+    worker_id: null,
+    completed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }))
 
   const job = previewJob(
     smeId,
@@ -301,17 +361,28 @@ async function runPreviewDocumentJob(
 
   onProgress?.({
     job,
-    batches: [],
+    batches,
   })
 
   return {
     job,
-    batches: [],
+    batches,
     result,
   }
 }
 
 export const api = {
+  createSME: (sme: SME) => {
+    if (isPreviewMode) {
+      return createPreviewSME(sme)
+    }
+
+    return apiRequest<SME>('/smes', {
+      method: 'POST',
+      body: JSON.stringify(sme),
+    })
+  },
+
   listSMEs: () => (
     isPreviewMode
       ? Promise.resolve(
@@ -378,6 +449,74 @@ export const api = {
             encodeURIComponent(documentId)
           }/processing`,
         )
+  ),
+
+  getLatestDocumentJobProgress: async (
+    smeId: string,
+    documentId: string,
+  ): Promise<DocumentJobProgress | null> => {
+    if (isPreviewMode) {
+      const result = await getPreviewDocumentProcessing(smeId, documentId)
+      if (result.state.status === 'stored') return null
+      const job = previewJob(
+        smeId,
+        documentId,
+        result.state.status === 'processing' ? 'running' : result.state.status,
+      )
+      const batches = (result.report?.processing_manifest?.batches ?? []).map(
+        (batch): DocumentBatchCheckpoint => ({
+          checkpoint_id: `checkpoint_${batch.batch_id}`,
+          job_id: job.job_id,
+          document_id: documentId,
+          batch_id: batch.batch_id,
+          page_numbers: batch.page_numbers,
+          status: batch.status === 'processing' ? 'running' : batch.status,
+          attempt_count: batch.attempt_count,
+          max_attempts: batch.maximum_attempts,
+          worker_id: null,
+          failure_message: batch.failure_message,
+          result_json: null,
+          created_at: job.created_at,
+          started_at: job.started_at,
+          completed_at: job.completed_at,
+          updated_at: job.updated_at,
+        }),
+      )
+      return { job, batches }
+    }
+
+    const path = `/smes/${encodeURIComponent(smeId)}/documents/${encodeURIComponent(documentId)}/processing-jobs`
+    const job = await apiRequest<DocumentProcessingJob | null>(`${path}/latest`)
+
+    if (!job) return null
+
+    const batches = await apiRequest<DocumentBatchCheckpoint[]>(
+      `${path}/${encodeURIComponent(job.job_id)}/batches`,
+    )
+    return { job, batches }
+  },
+
+  watchDocumentProcessingJob: (
+    smeId: string,
+    documentId: string,
+    progress: DocumentJobProgress,
+    onProgress?: (next: DocumentJobProgress) => void,
+  ) => pollDocumentJob(
+    smeId,
+    documentId,
+    progress.job,
+    onProgress,
+  ),
+
+  getDocumentContent: (smeId: string, documentId: string) => (
+    isPreviewMode
+      ? Promise.resolve(new Blob(
+          ['Presentation preview: original source bytes are available in connected mode.'],
+          { type: 'text/plain' },
+        ))
+      : authenticatedRequest(
+          `/smes/${encodeURIComponent(smeId)}/documents/${encodeURIComponent(documentId)}/content`,
+        ).then((response) => response.blob())
   ),
 
   processDocument: (

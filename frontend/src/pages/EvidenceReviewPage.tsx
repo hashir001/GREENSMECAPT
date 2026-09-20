@@ -10,6 +10,7 @@ export function EvidenceReviewPage() {
   const { canValidateEvidence } = usePermissions()
   const [companies, setCompanies] = useState<SME[]>([])
   const [evidence, setEvidence] = useState<EvidenceItem[]>([])
+  const [documentNames, setDocumentNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -19,6 +20,10 @@ export function EvidenceReviewPage() {
         setCompanies(nextCompanies)
         const records = await Promise.all(nextCompanies.map((company) => api.getSMERecord(company.sme_id)))
         setEvidence(records.flatMap((record) => record.evidence_items))
+        setDocumentNames(Object.fromEntries(
+          records.flatMap((record) => record.documents)
+            .map((document) => [document.document_id, document.file_name]),
+        ))
       })
       .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Evidence could not be loaded.'))
       .finally(() => setLoading(false))
@@ -57,7 +62,7 @@ export function EvidenceReviewPage() {
 
       {error && <div className="error-banner">{error}</div>}
       {loading ? <div className="skeleton evidence-page-skeleton" /> : (
-        <EvidenceReviewPanel evidenceItems={evidence} canValidate={canValidateEvidence} companyNames={companyNames} onValidate={validateEvidence} />
+        <EvidenceReviewPanel evidenceItems={evidence} canValidate={canValidateEvidence} companyNames={companyNames} documentNames={documentNames} onValidate={validateEvidence} />
       )}
     </>
   )

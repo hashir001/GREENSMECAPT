@@ -219,6 +219,40 @@ def test_queue_document_processing_and_poll_durable_job(
     assert batches.json()[0]["page_numbers"] == [1]
 
 
+def test_latest_job_and_original_content_survive_refresh(
+    tmp_path: Path,
+) -> None:
+    """The UI should recover job progress and inspect source bytes."""
+
+    content = b"Renewable energy share: 72 percent."
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        document_id = _upload(client, content)
+        jobs_path = (
+            f"/smes/sme_001/documents/{document_id}"
+            "/processing-jobs"
+        )
+
+        queued = client.post(jobs_path, headers=SME_HEADERS)
+        latest = client.get(
+            f"{jobs_path}/latest",
+            headers=SME_HEADERS,
+        )
+        source = client.get(
+            f"/smes/sme_001/documents/{document_id}/content",
+            headers=SME_HEADERS,
+        )
+
+    assert latest.status_code == 200
+    assert latest.json()["job_id"] == queued.json()["job_id"]
+    assert latest.json()["status"] == "completed"
+    assert source.status_code == 200
+    assert source.content == content
+    assert source.headers["content-type"] == "text/plain; charset=utf-8"
+    assert source.headers["cache-control"] == "private, no-store"
+
+
 def test_failed_processing_job_can_be_retried_with_same_identity(
     tmp_path: Path,
 ) -> None:

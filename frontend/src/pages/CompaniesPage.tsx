@@ -1,16 +1,35 @@
-import { ArrowUpRight, Building2, MapPin, Search } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import {
+  ArrowUpRight,
+  Building2,
+  LoaderCircle,
+  MapPin,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 
+import { usePermissions } from '../auth/usePermissions'
 import { StatusPill } from '../components/StatusPill'
 import { api } from '../lib/api'
 import type { SME } from '../types/api'
 
 export function CompaniesPage() {
+  const navigate = useNavigate()
+  const permissions = usePermissions()
   const [companies, setCompanies] = useState<SME[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [draft, setDraft] = useState<SME>({
+    sme_id: '',
+    legal_name: '',
+    sector: '',
+    jurisdiction: '',
+  })
 
   useEffect(() => {
     void api.listSMEs()
@@ -31,6 +50,32 @@ export function CompaniesPage() {
     )
   }, [companies, query])
 
+  function updateDraft(field: keyof SME, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }))
+  }
+
+  async function createCompany(event: FormEvent) {
+    event.preventDefault()
+    setCreating(true)
+    setError('')
+
+    try {
+      const next = await api.createSME({
+        sme_id: draft.sme_id.trim(),
+        legal_name: draft.legal_name.trim(),
+        sector: draft.sector.trim(),
+        jurisdiction: draft.jurisdiction.trim(),
+      })
+      setCompanies((current) => [...current, next])
+      setCreateOpen(false)
+      void navigate(`/companies/${next.sme_id}`)
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The company record could not be created.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <>
       <section className="page-heading">
@@ -39,7 +84,40 @@ export function CompaniesPage() {
           <h1>SME portfolio</h1>
           <p>Explore the companies, sectors and evidence records available to you.</p>
         </div>
+        {permissions.canCreateSMEs && (
+          <button className="primary-button" type="button" onClick={() => setCreateOpen(true)}>
+            <Plus size={16} /> Add company
+          </button>
+        )}
       </section>
+
+      {createOpen && (
+        <div className="company-create-backdrop" role="presentation" onMouseDown={() => setCreateOpen(false)}>
+          <form className="company-create-dialog" onSubmit={(event) => void createCompany(event)} onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span className="eyebrow">New evidence record</span>
+                <h2>Add an SME</h2>
+                <p>Create the company workspace first, then upload and process its sources.</p>
+              </div>
+              <button className="icon-button" type="button" aria-label="Close company form" onClick={() => setCreateOpen(false)}><X size={17} /></button>
+            </header>
+            <div className="company-create-grid">
+              <label className="builder-field">Company ID<input required minLength={1} value={draft.sme_id} onChange={(event) => updateDraft('sme_id', event.target.value)} placeholder="sme_ecopack" /></label>
+              <label className="builder-field">Legal name<input required minLength={1} value={draft.legal_name} onChange={(event) => updateDraft('legal_name', event.target.value)} placeholder="EcoPack Manufacturing LLC" /></label>
+              <label className="builder-field">Sector<input required minLength={1} value={draft.sector} onChange={(event) => updateDraft('sector', event.target.value)} placeholder="Sustainable packaging" /></label>
+              <label className="builder-field">Jurisdiction<input required minLength={1} value={draft.jurisdiction} onChange={(event) => updateDraft('jurisdiction', event.target.value)} placeholder="United Arab Emirates" /></label>
+            </div>
+            <footer>
+              <button className="secondary-button" type="button" onClick={() => setCreateOpen(false)}>Cancel</button>
+              <button className="primary-button" type="submit" disabled={creating}>
+                {creating ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}
+                {creating ? 'Creating…' : 'Create company workspace'}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
 
       <section className="panel portfolio-panel">
         <div className="portfolio-toolbar">

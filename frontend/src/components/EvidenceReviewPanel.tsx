@@ -11,6 +11,7 @@ type EvidenceReviewPanelProps = {
   canValidate: boolean
   conflictEvidenceIds?: Set<string>
   companyNames?: Record<string, string>
+  documentNames?: Record<string, string>
   onValidate: (evidenceId: string, status: 'accepted' | 'rejected', reason?: string) => Promise<void>
 }
 
@@ -23,7 +24,7 @@ function valueLabel(item: EvidenceItem) {
   return `${item.normalized_value}${item.unit === 'percent' ? '%' : item.unit ? ` ${item.unit}` : ''}`
 }
 
-export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEvidenceIds = new Set(), companyNames = {}, onValidate }: EvidenceReviewPanelProps) {
+export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEvidenceIds = new Set(), companyNames = {}, documentNames = {}, onValidate }: EvidenceReviewPanelProps) {
   const [filter, setFilter] = useState<Filter>('all')
   const [rejectingId, setRejectingId] = useState('')
   const [reason, setReason] = useState('')
@@ -104,6 +105,7 @@ export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEviden
 
               <blockquote>{item.source_excerpt || 'No source excerpt was returned.'}</blockquote>
               <div className="evidence-provenance">
+                <span><FileSearch size={14} /> {documentNames[item.document_id] ?? item.document_id}</span>
                 <span><FileSearch size={14} /> {item.source_locator}</span>
                 <span><ShieldCheck size={14} /> {humanize(item.extraction_method)}</span>
                 {item.confidence !== null && <span>{Math.round(item.confidence * 100)}% extraction confidence</span>}

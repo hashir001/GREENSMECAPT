@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  Bell,
   Building2,
   ChevronDown,
   FileSearch,
@@ -125,11 +124,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="topbar__actions">
-            <button className="icon-button" type="button" aria-label="Notifications">
-              <Bell size={19} />
-              <span className="notification-dot" />
-            </button>
-            <div className="user-menu">
+            <NavLink className="icon-button" to="/evidence" aria-label="Open evidence review queue">
+              <FileSearch size={18} />
+            </NavLink>
+            <NavLink className="user-menu" to="/settings">
               <span className="user-menu__avatar">
                 {isPreviewMode ? 'P' : email.charAt(0).toUpperCase()}
               </span>
@@ -138,7 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <small>{isPreviewMode ? 'interactive demo' : role}</small>
               </span>
               <ChevronDown size={16} />
-            </div>
+            </NavLink>
           </div>
         </header>
 

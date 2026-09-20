@@ -11,6 +11,7 @@ export function usePermissions() {
   const reviewerRole = role !== null && ['admin', 'reviewer'].includes(role)
   return {
     role: isPreviewMode ? 'reviewer' as const : role,
+    canCreateSMEs: isPreviewMode || role === 'admin',
     canUploadDocuments: isPreviewMode || documentRole,
     canProcessDocuments: isPreviewMode || documentRole,
     canValidateEvidence: isPreviewMode || reviewerRole,

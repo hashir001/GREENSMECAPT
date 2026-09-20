@@ -261,6 +261,22 @@ class GreenSMERepository:
 
         return _document_job_from_row(row)
 
+    def get_latest_document_processing_job(
+        self,
+        document_id: str,
+    ) -> DocumentProcessingJob | None:
+        """Return the newest durable job for one document, if any."""
+
+        row = self._session.exec(
+            select(DocumentProcessingJobRow)
+            .where(
+                DocumentProcessingJobRow.document_id == document_id
+            )
+            .order_by(DocumentProcessingJobRow.created_at.desc())
+        ).first()
+
+        return _document_job_from_row(row) if row is not None else None
+
     def initialize_document_batch_checkpoints(
         self,
         *,

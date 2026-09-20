@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from hashlib import sha256
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import (
@@ -14,6 +15,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Response,
     UploadFile,
     status,
 )
@@ -40,6 +42,7 @@ from greensmecapt.persistence import (
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
+    StoredDocumentRegistration,
 )
 from greensmecapt.security import (
     ApplicationRole,
@@ -416,6 +419,52 @@ def create_app(
         )
 
     @app.get(
+        "/smes/{sme_id}/documents/{document_id}/content",
+        response_class=Response,
+    )
+    def get_document_content(
+        sme_id: str,
+        document_id: str,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> Response:
+        """Return authorized original bytes for source inspection."""
+
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+        registration = _require_document_for_sme(
+            repository=repository,
+            document_id=document_id,
+            sme_id=sme_id,
+        )
+
+        try:
+            content = storage_backend.read(registration.storage_key)
+        except DocumentStorageError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+
+        return Response(
+            content=content,
+            media_type=registration.document.mime_type,
+            headers={
+                "Content-Disposition": (
+                    "inline; filename*=UTF-8''"
+                    + quote(registration.document.file_name)
+                ),
+                "Cache-Control": "private, no-store",
+            },
+        )
+
+    @app.get(
         "/smes/{sme_id}/documents/{document_id}/processing",
         response_model=DocumentProcessingResult,
     )
@@ -596,6 +645,38 @@ def create_app(
         return repository.list_document_batch_checkpoints(job_id)
 
     @app.get(
+        (
+            "/smes/{sme_id}/documents/{document_id}"
+            "/processing-jobs/latest"
+        ),
+        response_model=DocumentProcessingJob | None,
+    )
+    def get_latest_document_processing_job(
+        sme_id: str,
+        document_id: str,
+        session: Annotated[
+            Session,
+            Depends(get_session),
+        ],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> DocumentProcessingJob | None:
+        """Return resumable progress for the newest document job."""
+
+        _require_sme_access(principal, sme_id)
+        repository = GreenSMERepository(session)
+        _require_document_for_sme(
+            repository=repository,
+            document_id=document_id,
+            sme_id=sme_id,
+        )
+        return repository.get_latest_document_processing_job(
+            document_id
+        )
+
+    @app.get(
         "/smes/{sme_id}/documents/{document_id}/processing-jobs/{job_id}",
         response_model=DocumentProcessingJob,
     )
@@ -770,7 +851,7 @@ def _require_document_for_sme(
     repository: GreenSMERepository,
     document_id: str,
     sme_id: str,
-) -> None:
+) -> StoredDocumentRegistration:
     """Reject missing documents and cross-SME path mismatches."""
 
     try:
@@ -786,6 +867,8 @@ def _require_document_for_sme(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Document {document_id!r} was not found.",
         )
+
+    return registration
 
 
 app = create_app()

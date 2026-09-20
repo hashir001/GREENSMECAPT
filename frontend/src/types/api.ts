@@ -57,6 +57,85 @@ export type DocumentProcessingState = {
   updated_at: string
 }
 
+export type PageContentKind =
+  | 'digital_text'
+  | 'scanned_text'
+  | 'table'
+  | 'chart'
+  | 'diagram'
+  | 'image'
+  | 'unknown'
+
+export type ProcessingCapability =
+  | 'native_reading'
+  | 'ocr'
+  | 'table_structure'
+  | 'multimodal_interpretation'
+  | 'visual_relevance_review'
+  | 'human_review'
+
+export type PageProcessingProfile = {
+  page_number: number
+  text_source: 'plain_text' | 'pdf_embedded' | 'ocr' | 'hybrid' | null
+  content_kinds: PageContentKind[]
+  required_capabilities: ProcessingCapability[]
+  table_count: number
+  visual_region_count: number
+  reasons: string[]
+}
+
+export type DocumentProcessingManifest = {
+  document_id: string
+  total_pages: number
+  execution_mode: 'immediate' | 'background'
+  page_profiles: PageProcessingProfile[]
+  batches: Array<{
+    batch_id: string
+    page_numbers: number[]
+    status: 'planned' | 'processing' | 'completed' | 'failed'
+    attempt_count: number
+    maximum_attempts: number
+    failure_message: string | null
+  }>
+  unreadable_pages: number[]
+  table_page_count: number
+  visual_page_count: number
+  multimodal_page_count: number
+  review_required_page_count: number
+}
+
+export type VisualRegionDecision = {
+  page_number: number
+  region_id: string
+  relevance: 'relevant' | 'irrelevant' | 'uncertain'
+  relevance_reason: string
+  provider_status: 'skipped' | 'disabled' | 'succeeded' | 'failed'
+  provider_summary: string | null
+  evidence_ids: string[]
+  rejected_claims: Array<{
+    claim_index: number
+    indicator_id: string
+    reason: string
+  }>
+  issue: string | null
+}
+
+export type DocumentUnderstandingReport = {
+  document_id: string
+  processing_manifest: DocumentProcessingManifest | null
+  deterministic_evidence_ids: string[]
+  intelligent_evidence_ids: string[]
+  visual_evidence_ids: string[]
+  visual_understanding: {
+    document_id: string
+    decisions: VisualRegionDecision[]
+  } | null
+  rejected_intelligent_claim_count: number
+  intelligent_provider_status: 'disabled' | 'succeeded' | 'failed'
+  intelligent_provider_error: string | null
+  evidence_ids: string[]
+}
+
 export type EvidenceCluster = {
   cluster_id: string
   sme_id: string
@@ -89,15 +168,7 @@ export type ReconciliationReport = {
 
 export type DocumentProcessingResult = {
   state: DocumentProcessingState
-  report: {
-    document_id: string
-    deterministic_evidence_ids: string[]
-    intelligent_evidence_ids: string[]
-    rejected_intelligent_claim_count: number
-    intelligent_provider_status: string
-    intelligent_provider_error: string | null
-    evidence_ids: string[]
-  } | null
+  report: DocumentUnderstandingReport | null
   evidence_items: EvidenceItem[]
   reconciliation: ReconciliationReport | null
 }
