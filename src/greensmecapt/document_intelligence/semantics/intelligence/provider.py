@@ -293,7 +293,10 @@ Rules:
 7. Use the exact segment_id and indicator_id supplied.
 8. Return no claim when the metric, value, or unit is uncertain.
 9. Do not convert units. The application performs conversion.
-10. Return only the required JSON structure.
+10. Copy reporting_period only when the quote explicitly states it.
+11. Copy scope only when the quote explicitly states it, such as Scope 1.
+12. Use null for reporting_period or scope when it is not explicit.
+13. Return only the required JSON structure.
 """.strip()
 
 

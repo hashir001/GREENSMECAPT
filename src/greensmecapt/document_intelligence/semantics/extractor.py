@@ -8,6 +8,10 @@ from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
 )
+from greensmecapt.document_intelligence.semantics.context import (
+    extract_reporting_period,
+    extract_scope,
+)
 from greensmecapt.document_intelligence.semantics.models import (
     MetricCatalog,
     MetricDefinition,
@@ -25,6 +29,16 @@ class _TextSegment:
     text: str
     locator: str
     extraction_method: str
+    column_contexts: tuple["_ColumnContext", ...] = ()
+
+
+@dataclass(frozen=True)
+class _ColumnContext:
+    """Map a table-cell span to its column headers."""
+
+    start: int
+    end: int
+    header_text: str
 
 
 @dataclass(frozen=True)
@@ -202,7 +216,6 @@ def _unit_expression(
         + "|".join(alternatives)
         + r")(?!\w)"
     )
-
 def _page_segments(
     page: ExtractedPage,
 ) -> tuple[_TextSegment, ...]:
@@ -225,13 +238,17 @@ def _page_segments(
         )
 
     for table in page.tables:
-        for row_index, row in enumerate(
-            table.as_matrix()
-        ):
-            row_text = " | ".join(
-                cell.strip()
-                for cell in row
-                if cell.strip()
+        matrix = table.as_matrix()
+        header_indices = set(table.header_row_indices)
+
+        for row_index, row in enumerate(matrix):
+            if row_index in header_indices:
+                continue
+
+            row_text, column_contexts = _table_row_text(
+                row=row,
+                matrix=matrix,
+                header_indices=header_indices,
             )
 
             if not row_text:
@@ -248,6 +265,7 @@ def _page_segments(
                     extraction_method=(
                         "semantic_rule_table_row"
                     ),
+                    column_contexts=column_contexts,
                 )
             )
 
@@ -264,6 +282,50 @@ def _page_segments(
 
     return tuple(segments)
 
+
+def _table_row_text(
+    *,
+    row: tuple[str, ...],
+    matrix: tuple[tuple[str, ...], ...],
+    header_indices: set[int],
+) -> tuple[str, tuple[_ColumnContext, ...]]:
+    """Join a row while retaining each value's column header."""
+
+    parts: list[str] = []
+    contexts: list[_ColumnContext] = []
+    cursor = 0
+
+    for column_index, value in enumerate(row):
+        cleaned = value.strip()
+
+        if not cleaned:
+            continue
+
+        if parts:
+            cursor += len(" | ")
+
+        start = cursor
+        parts.append(cleaned)
+        cursor += len(cleaned)
+
+        headers = tuple(
+            matrix[index][column_index].strip()
+            for index in sorted(header_indices)
+            if (
+                column_index < len(matrix[index])
+                and matrix[index][column_index].strip()
+            )
+        )
+
+        contexts.append(
+            _ColumnContext(
+                start=start,
+                end=cursor,
+                header_text=" | ".join(headers),
+            )
+        )
+
+    return " | ".join(parts), tuple(contexts)
 
 def _metric_matches(
     compiled_metric: _CompiledMetric,
@@ -299,7 +361,6 @@ def _metric_matches(
             ),
         )
     )
-
 
 def _build_evidence(
     *,
@@ -359,6 +420,11 @@ def _build_evidence(
         start=match.start(),
         end=match.end(),
     )
+    reporting_period, scope = _match_context(
+        segment=segment,
+        match=match,
+        excerpt=excerpt,
+    )
 
     fingerprint = sha256(
         (
@@ -369,7 +435,9 @@ def _build_evidence(
             f"{match.start()}:"
             f"{match.end()}:"
             f"{normalized_value}:"
-            f"{definition.canonical_unit}"
+            f"{definition.canonical_unit}:"
+            f"{reporting_period}:"
+            f"{scope}"
         ).encode()
     ).hexdigest()[:20]
 
@@ -392,7 +460,43 @@ def _build_evidence(
             SemanticMetricExtractor.extractor_version
         ),
         confidence=None,
+        reporting_period=reporting_period,
+        scope=scope,
     )
+
+
+def _match_context(
+    *,
+    segment: _TextSegment,
+    match: re.Match[str],
+    excerpt: str,
+) -> tuple[str | None, str | None]:
+    """Recover only explicit period and scope context."""
+
+    reporting_period = extract_reporting_period(excerpt)
+    scope = extract_scope(excerpt)
+
+    number_position = match.start("number")
+    column = next(
+        (
+            item
+            for item in segment.column_contexts
+            if item.start <= number_position <= item.end
+        ),
+        None,
+    )
+
+    if column is not None:
+        reporting_period = (
+            reporting_period
+            or extract_reporting_period(
+                column.header_text,
+                allow_bare_year=True,
+            )
+        )
+        scope = scope or extract_scope(column.header_text)
+
+    return reporting_period, scope
 
 
 def _source_excerpt(

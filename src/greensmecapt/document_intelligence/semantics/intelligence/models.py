@@ -64,6 +64,11 @@ class SemanticClaimPayload(IntelligenceModel):
     raw_unit: str = Field(min_length=1)
 
     source_quote: str = Field(min_length=1)
+    reporting_period: str | None = Field(
+        default=None,
+        min_length=1,
+    )
+    scope: str | None = Field(default=None, min_length=1)
 
 
 class SemanticProviderOutput(IntelligenceModel):
