@@ -79,10 +79,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="sidebar__bottom">
-          <button className="nav-item" type="button">
+          <NavLink
+            className={({ isActive }) =>
+              `nav-item ${isActive ? 'nav-item--active' : ''}`
+            }
+            to="/settings"
+            onClick={() => setMobileOpen(false)}
+          >
             <Settings size={19} />
             <span>Settings</span>
-          </button>
+          </NavLink>
           <button
             className="nav-item"
             type="button"

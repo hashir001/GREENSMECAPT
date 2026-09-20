@@ -391,3 +391,141 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
     );
   transition: width 300ms ease;
 }
+
+.login-form__reset {
+  width: fit-content;
+  margin: -4px 0 4px auto;
+  padding: 0;
+  color: var(--jade);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-form__reset:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.form-success {
+  padding: 10px 12px;
+  color: #246148;
+  background: #e5f5eb;
+  border-radius: 10px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.account-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.account-card {
+  min-width: 0;
+}
+
+.account-card__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: var(--jade);
+  background: rgba(31, 111, 88, 0.09);
+  border: 1px solid rgba(31, 111, 88, 0.12);
+  border-radius: 13px;
+}
+
+.account-details {
+  margin: 18px 0 0;
+}
+
+.account-details > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr);
+  gap: 20px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-details > div:last-child {
+  border-bottom: 0;
+}
+
+.account-details dt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.account-details dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
+}
+
+.account-password-form {
+  display: grid;
+  gap: 15px;
+  margin-top: 18px;
+}
+
+.account-password-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.account-password-form input {
+  width: 100%;
+  padding: 12px 13px;
+  color: var(--ink);
+  background: #fbfcfb;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  outline: none;
+  font: inherit;
+}
+
+.account-password-form input:focus {
+  border-color: var(--jade);
+  box-shadow: 0 0 0 3px rgba(31, 111, 88, 0.09);
+}
+
+.account-preview-note {
+  margin-top: 18px;
+  padding: 16px;
+  color: var(--muted);
+  background: #f7f9f7;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 900px) {
+  .account-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .account-details > div {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+}

@@ -5,21 +5,50 @@ import { useAuth } from '../auth/useAuth'
 import { Brand } from '../components/Brand'
 
 export function LoginPage() {
-  const { signIn } = useAuth()
+  const { requestPasswordReset, signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitting(true)
     setError('')
+    setNotice('')
 
     try {
       await signIn(email, password)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Sign-in failed.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handlePasswordReset() {
+    setError('')
+    setNotice('')
+
+    if (!email.trim()) {
+      setError('Enter your email address first.')
+      return
+    }
+
+    setSubmitting(true)
+
+    try {
+      await requestPasswordReset(email.trim())
+      setNotice(
+        'Password-reset instructions have been sent if the account exists.',
+      )
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Password reset could not be requested.',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -82,6 +111,16 @@ export function LoginPage() {
             </label>
 
             {error && <div className="form-error">{error}</div>}
+            {notice && <div className="form-success">{notice}</div>}
+
+            <button
+              className="login-form__reset"
+              type="button"
+              disabled={submitting}
+              onClick={() => void handlePasswordReset()}
+            >
+              Forgot your password?
+            </button>
 
             <button className="primary-button" type="submit" disabled={submitting}>
               {submitting ? 'Signing in…' : 'Enter platform'}

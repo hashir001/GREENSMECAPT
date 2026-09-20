@@ -42,6 +42,11 @@ const EvidenceReviewPage = lazy(() =>
     default: module.EvidenceReviewPage,
   })),
 )
+const AccountPage = lazy(() =>
+  import('./pages/AccountPage').then((module) => ({
+    default: module.AccountPage,
+  })),
+)
 
 function LoadingScreen() {
   return (
@@ -70,6 +75,7 @@ export default function App() {
           <Route path="/assessments/new" element={<AssessmentBuilderPage />} />
           <Route path="/assessments/:runId" element={<AssessmentResultPage />} />
           <Route path="/evidence" element={<EvidenceReviewPage />} />
+          <Route path="/settings" element={<AccountPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

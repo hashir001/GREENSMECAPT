@@ -18,10 +18,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
-    })
+    void supabase.auth.getSession()
+      .then(({ data }) => {
+        setSession(data.session)
+      })
+      .finally(() => setLoading(false))
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
@@ -42,6 +43,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const { error } = await supabase.auth.signInWithPassword({
           email,
+          password,
+        })
+
+        if (error) throw error
+      },
+      requestPasswordReset: async (email: string) => {
+        if (!supabase) throw new Error('Supabase is not configured.')
+
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          email,
+          {
+            redirectTo: `${window.location.origin}/settings`,
+          },
+        )
+
+        if (error) throw error
+      },
+      updatePassword: async (password: string) => {
+        if (!supabase) throw new Error('Supabase is not configured.')
+
+        const { error } = await supabase.auth.updateUser({
           password,
         })
 

@@ -70,7 +70,7 @@ async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = await accessToken()
+  let token = await accessToken()
   const headers = new Headers(options.headers)
 
   headers.set('Authorization', `Bearer ${token}`)
@@ -82,7 +82,7 @@ async function apiRequest<T>(
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(
+  let response = await fetch(
     `${apiBaseUrl}${path}`,
     {
       ...options,
@@ -90,19 +90,38 @@ async function apiRequest<T>(
     },
   )
 
+  if (response.status === 401 && supabase) {
+    const { data, error } = await supabase.auth.refreshSession()
+
+    if (!error && data.session?.access_token) {
+      token = data.session.access_token
+      headers.set('Authorization', `Bearer ${token}`)
+      response = await fetch(
+        `${apiBaseUrl}${path}`,
+        {
+          ...options,
+          headers,
+        },
+      )
+    }
+  }
+
   if (!response.ok) {
     let message =
       `Request failed with status ${response.status}.`
 
     try {
       const payload = await response.json() as {
-        detail?: string | {
-          message?: string
-        }
+        detail?: string | { message?: string } | Array<{ msg?: string }>
       }
 
       if (typeof payload.detail === 'string') {
         message = payload.detail
+      } else if (Array.isArray(payload.detail)) {
+        message = payload.detail
+          .map((item) => item.msg)
+          .filter(Boolean)
+          .join(' ') || message
       } else if (payload.detail?.message) {
         message = payload.detail.message
       }
