@@ -17,6 +17,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Install OCR runtime
+        run: sudo apt-get update && sudo apt-get install --yes tesseract-ocr
       - name: Install backend
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
       - name: Lint backend
