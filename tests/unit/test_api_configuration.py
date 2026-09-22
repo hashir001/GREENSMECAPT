@@ -19,6 +19,7 @@ def _production_environment() -> dict[str, str]:
         "GREENSMECAPT_SUPABASE_URL": "https://project.supabase.co",
         "GREENSMECAPT_SUPABASE_SERVICE_ROLE_KEY": "server-secret",
         "GREENSMECAPT_STORAGE_BACKEND": "supabase",
+        "GREENSMECAPT_FRONTEND_URL": "https://app.example.com",
         "GREENSMECAPT_CORS_ORIGINS": "https://app.example.com",
     }
 
@@ -89,6 +90,14 @@ def test_reject_non_https_production_origin() -> None:
     environment["GREENSMECAPT_CORS_ORIGINS"] = "http://app.example.com"
 
     with pytest.raises(DeploymentConfigurationError, match="HTTPS"):
+        validate_deployment_environment(environment)
+
+
+def test_require_frontend_url_in_cors_allowlist() -> None:
+    environment = _production_environment()
+    environment["GREENSMECAPT_FRONTEND_URL"] = "https://other.example.com"
+
+    with pytest.raises(DeploymentConfigurationError, match="CORS origin"):
         validate_deployment_environment(environment)
 
 

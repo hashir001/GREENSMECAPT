@@ -30,6 +30,7 @@ def validate_deployment_environment(
         "GREENSMECAPT_AUTH_ISSUER",
         "GREENSMECAPT_SUPABASE_URL",
         "GREENSMECAPT_SUPABASE_SERVICE_ROLE_KEY",
+        "GREENSMECAPT_FRONTEND_URL",
         "GREENSMECAPT_CORS_ORIGINS",
     )
     missing = tuple(name for name in required if not configured.get(name))
@@ -73,11 +74,25 @@ def validate_deployment_environment(
             + "."
         )
 
-    for origin in _cors_origins(configured):
+    cors_origins = _cors_origins(configured)
+
+    for origin in cors_origins:
         if urlsplit(origin).scheme != "https":
             raise DeploymentConfigurationError(
                 "Production CORS origins must use HTTPS."
             )
+
+    frontend_url = configured["GREENSMECAPT_FRONTEND_URL"].rstrip("/")
+
+    if urlsplit(frontend_url).scheme != "https":
+        raise DeploymentConfigurationError(
+            "Production frontend URL must use HTTPS."
+        )
+
+    if frontend_url not in cors_origins:
+        raise DeploymentConfigurationError(
+            "Production frontend URL must be an allowed CORS origin."
+        )
 
     _validate_provider_key(configured, "SEMANTIC")
     _validate_provider_key(configured, "VISUAL")

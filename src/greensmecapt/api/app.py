@@ -57,8 +57,12 @@ from greensmecapt.persistence import (
 from greensmecapt.security import (
     ApplicationRole,
     AuthPrincipal,
+    IdentityAdmin,
+    IdentityAdministrationError,
+    ManagedUser,
     TokenVerifier,
     get_current_principal,
+    identity_admin_from_environment,
     require_roles,
     verifier_from_environment,
 )
@@ -125,7 +129,30 @@ class SystemCapabilities(BaseModel):
     table_extraction: bool = True
     semantic_provider_configured: bool
     visual_provider_configured: bool
+    identity_admin_configured: bool
     human_validation_required: bool = True
+
+
+class UserAccessRequest(BaseModel):
+    """Assign one server-controlled application role."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    role: ApplicationRole
+    sme_ids: tuple[str, ...] = ()
+
+
+class UserInvitationRequest(UserAccessRequest):
+    """Invite one user with their initial application access."""
+
+    email: str = Field(
+        min_length=3,
+        max_length=254,
+        pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$",
+    )
 
 
 def create_app(
@@ -134,6 +161,7 @@ def create_app(
     token_verifier: TokenVerifier | None = None,
     document_storage: DocumentStorage | None = None,
     document_processor: StoredDocumentProcessingService | None = None,
+    identity_administrator: IdentityAdmin | None = None,
 ) -> FastAPI:
     """Create a secured database-bound application."""
 
@@ -151,6 +179,10 @@ def create_app(
     processing_service = (
         document_processor
         or build_document_processing_service(storage_backend)
+    )
+    identity_service = (
+        identity_administrator
+        or identity_admin_from_environment()
     )
 
     @asynccontextmanager
@@ -190,6 +222,7 @@ def create_app(
     app.state.token_verifier = verifier
     app.state.document_storage = storage_backend
     app.state.document_processor = processing_service
+    app.state.identity_administrator = identity_service
     app.state.assessment_workflow = AssessmentWorkflow.from_environment()
 
     def get_session() -> Iterator[Session]:
@@ -238,7 +271,95 @@ def create_app(
             visual_provider_configured=(
                 processing_service.visual_provider_configured
             ),
+            identity_admin_configured=identity_service.configured,
         )
+
+    @app.get(
+        "/admin/users",
+        response_model=tuple[ManagedUser, ...],
+    )
+    def list_managed_users(
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_roles(ApplicationRole.ADMIN)),
+        ],
+    ) -> tuple[ManagedUser, ...]:
+        """List users through the server-only Supabase admin boundary."""
+
+        del principal
+
+        try:
+            return identity_service.list_users()
+        except IdentityAdministrationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(error),
+            ) from error
+
+    @app.post(
+        "/admin/users/invitations",
+        response_model=ManagedUser,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def invite_managed_user(
+        request: UserInvitationRequest,
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_roles(ApplicationRole.ADMIN)),
+        ],
+    ) -> ManagedUser:
+        """Invite a user with validated role and SME access claims."""
+
+        del principal
+
+        try:
+            return identity_service.invite_user(
+                email=request.email,
+                role=request.role,
+                sme_ids=request.sme_ids,
+            )
+        except IdentityAdministrationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+    @app.patch(
+        "/admin/users/{user_id}/access",
+        response_model=ManagedUser,
+    )
+    def update_managed_user_access(
+        user_id: str,
+        request: UserAccessRequest,
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_roles(ApplicationRole.ADMIN)),
+        ],
+    ) -> ManagedUser:
+        """Replace role claims while preventing accidental self-lockout."""
+
+        if (
+            user_id == principal.user_id
+            and request.role is not ApplicationRole.ADMIN
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Administrators cannot remove their own admin access."
+                ),
+            )
+
+        try:
+            return identity_service.update_access(
+                user_id=user_id,
+                role=request.role,
+                sme_ids=request.sme_ids,
+            )
+        except IdentityAdministrationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
 
     @app.post(
         "/system/providers/semantic/check",

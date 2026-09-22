@@ -187,7 +187,23 @@ export type SystemCapabilities = {
   table_extraction: boolean
   semantic_provider_configured: boolean
   visual_provider_configured: boolean
+  identity_admin_configured: boolean
   human_validation_required: boolean
+}
+
+export type ApplicationRole =
+  | 'admin'
+  | 'reviewer'
+  | 'investor'
+  | 'sme_user'
+
+export type ManagedUser = {
+  user_id: string
+  email: string
+  role: ApplicationRole | null
+  sme_ids: string[]
+  invited_at: string | null
+  last_sign_in_at: string | null
 }
 
 export type SemanticProviderConnection = {

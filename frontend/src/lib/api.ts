@@ -6,6 +6,8 @@ import type {
   DocumentProcessingResult,
   DocumentUploadResponse,
   EvidenceItem,
+  ApplicationRole,
+  ManagedUser,
   SME,
   SemanticProviderConnection,
   StructuredInvestmentRecord,
@@ -382,6 +384,7 @@ export const api = {
           table_extraction: true,
           semantic_provider_configured: false,
           visual_provider_configured: false,
+          identity_admin_configured: false,
           human_validation_required: true,
         })
       : apiRequest<SystemCapabilities>('/system/capabilities')
@@ -392,6 +395,43 @@ export const api = {
       '/system/providers/semantic/check',
       { method: 'POST' },
     )
+  ),
+
+  listManagedUsers: () => (
+    isPreviewMode
+      ? Promise.resolve<ManagedUser[]>([])
+      : apiRequest<ManagedUser[]>('/admin/users')
+  ),
+
+  inviteManagedUser: (
+    email: string,
+    role: ApplicationRole,
+    smeIds: string[],
+  ) => apiRequest<ManagedUser>(
+    '/admin/users/invitations',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        role,
+        sme_ids: smeIds,
+      }),
+    },
+  ),
+
+  updateManagedUserAccess: (
+    userId: string,
+    role: ApplicationRole,
+    smeIds: string[],
+  ) => apiRequest<ManagedUser>(
+    `/admin/users/${encodeURIComponent(userId)}/access`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        role,
+        sme_ids: smeIds,
+      }),
+    },
   ),
 
   createSME: (sme: SME) => {

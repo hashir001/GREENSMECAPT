@@ -51,6 +51,12 @@ Supported roles are `admin`, `reviewer`, `investor` and `sme_user`. SME users
 must have at least one assigned SME identifier. Sign out and in again after a
 claim change so Supabase issues a fresh token.
 
+After the first administrator is assigned, that administrator can invite
+additional users and change their roles or SME assignments from **Profile and
+access** in the application. These operations pass through the admin-only
+FastAPI endpoints; the service-role key never reaches the browser. The SQL
+function remains the secure bootstrap route for the first administrator.
+
 ## 3. Configure the backend
 
 Copy the root `.env.example` values into the environment used to start FastAPI.
@@ -60,6 +66,7 @@ Set:
 - the three `GREENSMECAPT_AUTH_*` values to the project's Auth endpoints;
 - `GREENSMECAPT_STORAGE_BACKEND=supabase`;
 - `GREENSMECAPT_SUPABASE_URL` and the server-only service-role key;
+- `GREENSMECAPT_FRONTEND_URL` for trusted invitation and recovery redirects;
 - `GREENSMECAPT_CORS_ORIGINS` to the exact frontend origins.
 
 Never put `GREENSMECAPT_SUPABASE_SERVICE_ROLE_KEY` in a `VITE_*` variable or

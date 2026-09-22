@@ -10,6 +10,7 @@ from greensmecapt.security import (
     ApplicationRole,
     AuthenticationError,
     AuthPrincipal,
+    ManagedUser,
 )
 from greensmecapt.storage import LocalDocumentStorage
 
@@ -74,6 +75,54 @@ class FakeTokenVerifier:
         )
 
 
+class FakeIdentityAdmin:
+    """Provide deterministic user administration for API tests."""
+
+    configured = True
+
+    def __init__(self) -> None:
+        self.users = {
+            "admin-user": ManagedUser(
+                user_id="admin-user",
+                email="admin@example.com",
+                role=ApplicationRole.ADMIN,
+            )
+        }
+
+    def list_users(self) -> tuple[ManagedUser, ...]:
+        return tuple(self.users.values())
+
+    def invite_user(
+        self,
+        *,
+        email: str,
+        role: ApplicationRole,
+        sme_ids: tuple[str, ...],
+    ) -> ManagedUser:
+        user = ManagedUser(
+            user_id="invited-user",
+            email=email,
+            role=role,
+            sme_ids=sme_ids,
+        )
+        self.users[user.user_id] = user
+        return user
+
+    def update_access(
+        self,
+        *,
+        user_id: str,
+        role: ApplicationRole,
+        sme_ids: tuple[str, ...],
+    ) -> ManagedUser:
+        current = self.users[user_id]
+        updated = current.model_copy(
+            update={"role": role, "sme_ids": sme_ids}
+        )
+        self.users[user_id] = updated
+        return updated
+
+
 def _client(tmp_path: Path) -> TestClient:
     """Create an isolated API client with test dependencies."""
 
@@ -85,6 +134,7 @@ def _client(tmp_path: Path) -> TestClient:
         document_storage=LocalDocumentStorage(
             tmp_path / "documents"
         ),
+        identity_administrator=FakeIdentityAdmin(),
     )
 
     return TestClient(application)
@@ -128,8 +178,64 @@ def test_report_runtime_document_capabilities(tmp_path: Path) -> None:
         "table_extraction": True,
         "semantic_provider_configured": False,
         "visual_provider_configured": False,
+        "identity_admin_configured": True,
         "human_validation_required": True,
     }
+
+
+def test_admin_can_invite_and_manage_user_access(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        invitation = client.post(
+            "/admin/users/invitations",
+            headers=ADMIN_HEADERS,
+            json={
+                "email": "owner@example.com",
+                "role": "sme_user",
+                "sme_ids": ["sme_001"],
+            },
+        )
+        update = client.patch(
+            "/admin/users/invited-user/access",
+            headers=ADMIN_HEADERS,
+            json={
+                "role": "reviewer",
+                "sme_ids": [],
+            },
+        )
+        listing = client.get(
+            "/admin/users",
+            headers=ADMIN_HEADERS,
+        )
+
+    assert invitation.status_code == 201
+    assert invitation.json()["sme_ids"] == ["sme_001"]
+    assert update.status_code == 200
+    assert update.json()["role"] == "reviewer"
+    assert len(listing.json()) == 2
+
+
+def test_non_admin_cannot_manage_users(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        response = client.get(
+            "/admin/users",
+            headers=INVESTOR_HEADERS,
+        )
+
+    assert response.status_code == 403
+
+
+def test_admin_cannot_remove_own_admin_access(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        response = client.patch(
+            "/admin/users/admin-user/access",
+            headers=ADMIN_HEADERS,
+            json={
+                "role": "reviewer",
+                "sme_ids": [],
+            },
+        )
+
+    assert response.status_code == 409
 
 
 def test_semantic_provider_check_reports_disabled_provider(

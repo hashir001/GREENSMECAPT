@@ -917,6 +917,102 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
   line-height: 1.65;
 }
 
+.identity-invite-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 18px 0;
+  padding: 16px;
+  background: linear-gradient(145deg, #f4f9f6, #fbfcfb);
+  border: 1px solid #dceae1;
+  border-radius: 14px;
+}
+
+.identity-invite-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.identity-invite-form input,
+.identity-invite-form select,
+.managed-user-row input,
+.managed-user-row select {
+  width: 100%;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.identity-invite-form input:focus,
+.identity-invite-form select:focus,
+.managed-user-row input:focus,
+.managed-user-row select:focus {
+  border-color: var(--jade);
+  box-shadow: 0 0 0 3px rgba(31, 111, 88, 0.08);
+}
+
+.identity-invite-form .primary-button,
+.managed-user-row .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.managed-user-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.managed-user-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.3fr) minmax(140px, 0.55fr) minmax(210px, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  padding: 12px;
+  background: #fbfcfb;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.managed-user-row__identity {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.managed-user-row__identity strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managed-user-row__identity span {
+  color: var(--muted);
+  font-size: 0.61rem;
+  font-weight: 650;
+}
+
+.managed-user-row input:disabled,
+.managed-user-row select:disabled,
+.identity-invite-form input:disabled {
+  color: #8b9892;
+  background: #f1f4f2;
+}
+
 @media (max-width: 900px) {
   .account-layout {
     grid-template-columns: 1fr;
@@ -924,6 +1020,11 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
 
   .capability-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .identity-invite-form,
+  .managed-user-row {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -936,5 +1037,15 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
 
   .capability-grid {
     grid-template-columns: 1fr;
+  }
+
+  .identity-invite-form,
+  .managed-user-row {
+    grid-template-columns: 1fr;
+  }
+
+  .identity-invite-form .primary-button,
+  .managed-user-row .secondary-button {
+    width: 100%;
   }
 }

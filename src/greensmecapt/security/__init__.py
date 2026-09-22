@@ -1,5 +1,15 @@
 """Authentication and authorization for GREENSMECAPT."""
 
+from greensmecapt.security.admin import (
+    DisabledIdentityAdmin,
+    IdentityAdmin,
+    IdentityAdministrationError,
+    IdentityResponse,
+    ManagedUser,
+    SupabaseIdentityAdmin,
+    SupabaseIdentityAdminConfiguration,
+    identity_admin_from_environment,
+)
 from greensmecapt.security.dependencies import (
     get_current_principal,
     require_roles,
@@ -22,10 +32,18 @@ __all__ = [
     "AuthPrincipal",
     "AuthenticationError",
     "DenyAllTokenVerifier",
+    "DisabledIdentityAdmin",
+    "IdentityAdmin",
+    "IdentityAdministrationError",
+    "IdentityResponse",
     "JWTVerifierConfiguration",
+    "ManagedUser",
+    "SupabaseIdentityAdmin",
+    "SupabaseIdentityAdminConfiguration",
     "SupabaseJWTVerifier",
     "TokenVerifier",
     "get_current_principal",
+    "identity_admin_from_environment",
     "require_roles",
     "verifier_from_environment",
 ]
