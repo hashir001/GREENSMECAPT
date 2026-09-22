@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: .
+    environment:
+      GREENSMECAPT_CORS_ORIGINS: http://localhost:4173
+      GREENSMECAPT_DATABASE_URL: sqlite:////app/data/greensmecapt.db
+      GREENSMECAPT_STORAGE_BACKEND: local
+      GREENSMECAPT_STORAGE_ROOT: /app/data/documents
+    ports:
+      - "8000:8000"
+    volumes:
+      - greensmecapt_data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+        VITE_PREVIEW_MODE: "true"
+    depends_on:
+      - api
+    ports:
+      - "4173:80"
+
+volumes:
+  greensmecapt_data:
