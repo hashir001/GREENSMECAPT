@@ -9,6 +9,7 @@ from greensmecapt.document_intelligence.semantics.intelligence.models import (
     RejectedSemanticClaim,
     SemanticClaimPayload,
     SemanticExtractionRequest,
+    SemanticProviderConnection,
     SemanticProviderOutput,
     SemanticSourceSegment,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "SemanticExtractionProvider",
     "SemanticExtractionRequest",
     "SemanticProviderError",
+    "SemanticProviderConnection",
     "SemanticProviderOutput",
     "SemanticSourceSegment",
 ]

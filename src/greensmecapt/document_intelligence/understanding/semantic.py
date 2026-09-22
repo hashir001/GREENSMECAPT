@@ -12,6 +12,7 @@ from greensmecapt.document_intelligence.semantics import (
 )
 from greensmecapt.document_intelligence.semantics.intelligence import (
     IntelligentSemanticExtractionService,
+    SemanticProviderConnection,
     SemanticProviderError,
 )
 from greensmecapt.document_intelligence.understanding.models import (
@@ -54,6 +55,22 @@ class HybridSemanticExtractor:
             configuration
             or HybridSemanticConfiguration()
         )
+
+    @property
+    def intelligent_provider_configured(self) -> bool:
+        """Report whether model-backed semantic extraction is enabled."""
+
+        return self._intelligent_service is not None
+
+    def check_intelligent_provider(self) -> SemanticProviderConnection:
+        """Exercise the configured provider's complete response contract."""
+
+        if self._intelligent_service is None:
+            raise HybridSemanticExtractionError(
+                "No intelligent semantic provider is configured."
+            )
+
+        return self._intelligent_service.check_connection()
 
     def extract(
         self,

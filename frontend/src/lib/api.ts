@@ -7,7 +7,9 @@ import type {
   DocumentUploadResponse,
   EvidenceItem,
   SME,
+  SemanticProviderConnection,
   StructuredInvestmentRecord,
+  SystemCapabilities,
 } from '../types/api'
 import type {
   DocumentBatchCheckpoint,
@@ -372,6 +374,26 @@ async function runPreviewDocumentJob(
 }
 
 export const api = {
+  getSystemCapabilities: () => (
+    isPreviewMode
+      ? Promise.resolve<SystemCapabilities>({
+          native_pdf_reading: true,
+          ocr_routing: true,
+          table_extraction: true,
+          semantic_provider_configured: false,
+          visual_provider_configured: false,
+          human_validation_required: true,
+        })
+      : apiRequest<SystemCapabilities>('/system/capabilities')
+  ),
+
+  checkSemanticProvider: () => (
+    apiRequest<SemanticProviderConnection>(
+      '/system/providers/semantic/check',
+      { method: 'POST' },
+    )
+  ),
+
   createSME: (sme: SME) => {
     if (isPreviewMode) {
       return createPreviewSME(sme)

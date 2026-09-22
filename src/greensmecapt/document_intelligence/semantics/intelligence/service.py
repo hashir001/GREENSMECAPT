@@ -19,6 +19,7 @@ from greensmecapt.document_intelligence.semantics.intelligence.models import (
     RejectedSemanticClaim,
     SemanticClaimPayload,
     SemanticExtractionRequest,
+    SemanticProviderConnection,
     SemanticSourceSegment,
 )
 from greensmecapt.document_intelligence.semantics.intelligence.provider import (
@@ -52,6 +53,44 @@ class IntelligentSemanticExtractionService:
         self._qualitative_instructions = qualitative_instructions
         self._maximum_segments_per_request = maximum_segments_per_request
         self._maximum_characters_per_request = maximum_characters_per_request
+
+    def check_connection(self) -> SemanticProviderConnection:
+        """Exercise authentication, model access and structured output."""
+
+        self._provider.extract(
+            SemanticExtractionRequest(
+                document_id="provider_connection_check",
+                catalog_id="provider_connection_check",
+                catalog_version="1",
+                metrics=(
+                    MetricInstruction(
+                        indicator_id="connection_check_metric",
+                        name="Connection check metric",
+                        aliases=("connection check metric",),
+                        canonical_unit="percent",
+                        accepted_unit_aliases=("percent",),
+                        minimum=0,
+                        maximum=100,
+                    ),
+                ),
+                segments=(
+                    SemanticSourceSegment(
+                        segment_id="connection_check_segment",
+                        page_number=1,
+                        locator="connection check",
+                        text=(
+                            "This is a provider connection check. It contains "
+                            "no environmental measurement."
+                        ),
+                    ),
+                ),
+            )
+        )
+        return SemanticProviderConnection(
+            provider_name=self._provider.provider_name,
+            provider_version=self._provider.provider_version,
+            model_name=self._provider.model_name,
+        )
 
     def extract(
         self,

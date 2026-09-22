@@ -114,6 +114,39 @@ def test_health_endpoint_is_public(tmp_path: Path) -> None:
     }
 
 
+def test_report_runtime_document_capabilities(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        response = client.get(
+            "/system/capabilities",
+            headers=ADMIN_HEADERS,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "native_pdf_reading": True,
+        "ocr_routing": True,
+        "table_extraction": True,
+        "semantic_provider_configured": False,
+        "visual_provider_configured": False,
+        "human_validation_required": True,
+    }
+
+
+def test_semantic_provider_check_reports_disabled_provider(
+    tmp_path: Path,
+) -> None:
+    with _client(tmp_path) as client:
+        response = client.post(
+            "/system/providers/semantic/check",
+            headers=ADMIN_HEADERS,
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "No intelligent semantic provider is configured."
+    )
+
+
 def test_allow_configured_browser_origin(
     tmp_path: Path,
     monkeypatch,

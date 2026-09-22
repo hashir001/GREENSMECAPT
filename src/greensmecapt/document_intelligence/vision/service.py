@@ -59,6 +59,12 @@ class VisualUnderstandingService:
         self._provider = provider
         self._analyze_uncertain = analyze_uncertain
 
+    @property
+    def provider_configured(self) -> bool:
+        """Report whether selected image regions can reach a model."""
+
+        return self._provider is not None
+
     def analyze(
         self,
         *,

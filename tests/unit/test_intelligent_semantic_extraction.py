@@ -46,7 +46,10 @@ class FakeProvider:
         self.requests = []
 
     def extract(self, request):
-        assert request.document_id == "doc_llm_001"
+        assert request.document_id in {
+            "doc_llm_001",
+            "provider_connection_check",
+        }
         self.requests.append(request)
 
         return SemanticProviderOutput(
@@ -321,3 +324,14 @@ def test_partition_long_documents_into_bounded_requests() -> None:
     assert report.request_count == 2
     assert len(provider.requests) == 2
     assert all(len(request.segments) == 1 for request in provider.requests)
+
+
+def test_provider_connection_check_uses_real_schema_contract() -> None:
+    provider = FakeProvider(())
+    service = IntelligentSemanticExtractionService(provider)
+
+    result = service.check_connection()
+
+    assert result.provider_name == "fake_provider"
+    assert result.model_name == "fake_model"
+    assert provider.requests[0].document_id == "provider_connection_check"

@@ -23,6 +23,9 @@ from greensmecapt.document_intelligence.reconciliation import (
     EvidenceReconciliationReport,
     EvidenceReconciliationService,
 )
+from greensmecapt.document_intelligence.semantics.intelligence import (
+    SemanticProviderConnection,
+)
 from greensmecapt.document_intelligence.service import (
     DocumentIntegrityError,
     DocumentIntelligenceService,
@@ -118,6 +121,22 @@ class StoredDocumentProcessingService:
             long_document_policy or LongDocumentPolicy()
         )
         self._visual_service = visual_service
+
+    @property
+    def semantic_provider_configured(self) -> bool:
+        return self._semantic_extractor.intelligent_provider_configured
+
+    @property
+    def visual_provider_configured(self) -> bool:
+        return (
+            self._visual_service is not None
+            and self._visual_service.provider_configured
+        )
+
+    def check_semantic_provider(self) -> SemanticProviderConnection:
+        """Verify the configured provider without transmitting SME data."""
+
+        return self._semantic_extractor.check_intelligent_provider()
 
     def process(
         self,

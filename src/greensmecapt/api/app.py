@@ -26,6 +26,13 @@ from sqlmodel import Session
 from greensmecapt.api.assessment import build_assessment_router
 from greensmecapt.api.configuration import cors_origins_from_environment
 from greensmecapt.assessment.workflow import AssessmentWorkflow
+from greensmecapt.document_intelligence.semantics.intelligence import (
+    SemanticProviderConnection,
+    SemanticProviderError,
+)
+from greensmecapt.document_intelligence.understanding import (
+    HybridSemanticExtractionError,
+)
 from greensmecapt.domain import (
     SME,
     DocumentBatchCheckpoint,
@@ -103,6 +110,19 @@ class DocumentUploadResponse(BaseModel):
     document: SourceDocument
     storage_key: str = Field(min_length=1)
     processing_status: str = "stored"
+
+
+class SystemCapabilities(BaseModel):
+    """Expose operational feature wiring without revealing secrets."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    native_pdf_reading: bool = True
+    ocr_routing: bool = True
+    table_extraction: bool = True
+    semantic_provider_configured: bool
+    visual_provider_configured: bool
+    human_validation_required: bool = True
 
 
 def create_app(
@@ -192,6 +212,55 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ready"}
+
+    @app.get(
+        "/system/capabilities",
+        response_model=SystemCapabilities,
+    )
+    def system_capabilities(
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> SystemCapabilities:
+        """Report which processing paths are configured in this runtime."""
+
+        del principal
+        return SystemCapabilities(
+            semantic_provider_configured=(
+                processing_service.semantic_provider_configured
+            ),
+            visual_provider_configured=(
+                processing_service.visual_provider_configured
+            ),
+        )
+
+    @app.post(
+        "/system/providers/semantic/check",
+        response_model=SemanticProviderConnection,
+    )
+    def check_semantic_provider(
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_roles(ApplicationRole.ADMIN)),
+        ],
+    ) -> SemanticProviderConnection:
+        """Verify key, endpoint, model access and structured output."""
+
+        del principal
+
+        try:
+            return processing_service.check_semantic_provider()
+        except HybridSemanticExtractionError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except SemanticProviderError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(error),
+            ) from error
 
     @app.post(
         "/smes",

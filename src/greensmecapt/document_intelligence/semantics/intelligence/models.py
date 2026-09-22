@@ -128,3 +128,11 @@ class IntelligentExtractionReport(IntelligenceModel):
 
     evidence_items: tuple[EvidenceItem, ...]
     rejected_claims: tuple[RejectedSemanticClaim, ...]
+
+
+class SemanticProviderConnection(IntelligenceModel):
+    """Confirm that a configured provider accepted the real contract."""
+
+    provider_name: str = Field(min_length=1)
+    provider_version: str = Field(min_length=1)
+    model_name: str = Field(min_length=1)

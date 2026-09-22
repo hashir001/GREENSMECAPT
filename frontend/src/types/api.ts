@@ -181,6 +181,21 @@ export type DocumentUploadResponse = {
   processing_status: string
 }
 
+export type SystemCapabilities = {
+  native_pdf_reading: boolean
+  ocr_routing: boolean
+  table_extraction: boolean
+  semantic_provider_configured: boolean
+  visual_provider_configured: boolean
+  human_validation_required: boolean
+}
+
+export type SemanticProviderConnection = {
+  provider_name: string
+  provider_version: string
+  model_name: string
+}
+
 export type StructuredInvestmentRecord = {
   sme: SME
   documents: SourceDocument[]
