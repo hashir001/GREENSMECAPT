@@ -1,4 +1,6 @@
-"""Contracts for grounded language-model metric extraction."""
+"""Contracts for grounded language-model document understanding."""
+
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -39,6 +41,23 @@ class MetricInstruction(IntelligenceModel):
     maximum: float | None = None
 
 
+class QualitativeValueType(StrEnum):
+    """Describe the only qualitative values a provider may propose."""
+
+    SOURCE_TEXT = "source_text"
+    BOOLEAN = "boolean"
+
+
+class QualitativeInstruction(IntelligenceModel):
+    """Describe one governed context claim the provider may identify."""
+
+    claim_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    value_type: QualitativeValueType
+    criterion_id: str | None = Field(default=None, min_length=1)
+
+
 class SemanticExtractionRequest(IntelligenceModel):
     """Supply allowed metrics and traceable source segments."""
 
@@ -48,6 +67,7 @@ class SemanticExtractionRequest(IntelligenceModel):
     metrics: tuple[MetricInstruction, ...] = Field(
         min_length=1
     )
+    qualitative_claims: tuple[QualitativeInstruction, ...] = ()
     segments: tuple[SemanticSourceSegment, ...] = Field(
         min_length=1
     )
@@ -71,10 +91,22 @@ class SemanticClaimPayload(IntelligenceModel):
     scope: str | None = Field(default=None, min_length=1)
 
 
+class QualitativeClaimPayload(IntelligenceModel):
+    """Represent one source-grounded context proposal."""
+
+    segment_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    source_quote: str = Field(min_length=1)
+    boolean_value: bool | None = None
+    reporting_period: str | None = Field(default=None, min_length=1)
+    scope: str | None = Field(default=None, min_length=1)
+
+
 class SemanticProviderOutput(IntelligenceModel):
     """Structured output required from every provider."""
 
     claims: tuple[SemanticClaimPayload, ...] = ()
+    qualitative_claims: tuple[QualitativeClaimPayload, ...] = ()
 
 
 class RejectedSemanticClaim(IntelligenceModel):
@@ -92,6 +124,7 @@ class IntelligentExtractionReport(IntelligenceModel):
     provider_name: str = Field(min_length=1)
     provider_version: str = Field(min_length=1)
     model_name: str = Field(min_length=1)
+    request_count: int = Field(default=1, ge=1)
 
     evidence_items: tuple[EvidenceItem, ...]
     rejected_claims: tuple[RejectedSemanticClaim, ...]

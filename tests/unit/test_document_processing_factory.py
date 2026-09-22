@@ -2,9 +2,14 @@
 
 import pytest
 
+from greensmecapt.assessment.profiles import load_policy
+from greensmecapt.document_intelligence.semantics.intelligence import (
+    QualitativeValueType,
+)
 from greensmecapt.services.factory import (
     DocumentProcessingConfigurationError,
     _environment_boolean,
+    _qualitative_instructions,
     _visual_provider_from_environment,
 )
 
@@ -44,3 +49,20 @@ def test_visual_provider_requires_complete_configuration() -> None:
                 )
             }
         )
+
+
+def test_build_governed_qualitative_instructions() -> None:
+    instructions = _qualitative_instructions(
+        load_policy("config/assessment_profiles.development.json")
+    )
+
+    by_id = {item.claim_id: item for item in instructions}
+
+    assert (
+        by_id["activity_fact:operates_facility"].value_type
+        is QualitativeValueType.BOOLEAN
+    )
+    assert (
+        by_id["criterion_context:green_contribution"].value_type
+        is QualitativeValueType.SOURCE_TEXT
+    )

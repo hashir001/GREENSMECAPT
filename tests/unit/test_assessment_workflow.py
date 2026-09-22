@@ -14,7 +14,12 @@ from greensmecapt.assessment.workflow import (
     AssessmentWorkflow,
     AssessmentWorkflowError,
 )
-from greensmecapt.domain import SME, StructuredInvestmentRecord
+from greensmecapt.domain import (
+    SME,
+    EvidenceItem,
+    EvidenceValidationStatus,
+    StructuredInvestmentRecord,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -137,5 +142,73 @@ def test_reject_duplicate_smes() -> None:
                 cohort_id="cohort_001",
                 version="1.0",
                 minimum_shared_criteria=1,
+            ),
+        )
+
+
+def test_apply_accepted_document_activity_fact() -> None:
+    evidence = EvidenceItem(
+        evidence_id="evidence_fact_001",
+        sme_id="sme_001",
+        document_id="doc_001",
+        indicator_id="activity_fact:operates_facility",
+        raw_value="We operate a workshop in Lahore.",
+        normalized_value=True,
+        source_locator="page 2",
+        source_excerpt="We operate a workshop in Lahore.",
+        extraction_method="language_model_grounded_context_extraction",
+        extractor_name="test",
+        validation_status=EvidenceValidationStatus.ACCEPTED,
+    )
+    record = _record("sme_001").model_copy(
+        update={"evidence_items": (evidence,)}
+    )
+
+    prepared = _workflow().prepare(
+        record=record,
+        context=AssessmentContext(
+            sme_id="sme_001",
+            activity_description="Environmental service provider.",
+        ),
+    )
+
+    assert prepared.profile.context_snapshot.facts["operates_facility"] is True
+    assert prepared.activity_fact_evidence_ids == {
+        "operates_facility": ("evidence_fact_001",)
+    }
+    assert any(
+        item.criterion_id == "purchased_energy_management"
+        and item.status == "applicable"
+        for item in prepared.profile.decisions
+    )
+
+
+def test_reject_conflicting_reviewed_activity_facts() -> None:
+    evidence_items = tuple(
+        EvidenceItem(
+            evidence_id=f"evidence_fact_{value}",
+            sme_id="sme_001",
+            document_id=f"doc_{value}",
+            indicator_id="activity_fact:operates_facility",
+            raw_value=str(value),
+            normalized_value=value,
+            source_locator="page 1",
+            source_excerpt=str(value),
+            extraction_method="language_model_grounded_context_extraction",
+            extractor_name="test",
+            validation_status=EvidenceValidationStatus.ACCEPTED,
+        )
+        for value in (True, False)
+    )
+    record = _record("sme_001").model_copy(
+        update={"evidence_items": evidence_items}
+    )
+
+    with pytest.raises(AssessmentWorkflowError, match="conflicts"):
+        _workflow().prepare(
+            record=record,
+            context=AssessmentContext(
+                sme_id="sme_001",
+                activity_description="Environmental service provider.",
             ),
         )

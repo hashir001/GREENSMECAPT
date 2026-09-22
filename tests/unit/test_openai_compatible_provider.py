@@ -169,4 +169,8 @@ def test_request_schema_constrained_output() -> None:
         transport.payload["temperature"]
         == 0
     )
+    schema = transport.payload["response_format"]["json_schema"]["schema"]
+    assert set(schema["required"]) == set(schema["properties"])
+    claim_schema = schema["$defs"]["SemanticClaimPayload"]
+    assert set(claim_schema["required"]) == set(claim_schema["properties"])
     assert "Authorization" not in transport.headers

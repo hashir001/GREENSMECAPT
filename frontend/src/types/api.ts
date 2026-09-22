@@ -125,6 +125,8 @@ export type DocumentUnderstandingReport = {
   processing_manifest: DocumentProcessingManifest | null
   deterministic_evidence_ids: string[]
   intelligent_evidence_ids: string[]
+  context_evidence_ids: string[]
+  intelligent_request_count: number
   visual_evidence_ids: string[]
   visual_understanding: {
     document_id: string

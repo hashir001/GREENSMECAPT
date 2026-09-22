@@ -689,6 +689,11 @@ def _merge_semantic_results(
         for result in semantic_results
         for evidence_id in result.report.intelligent_evidence_ids
     )
+    context_ids = tuple(
+        evidence_id
+        for result in semantic_results
+        for evidence_id in result.report.context_evidence_ids
+    )
     visual_ids = tuple(
         evidence.evidence_id
         for evidence in visual_evidence
@@ -719,6 +724,11 @@ def _merge_semantic_results(
         ),
         deterministic_evidence_ids=deterministic_ids,
         intelligent_evidence_ids=intelligent_ids,
+        context_evidence_ids=context_ids,
+        intelligent_request_count=sum(
+            result.report.intelligent_request_count
+            for result in semantic_results
+        ),
         visual_evidence_ids=visual_ids,
         visual_understanding=(
             VisualUnderstandingReport(

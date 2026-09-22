@@ -58,6 +58,8 @@ class DocumentUnderstandingReport(UnderstandingModel):
     processing_manifest: DocumentProcessingManifest | None = None
     deterministic_evidence_ids: tuple[str, ...] = ()
     intelligent_evidence_ids: tuple[str, ...] = ()
+    context_evidence_ids: tuple[str, ...] = ()
+    intelligent_request_count: int = Field(default=0, ge=0)
     visual_evidence_ids: tuple[str, ...] = ()
     visual_understanding: VisualUnderstandingReport | None = None
     rejected_intelligent_claim_count: int = Field(

@@ -298,7 +298,8 @@ export function DocumentIntelligencePanel({
           </div>
           <div className="diagnostic-grid">
             <article><span>Rules and catalog</span><strong>{report.deterministic_evidence_ids.length}</strong><p>Deterministic, traceable metric matches.</p></article>
-            <article><span>Language model</span><strong>{report.intelligent_evidence_ids.length}</strong><p>Grounded claims accepted after validation.</p><StatusPill label={humanize(report.intelligent_provider_status)} tone={statusTone(report.intelligent_provider_status)} /></article>
+            <article><span>Language model</span><strong>{report.intelligent_evidence_ids.length}</strong><p>{report.intelligent_request_count} bounded request{report.intelligent_request_count === 1 ? '' : 's'} · metrics and varied wording.</p><StatusPill label={humanize(report.intelligent_provider_status)} tone={statusTone(report.intelligent_provider_status)} /></article>
+            <article><span>Activity & context</span><strong>{report.context_evidence_ids.length}</strong><p>Grounded qualitative facts awaiting human review.</p></article>
             <article><span>Visual understanding</span><strong>{report.visual_evidence_ids.length}</strong><p>Claims grounded in selected charts or diagrams.</p></article>
             <article><span>Rejected proposals</span><strong>{report.rejected_intelligent_claim_count}</strong><p>AI suggestions blocked by grounding or bounds.</p></article>
           </div>

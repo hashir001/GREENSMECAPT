@@ -135,6 +135,9 @@ class HybridSemanticExtractor:
             rejected_claim_count=len(
                 intelligent_report.rejected_claims
             ),
+            intelligent_request_count=(
+                intelligent_report.request_count
+            ),
         )
 
 
@@ -146,6 +149,7 @@ def _result(
     intelligent: tuple[EvidenceItem, ...],
     provider_status: IntelligentProviderStatus,
     rejected_claim_count: int = 0,
+    intelligent_request_count: int = 0,
     provider_error: str | None = None,
 ) -> HybridSemanticResult:
     """Build a validated combined result."""
@@ -193,6 +197,13 @@ def _result(
                 evidence.evidence_id
                 for evidence in intelligent
             ),
+            context_evidence_ids=tuple(
+                evidence.evidence_id
+                for evidence in intelligent
+                if evidence.extraction_method
+                == "language_model_grounded_context_extraction"
+            ),
+            intelligent_request_count=intelligent_request_count,
             rejected_intelligent_claim_count=(
                 rejected_claim_count
             ),

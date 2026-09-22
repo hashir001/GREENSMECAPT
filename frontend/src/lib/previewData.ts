@@ -285,6 +285,8 @@ function previewReport(
     processing_manifest: manifest,
     deterministic_evidence_ids: evidenceIds,
     intelligent_evidence_ids: [],
+    context_evidence_ids: [],
+    intelligent_request_count: 0,
     visual_evidence_ids: [],
     visual_understanding: decisions.length
       ? { document_id: document.document_id, decisions }

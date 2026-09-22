@@ -11,6 +11,7 @@ from greensmecapt.document_intelligence.semantics.intelligence.provider import (
     OpenAICompatibleProviderConfiguration,
     SemanticProviderError,
     UrllibJsonTransport,
+    strict_provider_schema,
 )
 from greensmecapt.document_intelligence.vision.models import (
     VisualInterpretationRequest,
@@ -66,7 +67,9 @@ class OpenAICompatibleVisualProvider:
         payload = {
             "model": self._configuration.model,
             "temperature": 0,
-            "max_tokens": self._configuration.maximum_output_tokens,
+            self._configuration.token_parameter: (
+                self._configuration.maximum_output_tokens
+            ),
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {
@@ -88,7 +91,9 @@ class OpenAICompatibleVisualProvider:
                 "json_schema": {
                     "name": "greensmecapt_visual_claims",
                     "strict": True,
-                    "schema": VisualProviderOutput.model_json_schema(),
+                    "schema": strict_provider_schema(
+                        VisualProviderOutput.model_json_schema()
+                    ),
                 },
             },
         }

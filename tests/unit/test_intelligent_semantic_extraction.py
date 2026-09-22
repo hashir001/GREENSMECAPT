@@ -13,6 +13,9 @@ from greensmecapt.document_intelligence.semantics import (
 )
 from greensmecapt.document_intelligence.semantics.intelligence import (
     IntelligentSemanticExtractionService,
+    QualitativeClaimPayload,
+    QualitativeInstruction,
+    QualitativeValueType,
     SemanticClaimPayload,
     SemanticProviderOutput,
 )
@@ -36,14 +39,19 @@ class FakeProvider:
     def __init__(
         self,
         claims: tuple[SemanticClaimPayload, ...],
+        qualitative_claims: tuple[QualitativeClaimPayload, ...] = (),
     ) -> None:
         self._claims = claims
+        self._qualitative_claims = qualitative_claims
+        self.requests = []
 
     def extract(self, request):
         assert request.document_id == "doc_llm_001"
+        self.requests.append(request)
 
         return SemanticProviderOutput(
-            claims=self._claims
+            claims=self._claims,
+            qualitative_claims=self._qualitative_claims,
         )
 
 
@@ -202,3 +210,114 @@ def test_reject_out_of_range_value() -> None:
     assert "exceeds the metric maximum" in (
         report.rejected_claims[0].reason
     )
+
+
+def test_extract_grounded_activity_fact_for_review() -> None:
+    """An explicit activity fact should remain unvalidated evidence."""
+
+    provider = FakeProvider(
+        (),
+        (
+            QualitativeClaimPayload(
+                segment_id="page_1_text",
+                claim_id="activity_fact:operates_facility",
+                source_quote=(
+                    "The measured renewable energy contribution was "
+                    "72 percent."
+                ),
+                boolean_value=True,
+            ),
+        ),
+    )
+    service = IntelligentSemanticExtractionService(
+        provider,
+        qualitative_instructions=(
+            QualitativeInstruction(
+                claim_id="activity_fact:operates_facility",
+                name="operates facility",
+                question="Does the company operate a facility?",
+                value_type=QualitativeValueType.BOOLEAN,
+            ),
+        ),
+    )
+
+    report = service.extract(
+        document=_document(),
+        extracted_document=_extracted_document(),
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert report.rejected_claims == ()
+    assert len(report.evidence_items) == 1
+    evidence = report.evidence_items[0]
+    assert evidence.indicator_id == "activity_fact:operates_facility"
+    assert evidence.normalized_value is True
+    assert evidence.criterion_id is None
+    assert evidence.validation_status is EvidenceValidationStatus.UNVALIDATED
+
+
+def test_reject_qualitative_quote_absent_from_source() -> None:
+    provider = FakeProvider(
+        (),
+        (
+            QualitativeClaimPayload(
+                segment_id="page_1_text",
+                claim_id="criterion_context:green_contribution",
+                source_quote="We prevent ten tonnes of waste every month.",
+            ),
+        ),
+    )
+    service = IntelligentSemanticExtractionService(
+        provider,
+        qualitative_instructions=(
+            QualitativeInstruction(
+                claim_id="criterion_context:green_contribution",
+                name="Green contribution",
+                question="What environmental benefit is provided?",
+                value_type=QualitativeValueType.SOURCE_TEXT,
+                criterion_id="green_contribution",
+            ),
+        ),
+    )
+
+    report = service.extract(
+        document=_document(),
+        extracted_document=_extracted_document(),
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert report.evidence_items == ()
+    assert "does not occur" in report.rejected_claims[0].reason
+
+
+def test_partition_long_documents_into_bounded_requests() -> None:
+    provider = FakeProvider(())
+    service = IntelligentSemanticExtractionService(
+        provider,
+        maximum_segments_per_request=1,
+    )
+    extracted = ExtractedDocument(
+        document_id="doc_llm_001",
+        pages=(
+            ExtractedPage(
+                page_number=1,
+                text="Renewable energy share was 72 percent.",
+                text_source=TextSource.OCR,
+            ),
+            ExtractedPage(
+                page_number=2,
+                text="The company operates a workshop.",
+                text_source=TextSource.OCR,
+            ),
+        ),
+    )
+
+    report = service.extract(
+        document=_document(),
+        extracted_document=extracted,
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert report.request_count == 2
+    assert len(provider.requests) == 2
+    assert all(len(request.segments) == 1 for request in provider.requests)

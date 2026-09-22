@@ -3,7 +3,7 @@
 import json
 import os
 from collections.abc import Mapping
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -94,6 +94,10 @@ class OpenAICompatibleProviderConfiguration(BaseModel):
         ge=256,
         le=32768,
     )
+    token_parameter: Literal[
+        "max_tokens",
+        "max_completion_tokens",
+    ] = "max_tokens"
 
     @model_validator(mode="after")
     def validate_endpoint(self):
@@ -224,14 +228,14 @@ class OpenAICompatibleSemanticProvider:
 
             headers["Authorization"] = f"Bearer {api_key}"
 
-        output_schema = (
+        output_schema = strict_provider_schema(
             SemanticProviderOutput.model_json_schema()
         )
 
         payload = {
             "model": self._configuration.model,
             "temperature": 0,
-            "max_tokens": (
+            self._configuration.token_parameter: (
                 self._configuration.maximum_output_tokens
             ),
             "messages": [
@@ -281,10 +285,11 @@ class OpenAICompatibleSemanticProvider:
 
 
 _SYSTEM_PROMPT = """
-You extract environmental metrics from supplied document segments.
+You extract environmental metrics and governed context claims from supplied
+document segments.
 
 Rules:
-1. Use only the supplied segments and allowed metrics.
+1. Use only the supplied segments, allowed metrics and qualitative_claims.
 2. Never infer or estimate a value.
 3. Copy source_quote exactly from one segment.
 4. Copy raw_value exactly as written.
@@ -296,8 +301,41 @@ Rules:
 10. Copy reporting_period only when the quote explicitly states it.
 11. Copy scope only when the quote explicitly states it, such as Scope 1.
 12. Use null for reporting_period or scope when it is not explicit.
-13. Return only the required JSON structure.
+13. For a qualitative claim, copy source_quote exactly from one segment and
+use only a supplied claim_id.
+14. Set boolean_value only for a qualitative instruction whose value_type is
+boolean. Use true or false only when the quote states the fact clearly.
+15. For source_text qualitative claims, boolean_value must be null. Do not
+summarize or rewrite the source; the application preserves the exact quote.
+16. A plan, target or intention is not an achieved result. A missing statement
+is not false. Return no claim when wording is ambiguous.
+17. Never turn a qualitative statement into a numeric metric or score.
+18. Return only the required JSON structure.
 """.strip()
+
+
+def strict_provider_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """Adapt a Pydantic schema to strict structured-output requirements."""
+
+    result = json.loads(json.dumps(schema))
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            value.pop("default", None)
+            properties = value.get("properties")
+
+            if value.get("type") == "object" and isinstance(properties, dict):
+                value["required"] = list(properties)
+                value["additionalProperties"] = False
+
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(result)
+    return result
 
 
 def _completion_content(

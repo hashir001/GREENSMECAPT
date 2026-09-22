@@ -4,6 +4,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
+from greensmecapt.assessment.profiles import AssessmentPolicy, load_policy
 from greensmecapt.document_intelligence.readers import (
     ProductionReaderConfiguration,
     build_production_document_reader,
@@ -16,6 +17,8 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     IntelligentSemanticExtractionService,
     OpenAICompatibleProviderConfiguration,
     OpenAICompatibleSemanticProvider,
+    QualitativeInstruction,
+    QualitativeValueType,
 )
 from greensmecapt.document_intelligence.structure.paddle import (
     PaddleParserConfiguration,
@@ -67,7 +70,15 @@ def build_document_processing_service(
     )
     intelligent_service = (
         _intelligent_service_from_environment(
-            configured_environment
+            configured_environment,
+            policy=load_policy(
+                Path(
+                    configured_environment.get(
+                        "GREENSMECAPT_ASSESSMENT_POLICY",
+                        "config/assessment_profiles.development.json",
+                    )
+                )
+            ),
         )
     )
     reader_configuration = (
@@ -216,6 +227,8 @@ def production_reader_configuration_from_environment(
 
 def _intelligent_service_from_environment(
     environment: Mapping[str, str],
+    *,
+    policy: AssessmentPolicy | None = None,
 ) -> IntelligentSemanticExtractionService | None:
     endpoint = environment.get(
         "GREENSMECAPT_SEMANTIC_ENDPOINT"
@@ -254,12 +267,62 @@ def _intelligent_service_from_environment(
                 ),
                 default=False,
             ),
+            token_parameter=environment.get(
+                "GREENSMECAPT_SEMANTIC_TOKEN_PARAMETER",
+                "max_tokens",
+            ),
         )
     )
 
     return IntelligentSemanticExtractionService(
-        provider
+        provider,
+        qualitative_instructions=(
+            _qualitative_instructions(policy)
+            if policy is not None
+            else ()
+        ),
+        maximum_segments_per_request=_environment_integer(
+            environment,
+            "GREENSMECAPT_SEMANTIC_MAX_SEGMENTS",
+            default=60,
+            minimum=1,
+            maximum=500,
+        ),
+        maximum_characters_per_request=_environment_integer(
+            environment,
+            "GREENSMECAPT_SEMANTIC_MAX_CHARACTERS",
+            default=40_000,
+            minimum=1_000,
+            maximum=500_000,
+        ),
     )
+
+
+def _qualitative_instructions(
+    policy: AssessmentPolicy,
+) -> tuple[QualitativeInstruction, ...]:
+    """Expose only policy-governed facts and assessment context to the LLM."""
+
+    activity_facts = tuple(
+        QualitativeInstruction(
+            claim_id=f"activity_fact:{fact_id}",
+            name=fact_id.replace("_", " "),
+            question=question,
+            value_type=QualitativeValueType.BOOLEAN,
+        )
+        for fact_id, question in policy.fact_questions.items()
+    )
+    criterion_context = tuple(
+        QualitativeInstruction(
+            claim_id=f"criterion_context:{criterion.criterion_id}",
+            name=criterion.title,
+            question=criterion.question,
+            value_type=QualitativeValueType.SOURCE_TEXT,
+            criterion_id=criterion.criterion_id,
+        )
+        for criterion in policy.criteria
+    )
+    return (*activity_facts, *criterion_context)
 
 
 def _visual_provider_from_environment(
@@ -295,6 +358,10 @@ def _visual_provider_from_environment(
                 environment,
                 "GREENSMECAPT_VISUAL_ALLOW_REMOTE",
                 default=False,
+            ),
+            token_parameter=environment.get(
+                "GREENSMECAPT_VISUAL_TOKEN_PARAMETER",
+                "max_tokens",
             ),
         )
     )

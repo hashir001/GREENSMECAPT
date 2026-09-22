@@ -48,7 +48,11 @@ from greensmecapt.assessment.robustness import (
     RobustnessConfiguration,
     analyze_ranking_robustness,
 )
-from greensmecapt.domain import StructuredInvestmentRecord
+from greensmecapt.domain import (
+    EvidenceItem,
+    EvidenceValidationStatus,
+    StructuredInvestmentRecord,
+)
 
 
 class AssessmentWorkflowError(ValueError):
@@ -71,6 +75,9 @@ class PreparedAssessment(AssessmentWorkflowModel):
     profile: AssessmentProfile
     observations: ObservationSet
     normalized_inputs: NormalizedAssessmentInputs
+    activity_fact_evidence_ids: dict[str, tuple[str, ...]] = Field(
+        default_factory=dict
+    )
 
 
 class CohortAssessmentResult(AssessmentWorkflowModel):
@@ -174,6 +181,10 @@ class AssessmentWorkflow:
                 "The assessment context belongs to a different SME."
             )
 
+        context, fact_evidence = _merge_reviewed_activity_facts(
+            context,
+            record.evidence_items,
+        )
         profile = build_profile(context, self._assessment_policy)
         observations = build_observations(
             profile,
@@ -190,6 +201,7 @@ class AssessmentWorkflow:
             profile=profile,
             observations=observations,
             normalized_inputs=normalized,
+            activity_fact_evidence_ids=fact_evidence,
         )
 
     def compare(
@@ -249,3 +261,61 @@ class AssessmentWorkflow:
             robustness=robustness,
             calibration=self._calibration_manifest,
         )
+
+
+def _merge_reviewed_activity_facts(
+    context: AssessmentContext,
+    evidence_items: Sequence[EvidenceItem],
+) -> tuple[AssessmentContext, dict[str, tuple[str, ...]]]:
+    """Apply only accepted, non-conflicting document activity facts."""
+
+    grouped: dict[str, list[EvidenceItem]] = {}
+
+    for evidence in evidence_items:
+        prefix = "activity_fact:"
+
+        if (
+            evidence.validation_status
+            is not EvidenceValidationStatus.ACCEPTED
+            or not evidence.indicator_id.startswith(prefix)
+        ):
+            continue
+
+        fact_id = evidence.indicator_id.removeprefix(prefix)
+
+        if not isinstance(evidence.normalized_value, bool):
+            raise AssessmentWorkflowError(
+                f"Accepted activity fact {fact_id!r} must be boolean."
+            )
+
+        grouped.setdefault(fact_id, []).append(evidence)
+
+    merged = dict(context.facts)
+    provenance: dict[str, tuple[str, ...]] = {}
+
+    for fact_id, evidence_group in grouped.items():
+        values = {item.normalized_value for item in evidence_group}
+
+        if len(values) != 1:
+            raise AssessmentWorkflowError(
+                f"Accepted evidence conflicts for activity fact {fact_id!r}."
+            )
+
+        evidence_value = values.pop()
+        supplied_value = merged.get(fact_id)
+
+        if supplied_value is not None and supplied_value is not evidence_value:
+            raise AssessmentWorkflowError(
+                f"Assessment context conflicts with accepted evidence for "
+                f"activity fact {fact_id!r}."
+            )
+
+        merged[fact_id] = evidence_value
+        provenance[fact_id] = tuple(
+            sorted(item.evidence_id for item in evidence_group)
+        )
+
+    return (
+        context.model_copy(update={"facts": merged}),
+        provenance,
+    )
