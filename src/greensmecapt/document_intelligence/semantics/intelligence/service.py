@@ -1,6 +1,8 @@
 """Ground intelligent semantic claims in document evidence."""
 
+import re
 from hashlib import sha256
+from math import isclose
 
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
@@ -31,6 +33,10 @@ from greensmecapt.document_intelligence.semantics.models import (
     UnitRule,
 )
 from greensmecapt.domain import EvidenceItem, SourceDocument
+
+_WRITTEN_NUMBER_PATTERN = re.compile(
+    r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?(?![\w.])"
+)
 
 
 class IntelligentSemanticExtractionService:
@@ -458,6 +464,15 @@ def _ground_claim(
             "The normalized value exceeds the metric maximum."
         )
 
+    if not _raw_number_occurs_in_value(
+        raw_number=claim.raw_number,
+        raw_value=claim.raw_value,
+    ):
+        return (
+            "The structured raw number does not match the number "
+            "written in the raw value."
+        )
+
     fingerprint = sha256(
         (
             f"{document.document_id}:"
@@ -636,6 +651,32 @@ def _contains_text(
     return _normalize_text(candidate) in _normalize_text(
         container
     )
+
+
+def _raw_number_occurs_in_value(
+    *,
+    raw_number: float,
+    raw_value: str,
+) -> bool:
+    """Require the provider's number to be literally grounded in its value."""
+
+    for match in _WRITTEN_NUMBER_PATTERN.finditer(raw_value):
+        try:
+            written_number = float(
+                match.group().replace(",", "")
+            )
+        except ValueError:
+            continue
+
+        if isclose(
+            written_number,
+            raw_number,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            return True
+
+    return False
 
 
 def _normalize_text(value: str) -> str:
