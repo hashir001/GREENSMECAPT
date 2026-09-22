@@ -24,7 +24,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
 from greensmecapt.api.assessment import build_assessment_router
-from greensmecapt.api.configuration import cors_origins_from_environment
+from greensmecapt.api.configuration import (
+    cors_origins_from_environment,
+    validate_deployment_environment,
+)
 from greensmecapt.assessment.workflow import AssessmentWorkflow
 from greensmecapt.document_intelligence.semantics.intelligence import (
     SemanticProviderConnection,
@@ -133,6 +136,8 @@ def create_app(
     document_processor: StoredDocumentProcessingService | None = None,
 ) -> FastAPI:
     """Create a secured database-bound application."""
+
+    validate_deployment_environment()
 
     database = Database(database_url)
     verifier = (

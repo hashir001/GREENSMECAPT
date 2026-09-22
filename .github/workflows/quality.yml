@@ -42,3 +42,18 @@ jobs:
         run: npm ci
       - name: Lint and build frontend
         run: npm run check
+
+  containers:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build --tag greensmecapt-api:test .
+      - name: Build frontend preview image
+        run: >-
+          docker build
+          --build-arg VITE_PREVIEW_MODE=true
+          --build-arg VITE_API_BASE_URL=http://localhost:8000
+          --tag greensmecapt-frontend:test
+          frontend

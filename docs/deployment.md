@@ -26,6 +26,10 @@ install `.[document-ai]` without changing the application interfaces.
 Required backend secrets include the Supabase database URL, service-role key
 and any hosted LLM key. Never provide those as frontend build arguments.
 
+Set `GREENSMECAPT_ENV=production` in the deployed API. Production startup then
+refuses SQLite/local-storage fallbacks, placeholder secrets, non-HTTPS browser
+origins and configured remote AI providers whose key is unavailable.
+
 After deployment:
 
 1. run the Supabase migration in `supabase/migrations`;
