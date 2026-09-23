@@ -1,5 +1,10 @@
 """Persistent storage for GREENSMECAPT."""
 
+from greensmecapt.persistence.assessment_profiles import (
+    AssessmentProfileRepository,
+    SMEAssessmentProfileRow,
+    StoredAssessmentProfile,
+)
 from greensmecapt.persistence.assessment_runs import (
     AssessmentRunRecord,
     AssessmentRunRepository,
@@ -24,6 +29,7 @@ from greensmecapt.persistence.tables import (
 )
 
 __all__ = [
+    "AssessmentProfileRepository",
     "AssessmentRunRecord",
     "AssessmentRunRepository",
     "AssessmentRunRow",
@@ -38,6 +44,8 @@ __all__ = [
     "GreenSMERepository",
     "PersistenceConflictError",
     "PersistenceNotFoundError",
+    "SMEAssessmentProfileRow",
     "SMERow",
+    "StoredAssessmentProfile",
     "StoredDocumentRegistration",
 ]
