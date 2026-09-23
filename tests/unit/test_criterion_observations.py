@@ -102,6 +102,38 @@ class TestCriterionObservations(unittest.TestCase):
         self.assertEqual(item.source_indicator_ids, ("renewable_energy_percentage",))
         self.assertFalse(hasattr(item, "criterion_score"))
 
+    def test_accepted_numeric_evidence_replaces_redundant_rating(
+        self,
+    ) -> None:
+        """Reviewed measurements should outrank generic manual ratings."""
+
+        response = self.response(
+            response_id="response_energy_rating",
+            criterion_id="purchased_energy_management",
+            linguistic_value="low",
+        )
+
+        result = build_observations(
+            self.profile,
+            responses=(response,),
+            evidence_items=(self.evidence(),),
+        )
+        item = self.find(
+            result,
+            "purchased_energy_management",
+        )
+
+        self.assertEqual(
+            item.status,
+            ObservationStatus.READY_NUMERIC,
+        )
+        self.assertEqual(item.exact_value, 72.0)
+        self.assertEqual(item.response_ids, ())
+        self.assertEqual(
+            item.evidence_ids,
+            ("evidence_001",),
+        )
+
     def test_unvalidated_extraction_waits_for_acceptance(self) -> None:
         evidence = self.evidence(validation_status=EvidenceValidationStatus.UNVALIDATED)
         result = build_observations(self.profile, evidence_items=(evidence,))
