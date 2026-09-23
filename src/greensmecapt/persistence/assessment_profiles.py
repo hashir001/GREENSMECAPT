@@ -94,6 +94,8 @@ class AssessmentProfileRepository:
                 "Every assessment response must belong to the context SME."
             )
 
+        context_json = context.model_dump_json()
+        responses_json = _serialize_responses(responses)
         now = _utc_now()
         row = self._session.get(
             SMEAssessmentProfileRow,
@@ -104,17 +106,22 @@ class AssessmentProfileRepository:
             row = SMEAssessmentProfileRow(
                 sme_id=sme_id,
                 profile_version=1,
-                context_json=context.model_dump_json(),
-                responses_json=_serialize_responses(responses),
+                context_json=context_json,
+                responses_json=responses_json,
                 approved_by=actor_id,
                 created_at=now,
                 updated_at=now,
             )
             action = "assessment_profile_created"
+        elif (
+            row.context_json == context_json
+            and row.responses_json == responses_json
+        ):
+            return _profile_from_row(row)
         else:
             row.profile_version += 1
-            row.context_json = context.model_dump_json()
-            row.responses_json = _serialize_responses(responses)
+            row.context_json = context_json
+            row.responses_json = responses_json
             row.approved_by = actor_id
             row.updated_at = now
             action = "assessment_profile_updated"
