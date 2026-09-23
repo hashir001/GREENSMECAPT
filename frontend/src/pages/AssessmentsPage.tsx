@@ -18,7 +18,10 @@ function formattedDate(value: string): string {
 }
 
 export function AssessmentsPage() {
-  const { canRunAssessments } = usePermissions()
+  const {
+    canCompareApprovedProfiles,
+    canRunAssessments,
+  } = usePermissions()
   const [runs, setRuns] = useState<AssessmentRunSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -40,7 +43,26 @@ export function AssessmentsPage() {
           <h1>Assessment runs</h1>
           <p>Every completed comparison remains reproducible and available for review.</p>
         </div>
-        {canRunAssessments && <Link className="primary-button" to="/assessments/new"><Plus size={17} /> New comparison</Link>}
+        <div className="page-heading__actions">
+          {canRunAssessments && (
+            <Link
+              className="secondary-button"
+              to="/assessments/new"
+            >
+              <Plus size={17} />
+              Manage approved profiles
+            </Link>
+          )}
+          {canCompareApprovedProfiles && (
+            <Link
+              className="primary-button"
+              to="/assessments/compare"
+            >
+              <Users size={17} />
+              Compare companies
+            </Link>
+          )}
+        </div>
       </section>
 
       {error && <div className="error-banner">{error}</div>}
@@ -78,7 +100,7 @@ export function AssessmentsPage() {
         <section className="panel empty-state">
           <span className="empty-state__icon"><BarChart3 size={21} /></span>
           <strong>No completed assessments</strong>
-          <p>A reviewer-created comparison will appear here as an immutable run.</p>
+          <p>An approved-profile comparison will appear here as an immutable run.</p>
         </section>
       )}
     </>
