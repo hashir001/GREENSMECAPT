@@ -25,6 +25,7 @@ from greensmecapt.assessment.workflow import (
     PreparedAssessment,
 )
 from greensmecapt.persistence import (
+    AssessmentProfileRepository,
     AssessmentRunRecord,
     AssessmentRunRepository,
     AssessmentRunSummary,
@@ -71,6 +72,27 @@ class CohortAssessmentRequest(BaseModel):
     )
     submissions: tuple[AssessmentSubmission, ...] = Field(
         min_length=2
+    )
+
+
+class AutomaticCohortAssessmentRequest(BaseModel):
+    """Compare SMEs using centrally approved profiles only."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+    )
+
+    run_id: str = Field(min_length=1)
+    cohort_id: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    sme_ids: tuple[str, ...] = Field(min_length=2)
+    minimum_shared_criteria: int = Field(default=2, ge=1)
+    minimum_shared_weight_ratio: float = Field(
+        default=0.6,
+        gt=0.0,
+        le=1.0,
     )
 
 
@@ -199,6 +221,17 @@ def build_assessment_router(
                 ),
             )
 
+            profile_repository = AssessmentProfileRepository(
+                session
+            )
+
+            for submission in request.submissions:
+                profile_repository.save(
+                    context=submission.context,
+                    responses=submission.responses,
+                    actor_id=principal.user_id,
+                )
+
             return AssessmentRunRepository(session).save(
                 run_id=request.run_id,
                 result=result,
@@ -207,6 +240,85 @@ def build_assessment_router(
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except (
+            AssessmentWorkflowError,
+            CohortComparisonError,
+            ElectreIIIError,
+            FuzzyTopsisError,
+            ValueError,
+        ) as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+    @router.post(
+        "/compare/automatic",
+        response_model=AssessmentRunRecord,
+    )
+    def compare_approved_profiles(
+        request: AutomaticCohortAssessmentRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(results_dependency),
+        ],
+    ) -> AssessmentRunRecord:
+        """Compare approved profiles without accepting investor judgements."""
+
+        if len(request.sme_ids) != len(set(request.sme_ids)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="SME IDs must be unique within a comparison.",
+            )
+
+        record_repository = GreenSMERepository(session)
+        profile_repository = AssessmentProfileRepository(session)
+
+        try:
+            profiles = tuple(
+                profile_repository.get(sme_id)
+                for sme_id in request.sme_ids
+            )
+            preparations = tuple(
+                workflow.prepare(
+                    record=record_repository.get_record(
+                        profile.sme_id
+                    ),
+                    context=profile.context,
+                    responses=profile.responses,
+                )
+                for profile in profiles
+            )
+            result = workflow.compare(
+                preparations,
+                CohortConfiguration(
+                    cohort_id=request.cohort_id,
+                    version=request.version,
+                    minimum_shared_criteria=(
+                        request.minimum_shared_criteria
+                    ),
+                    minimum_shared_weight_ratio=(
+                        request.minimum_shared_weight_ratio
+                    ),
+                ),
+            )
+
+            return AssessmentRunRepository(session).save(
+                run_id=request.run_id,
+                result=result,
+                actor_id=principal.user_id,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(error),
             ) from error
         except PersistenceConflictError as error:
