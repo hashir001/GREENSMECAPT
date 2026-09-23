@@ -312,6 +312,15 @@ export type CohortAssessmentRequest = {
   submissions: AssessmentSubmission[]
 }
 
+export type AutomaticCohortAssessmentRequest = {
+  run_id: string
+  cohort_id: string
+  version: string
+  sme_ids: string[]
+  minimum_shared_criteria: number
+  minimum_shared_weight_ratio: number
+}
+
 export type SMECohortCoverage = {
   sme_id: string
   available_criterion_ids: string[]
