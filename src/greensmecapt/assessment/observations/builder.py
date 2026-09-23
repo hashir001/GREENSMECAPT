@@ -271,7 +271,7 @@ def _build_one(
         )
     ]
 
-    numbers = [
+    accepted_numbers = [
         _Number(
             value=float(item.normalized_value),
             unit=item.unit,
@@ -288,8 +288,7 @@ def _build_one(
             bool,
         )
     ]
-
-    numbers.extend(
+    response_numbers = [
         _Number(
             value=item.exact_value,
             unit=item.unit,
@@ -298,8 +297,7 @@ def _build_one(
         )
         for item in responses
         if item.kind is ResponseKind.EXACT_NUMBER
-    )
-
+    ]
     ranges = [
         item
         for item in responses
@@ -319,10 +317,34 @@ def _build_one(
         )
     ]
 
+    # A reviewed measurement is more authoritative than a redundant
+    # linguistic estimate. Deliberate overrides require an explicit
+    # override contract; a generic rating must never silently compete
+    # with accepted numeric evidence.
+    evidence_numeric_is_authoritative = (
+        bool(accepted_numbers)
+        and bool(linguistic)
+        and not response_numbers
+        and not ranges
+        and not accepted_qualitative
+    )
+
+    if evidence_numeric_is_authoritative:
+        linguistic = []
+        scoring_responses = [
+            item
+            for item in responses
+            if item.kind is not ResponseKind.LINGUISTIC
+        ]
+    else:
+        scoring_responses = list(responses)
+
+    numbers = [*accepted_numbers, *response_numbers]
+
     response_ids = tuple(
         sorted(
             item.response_id
-            for item in responses
+            for item in scoring_responses
         )
     )
     evidence_ids = tuple(
