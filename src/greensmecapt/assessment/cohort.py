@@ -110,14 +110,31 @@ def run_comparable_topsis(
         )
 
     blocked = [
-        item.sme_id
+        item
         for item in inputs
         if item.readiness is AssessmentReadiness.BLOCKED
     ]
 
     if blocked:
+        details = "; ".join(
+            (
+                f"{item.sme_id}: "
+                + (
+                    " | ".join(
+                        (
+                            f"{issue.criterion_id} "
+                            f"[{issue.code}]: {issue.message}"
+                        )
+                        for issue in item.issues
+                    )
+                    or "assessment coverage is insufficient"
+                )
+            )
+            for item in blocked
+        )
         raise CohortComparisonError(
-            f"Blocked assessments cannot enter TOPSIS: {blocked}."
+            "Assessment inputs are not ready for comparison. "
+            + details
         )
 
     policy_references = {
