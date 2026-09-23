@@ -1049,3 +1049,28 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
     width: 100%;
   }
 }
+
+.page-heading__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.comparison-assurance {
+  align-items: center;
+  background: rgba(20, 142, 91, 0.08);
+  border: 1px solid rgba(20, 142, 91, 0.18);
+  border-radius: 14px;
+  color: var(--ink-soft);
+  display: flex;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.comparison-assurance svg {
+  color: var(--green);
+  flex: 0 0 auto;
+}
+
