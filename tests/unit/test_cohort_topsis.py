@@ -139,7 +139,7 @@ def test_use_intersection_without_penalizing_missing_module() -> None:
 def test_reject_blocked_assessment() -> None:
     with pytest.raises(
         CohortComparisonError,
-        match="Blocked assessments",
+        match="Assessment inputs are not ready for comparison",
     ):
         run_comparable_topsis(
             inputs=(
