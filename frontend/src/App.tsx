@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { useAuth } from './auth/useAuth'
+import { usePermissions } from './auth/usePermissions'
 import { AppShell } from './components/AppShell'
 import { ConfigurationPage } from './pages/ConfigurationPage'
 import { LoginPage } from './pages/LoginPage'
@@ -48,6 +49,16 @@ const AccountPage = lazy(() =>
   })),
 )
 
+function AssessmentBuilderRoute() {
+  const { canRunAssessments } = usePermissions()
+
+  if (!canRunAssessments) {
+    return <Navigate to="/assessments" replace />
+  }
+
+  return <AssessmentBuilderPage />
+}
+
 function LoadingScreen() {
   return (
     <main className="loading-screen">
@@ -72,7 +83,7 @@ export default function App() {
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/companies/:smeId" element={<CompanyDetailPage />} />
           <Route path="/assessments" element={<AssessmentsPage />} />
-          <Route path="/assessments/new" element={<AssessmentBuilderPage />} />
+          <Route path="/assessments/new" element={<AssessmentBuilderRoute />} />
           <Route path="/assessments/:runId" element={<AssessmentResultPage />} />
           <Route path="/evidence" element={<EvidenceReviewPage />} />
           <Route path="/settings" element={<AccountPage />} />
