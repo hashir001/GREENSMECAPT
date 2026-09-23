@@ -16,5 +16,10 @@ export function usePermissions() {
     canProcessDocuments: isPreviewMode || documentRole,
     canValidateEvidence: isPreviewMode || reviewerRole,
     canRunAssessments: isPreviewMode || reviewerRole,
+    canCompareApprovedProfiles: (
+      isPreviewMode
+      || reviewerRole
+      || role === 'investor'
+    ),
   }
 }
