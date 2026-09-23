@@ -33,6 +33,11 @@ const AssessmentBuilderPage = lazy(() =>
     default: module.AssessmentBuilderPage,
   })),
 )
+const ApprovedComparisonPage = lazy(() =>
+  import('./pages/ApprovedComparisonPage').then((module) => ({
+    default: module.ApprovedComparisonPage,
+  })),
+)
 const AssessmentResultPage = lazy(() =>
   import('./pages/AssessmentResultPage').then((module) => ({
     default: module.AssessmentResultPage,
@@ -48,6 +53,16 @@ const AccountPage = lazy(() =>
     default: module.AccountPage,
   })),
 )
+
+function ApprovedComparisonRoute() {
+  const { canCompareApprovedProfiles } = usePermissions()
+
+  if (!canCompareApprovedProfiles) {
+    return <Navigate to="/assessments" replace />
+  }
+
+  return <ApprovedComparisonPage />
+}
 
 function AssessmentBuilderRoute() {
   const { canRunAssessments } = usePermissions()
@@ -84,6 +99,7 @@ export default function App() {
           <Route path="/companies/:smeId" element={<CompanyDetailPage />} />
           <Route path="/assessments" element={<AssessmentsPage />} />
           <Route path="/assessments/new" element={<AssessmentBuilderRoute />} />
+          <Route path="/assessments/compare" element={<ApprovedComparisonRoute />} />
           <Route path="/assessments/:runId" element={<AssessmentResultPage />} />
           <Route path="/evidence" element={<EvidenceReviewPage />} />
           <Route path="/settings" element={<AccountPage />} />
