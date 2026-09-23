@@ -2,6 +2,7 @@ import type {
   AssessmentConfiguration,
   AssessmentRunRecord,
   AssessmentRunSummary,
+  AutomaticCohortAssessmentRequest,
   CohortAssessmentRequest,
   DocumentProcessingResult,
   DocumentUploadResponse,
@@ -734,6 +735,27 @@ export const api = {
           },
         )
   ),
+
+  createAutomaticAssessment: (
+    request: AutomaticCohortAssessmentRequest,
+  ) => {
+    if (isPreviewMode) {
+      return Promise.reject(
+        new ApiError(
+          'Automatic comparison requires the connected backend.',
+          501,
+        ),
+      )
+    }
+
+    return apiRequest<AssessmentRunRecord>(
+      '/assessments/compare/automatic',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    )
+  },
 
   listAssessmentRuns: () => (
     isPreviewMode
