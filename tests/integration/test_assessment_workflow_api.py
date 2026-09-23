@@ -179,6 +179,86 @@ def test_retrieve_persisted_assessment_run(tmp_path: Path) -> None:
     assert retrieve_response.json() == create_response.json()
 
 
+def test_investor_compares_centrally_approved_profiles(
+    tmp_path: Path,
+) -> None:
+    """Investors should select SMEs without supplying scoring inputs."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client, "sme_strong")
+        _create_sme(client, "sme_weaker")
+
+        governed_response = client.post(
+            "/assessments/compare",
+            headers=ADMIN_HEADERS,
+            json={
+                "run_id": "run_governed",
+                "cohort_id": "governed_cohort",
+                "version": "1.0",
+                "minimum_shared_criteria": 1,
+                "submissions": [
+                    _submission("sme_strong", "very_high"),
+                    _submission("sme_weaker", "low"),
+                ],
+            },
+        )
+        automatic_response = client.post(
+            "/assessments/compare/automatic",
+            headers=INVESTOR_HEADERS,
+            json={
+                "run_id": "run_investor",
+                "cohort_id": "investor_comparison",
+                "version": "1.0",
+                "minimum_shared_criteria": 1,
+                "minimum_shared_weight_ratio": 0.6,
+                "sme_ids": [
+                    "sme_strong",
+                    "sme_weaker",
+                ],
+            },
+        )
+
+    assert governed_response.status_code == 200
+    assert automatic_response.status_code == 200
+
+    result = automatic_response.json()
+
+    assert result["requested_by"] == "investor_001"
+    assert result["sme_ids"] == [
+        "sme_strong",
+        "sme_weaker",
+    ]
+    assert (
+        result["result"]["comparable_topsis"]
+        ["topsis_result"]["ranking"][0]["sme_id"]
+        == "sme_strong"
+    )
+
+
+def test_automatic_comparison_requires_approved_profiles(
+    tmp_path: Path,
+) -> None:
+    """Missing governed profiles should produce an actionable response."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client, "sme_001")
+        _create_sme(client, "sme_002")
+
+        response = client.post(
+            "/assessments/compare/automatic",
+            headers=INVESTOR_HEADERS,
+            json={
+                "run_id": "run_missing_profiles",
+                "cohort_id": "missing_profiles",
+                "version": "1.0",
+                "sme_ids": ["sme_001", "sme_002"],
+            },
+        )
+
+    assert response.status_code == 422
+    assert "no approved assessment profile" in response.json()["detail"]
+
+
 def test_investor_cannot_supply_assessment_inputs(
     tmp_path: Path,
 ) -> None:
