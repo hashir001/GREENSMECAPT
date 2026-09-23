@@ -21,6 +21,97 @@ function slug(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
 }
 
+function suggestedFacts(
+  company: SME | undefined,
+  factIds: string[],
+): Record<string, boolean | null> {
+  const facts = Object.fromEntries(
+    factIds.map((factId) => [factId, false]),
+  ) as Record<string, boolean | null>
+
+  if (!company) return facts
+
+  const description = `${company.legal_name} ${company.sector}`.toLowerCase()
+  const includesAny = (...terms: string[]) => (
+    terms.some((term) => description.includes(term))
+  )
+
+  facts.manufactures_or_processes = includesAny(
+    'manufactur',
+    'packag',
+    'processing',
+    'industrial',
+    'production',
+  )
+  facts.operates_facility = includesAny(
+    'manufactur',
+    'packag',
+    'solar',
+    'energy',
+    'industrial',
+    'production',
+    'retail',
+    'hospitality',
+  )
+  facts.handles_materials_or_waste = includesAny(
+    'manufactur',
+    'packag',
+    'recycl',
+    'circular',
+    'waste',
+    'material',
+    'production',
+  )
+  facts.provides_clean_energy = includesAny(
+    'solar',
+    'renewable',
+    'clean energy',
+  )
+  facts.provides_circular_services = includesAny(
+    'recycl',
+    'circular',
+    'reuse',
+    'repair',
+    'recovery',
+  )
+  facts.works_on_buildings = includesAny(
+    'construction',
+    'building',
+    'retrofit',
+    'rooftop',
+  )
+  facts.works_in_agriculture_food_land = includesAny(
+    'agriculture',
+    'farming',
+    'food',
+    'land',
+  )
+  facts.provides_digital_services = includesAny(
+    'software',
+    'digital',
+    'technology',
+    'consulting',
+  )
+  facts.offers_environmental_solution = includesAny(
+    'sustainable',
+    'green',
+    'solar',
+    'renewable',
+    'clean energy',
+    'environment',
+    'recycl',
+    'circular',
+  )
+  facts.operates_retail_or_hospitality = includesAny(
+    'retail',
+    'restaurant',
+    'hospitality',
+    'hotel',
+  )
+
+  return facts
+}
+
 export function AssessmentBuilderPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -56,7 +147,12 @@ export function AssessmentBuilderPage() {
   function draftFor(smeId: string): Draft {
     return drafts[smeId] ?? {
       activityDescription: companies.find((company) => company.sme_id === smeId)?.sector ?? '',
-      facts: Object.fromEntries(Object.keys(configuration?.assessment_policy.fact_questions ?? {}).map((key) => [key, null])),
+      facts: suggestedFacts(
+        companies.find((company) => company.sme_id === smeId),
+        Object.keys(
+          configuration?.assessment_policy.fact_questions ?? {},
+        ),
+      ),
       ratings: {},
     }
   }
@@ -187,6 +283,14 @@ export function AssessmentBuilderPage() {
 
       {step === 2 && (
         <div className="profile-stack">
+          <div className="methodology-note">
+            <Info size={18} />
+            <p>
+              Activity answers are prefilled from the registered company
+              profile for internal review. Adjust any suggestion that does
+              not describe the company accurately.
+            </p>
+          </div>
           {selected.map((smeId) => {
             const company = companies.find((item) => item.sme_id === smeId)!
             const draft = draftFor(smeId)
