@@ -194,6 +194,7 @@ export type SystemCapabilities = {
 export type ApplicationRole =
   | 'admin'
   | 'reviewer'
+  | 'expert'
   | 'investor'
   | 'sme_user'
 

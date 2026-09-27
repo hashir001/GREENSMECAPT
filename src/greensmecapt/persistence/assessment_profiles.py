@@ -1,18 +1,20 @@
-"""Durable governed inputs reused by automatic investor comparisons."""
+"""Immutable approved profile revisions and explicit publication."""
 
+import hashlib
 import json
 from datetime import UTC, datetime
-from typing import Self
+from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field as SQLField
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session, SQLModel, select
 
+from greensmecapt.assessment.normalization import NormalizationPolicy
 from greensmecapt.assessment.observations import CriterionResponse
-from greensmecapt.assessment.profiles import AssessmentContext
-from greensmecapt.persistence.repository import (
-    PersistenceNotFoundError,
-)
+from greensmecapt.assessment.profiles import AssessmentContext, AssessmentPolicy
+from greensmecapt.domain import StructuredInvestmentRecord
+from greensmecapt.persistence.repository import PersistenceNotFoundError
 from greensmecapt.persistence.tables import AuditEventRow
 
 
@@ -20,25 +22,51 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-class SMEAssessmentProfileRow(SQLModel, table=True):
-    """Persist the latest internally approved inputs for one SME."""
+class SMEAssessmentProfileRevisionRow(SQLModel, table=True):
+    """Persist one immutable approved assessment-input snapshot."""
 
-    __tablename__ = "sme_assessment_profiles"
-
-    sme_id: str = SQLField(
-        primary_key=True,
-        foreign_key="smes.sme_id",
+    __tablename__ = "sme_assessment_profile_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "sme_id",
+            "profile_version",
+            name="uq_profile_revision_sme_version",
+        ),
     )
-    profile_version: int = SQLField(default=1, ge=1)
+
+    revision_id: str = SQLField(primary_key=True)
+    sme_id: str = SQLField(foreign_key="smes.sme_id", index=True)
+    profile_version: int = SQLField(ge=1)
     context_json: str
     responses_json: str
+    record_snapshot_json: str
+    approval_fingerprint: str = SQLField(index=True)
+    assessment_policy_json: str
+    normalization_policy_json: str
     approved_by: str = SQLField(index=True)
-    created_at: datetime = SQLField(default_factory=_utc_now)
-    updated_at: datetime = SQLField(default_factory=_utc_now)
+    approved_at: datetime = SQLField(default_factory=_utc_now)
 
 
-class StoredAssessmentProfile(BaseModel):
-    """Return one reusable governed assessment profile."""
+class SMEAssessmentProfilePublicationRow(SQLModel, table=True):
+    """Retain publication history while identifying the active revision."""
+
+    __tablename__ = "sme_assessment_profile_publications"
+
+    publication_id: str = SQLField(primary_key=True)
+    sme_id: str = SQLField(foreign_key="smes.sme_id", index=True)
+    revision_id: str = SQLField(
+        foreign_key="sme_assessment_profile_revisions.revision_id",
+        index=True,
+    )
+    active: bool = SQLField(default=True, index=True)
+    published_by: str = SQLField(index=True)
+    published_at: datetime = SQLField(default_factory=_utc_now)
+    withdrawn_by: str | None = SQLField(default=None, index=True)
+    withdrawn_at: datetime | None = SQLField(default=None)
+
+
+class StoredAssessmentProfileRevision(BaseModel):
+    """Return a complete immutable approved profile revision."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -46,155 +74,313 @@ class StoredAssessmentProfile(BaseModel):
         str_strip_whitespace=True,
     )
 
+    revision_id: str = Field(min_length=1)
     sme_id: str = Field(min_length=1)
     profile_version: int = Field(ge=1)
     context: AssessmentContext
     responses: tuple[CriterionResponse, ...]
+    record_snapshot: StructuredInvestmentRecord
+    approval_fingerprint: str = Field(min_length=64, max_length=64)
+    assessment_policy: AssessmentPolicy
+    normalization_policy: NormalizationPolicy
     approved_by: str = Field(min_length=1)
-    created_at: datetime
-    updated_at: datetime
+    approved_at: datetime
 
-    @model_validator(mode="after")
-    def validate_ownership(self) -> Self:
-        if self.context.sme_id != self.sme_id:
-            raise ValueError(
-                "Stored assessment context belongs to another SME."
-            )
 
-        if any(
-            response.sme_id != self.sme_id
-            for response in self.responses
-        ):
-            raise ValueError(
-                "Stored assessment responses belong to another SME."
-            )
+class AssessmentProfilePublication(BaseModel):
+    """Return one publication event and the published revision."""
 
-        return self
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+    )
+
+    publication_id: str = Field(min_length=1)
+    sme_id: str = Field(min_length=1)
+    revision_id: str = Field(min_length=1)
+    active: bool
+    published_by: str = Field(min_length=1)
+    published_at: datetime
+    withdrawn_by: str | None = Field(default=None, min_length=1)
+    withdrawn_at: datetime | None = None
 
 
 class AssessmentProfileRepository:
-    """Store inputs once so investors never supply scoring judgements."""
+    """Store immutable approvals and explicit investor publications."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def save(
+    def approve(
         self,
         *,
         context: AssessmentContext,
         responses: tuple[CriterionResponse, ...],
+        record_snapshot: StructuredInvestmentRecord,
+        assessment_policy: AssessmentPolicy,
+        normalization_policy: NormalizationPolicy,
         actor_id: str,
-    ) -> StoredAssessmentProfile:
-        """Create or replace the approved profile for one SME."""
-
+        commit: bool = True,
+    ) -> StoredAssessmentProfileRevision:
         sme_id = context.sme_id
 
-        if any(response.sme_id != sme_id for response in responses):
+        if record_snapshot.sme.sme_id != sme_id or any(
+            response.sme_id != sme_id for response in responses
+        ):
             raise ValueError(
-                "Every assessment response must belong to the context SME."
+                "Approved profile inputs must belong to the same SME."
             )
 
-        context_json = context.model_dump_json()
-        responses_json = _serialize_responses(responses)
-        now = _utc_now()
-        row = self._session.get(
-            SMEAssessmentProfileRow,
-            sme_id,
+        serialized = _serialize_approval(
+            context=context,
+            responses=responses,
+            record_snapshot=record_snapshot,
+            assessment_policy=assessment_policy,
+            normalization_policy=normalization_policy,
+        )
+        fingerprint = hashlib.sha256(serialized.encode()).hexdigest()
+        latest = self._latest_row(sme_id)
+
+        if latest is not None and latest.approval_fingerprint == fingerprint:
+            return _revision_from_row(latest)
+
+        row = SMEAssessmentProfileRevisionRow(
+            revision_id=f"profile_revision_{uuid4().hex}",
+            sme_id=sme_id,
+            profile_version=1 if latest is None else latest.profile_version + 1,
+            context_json=context.model_dump_json(),
+            responses_json=_serialize_responses(responses),
+            record_snapshot_json=record_snapshot.model_dump_json(),
+            approval_fingerprint=fingerprint,
+            assessment_policy_json=assessment_policy.model_dump_json(),
+            normalization_policy_json=normalization_policy.model_dump_json(),
+            approved_by=actor_id,
+            approved_at=_utc_now(),
+        )
+        self._session.add(row)
+        self._session.add(
+            AuditEventRow(
+                sme_id=sme_id,
+                entity_type="assessment_profile_revision",
+                entity_id=row.revision_id,
+                action="assessment_profile_approved",
+                actor_id=actor_id,
+                new_value_json=json.dumps(
+                    {
+                        "profile_version": row.profile_version,
+                        "approval_fingerprint": fingerprint,
+                        "policy_version": assessment_policy.version,
+                        "normalization_version": normalization_policy.version,
+                    },
+                    sort_keys=True,
+                ),
+            )
+        )
+        self._finish(commit)
+        return _revision_from_row(row)
+
+    def publish(
+        self,
+        *,
+        sme_id: str,
+        revision_id: str,
+        actor_id: str,
+        commit: bool = True,
+    ) -> AssessmentProfilePublication:
+        revision = self._session.get(
+            SMEAssessmentProfileRevisionRow,
+            revision_id,
         )
 
-        if row is None:
-            row = SMEAssessmentProfileRow(
+        if revision is None or revision.sme_id != sme_id:
+            raise PersistenceNotFoundError(
+                f"Approved profile revision {revision_id!r} was not found."
+            )
+
+        active_rows = self._session.exec(
+            select(SMEAssessmentProfilePublicationRow).where(
+                SMEAssessmentProfilePublicationRow.sme_id == sme_id,
+                SMEAssessmentProfilePublicationRow.active.is_(True),
+            )
+        ).all()
+        now = _utc_now()
+
+        for active in active_rows:
+            if active.revision_id == revision_id:
+                return _publication_from_row(active)
+            active.active = False
+            active.withdrawn_by = actor_id
+            active.withdrawn_at = now
+            self._session.add(active)
+
+        row = SMEAssessmentProfilePublicationRow(
+            publication_id=f"profile_publication_{uuid4().hex}",
+            sme_id=sme_id,
+            revision_id=revision_id,
+            active=True,
+            published_by=actor_id,
+            published_at=now,
+        )
+        self._session.add(row)
+        self._session.add(
+            AuditEventRow(
                 sme_id=sme_id,
-                profile_version=1,
-                context_json=context_json,
-                responses_json=responses_json,
-                approved_by=actor_id,
-                created_at=now,
-                updated_at=now,
+                entity_type="assessment_profile_publication",
+                entity_id=row.publication_id,
+                action="assessment_profile_published",
+                actor_id=actor_id,
+                previous_value_json=json.dumps(
+                    {
+                        "revision_ids": [
+                            item.revision_id for item in active_rows
+                        ]
+                    },
+                    sort_keys=True,
+                ),
+                new_value_json=json.dumps(
+                    {"revision_id": revision_id},
+                    sort_keys=True,
+                ),
             )
-            action = "assessment_profile_created"
-        elif (
-            row.context_json == context_json
-            and row.responses_json == responses_json
-        ):
-            return _profile_from_row(row)
-        else:
-            row.profile_version += 1
-            row.context_json = context_json
-            row.responses_json = responses_json
-            row.approved_by = actor_id
-            row.updated_at = now
-            action = "assessment_profile_updated"
+        )
+        self._finish(commit)
+        return _publication_from_row(row)
 
-        try:
-            self._session.add(row)
-            self._session.add(
-                AuditEventRow(
-                    sme_id=sme_id,
-                    entity_type="assessment_profile",
-                    entity_id=sme_id,
-                    action=action,
-                    actor_id=actor_id,
-                    new_value_json=json.dumps(
-                        {
-                            "profile_version": row.profile_version,
-                            "response_count": len(responses),
-                        },
-                        sort_keys=True,
-                    ),
-                )
-            )
-            self._session.commit()
-            self._session.refresh(row)
-        except Exception:
-            self._session.rollback()
-            raise
-
-        return _profile_from_row(row)
-
-    def get(self, sme_id: str) -> StoredAssessmentProfile:
+    def get_revision(
+        self,
+        revision_id: str,
+    ) -> StoredAssessmentProfileRevision:
         row = self._session.get(
-            SMEAssessmentProfileRow,
-            sme_id,
+            SMEAssessmentProfileRevisionRow,
+            revision_id,
         )
 
         if row is None:
             raise PersistenceNotFoundError(
-                f"SME {sme_id!r} has no approved assessment profile."
+                f"Approved profile revision {revision_id!r} was not found."
             )
 
-        return _profile_from_row(row)
+        return _revision_from_row(row)
+
+    def get_published(
+        self,
+        sme_id: str,
+    ) -> StoredAssessmentProfileRevision:
+        publication = self._session.exec(
+            select(SMEAssessmentProfilePublicationRow).where(
+                SMEAssessmentProfilePublicationRow.sme_id == sme_id,
+                SMEAssessmentProfilePublicationRow.active.is_(True),
+            )
+        ).first()
+
+        if publication is None:
+            raise PersistenceNotFoundError(
+                f"SME {sme_id!r} has no published assessment profile."
+            )
+
+        return self.get_revision(publication.revision_id)
+
+    def list_published_sme_ids(self) -> tuple[str, ...]:
+        rows = self._session.exec(
+            select(SMEAssessmentProfilePublicationRow).where(
+                SMEAssessmentProfilePublicationRow.active.is_(True)
+            )
+        ).all()
+        return tuple(sorted({row.sme_id for row in rows}))
+
+    def _latest_row(
+        self,
+        sme_id: str,
+    ) -> SMEAssessmentProfileRevisionRow | None:
+        return self._session.exec(
+            select(SMEAssessmentProfileRevisionRow)
+            .where(SMEAssessmentProfileRevisionRow.sme_id == sme_id)
+            .order_by(SMEAssessmentProfileRevisionRow.profile_version.desc())
+        ).first()
+
+    def _finish(self, commit: bool) -> None:
+        try:
+            if commit:
+                self._session.commit()
+            else:
+                self._session.flush()
+        except Exception:
+            if commit:
+                self._session.rollback()
+            raise
 
 
 def _serialize_responses(
     responses: tuple[CriterionResponse, ...],
 ) -> str:
     return json.dumps(
-        [
-            response.model_dump(mode="json")
-            for response in responses
-        ],
+        [response.model_dump(mode="json") for response in responses],
         sort_keys=True,
         separators=(",", ":"),
     )
 
 
-def _profile_from_row(
-    row: SMEAssessmentProfileRow,
-) -> StoredAssessmentProfile:
-    response_data = json.loads(row.responses_json)
+def _serialize_approval(
+    *,
+    context: AssessmentContext,
+    responses: tuple[CriterionResponse, ...],
+    record_snapshot: StructuredInvestmentRecord,
+    assessment_policy: AssessmentPolicy,
+    normalization_policy: NormalizationPolicy,
+) -> str:
+    return json.dumps(
+        {
+            "context": context.model_dump(mode="json"),
+            "responses": [
+                response.model_dump(mode="json") for response in responses
+            ],
+            "record_snapshot": record_snapshot.model_dump(mode="json"),
+            "assessment_policy": assessment_policy.model_dump(mode="json"),
+            "normalization_policy": normalization_policy.model_dump(mode="json"),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
-    return StoredAssessmentProfile(
+
+def _revision_from_row(
+    row: SMEAssessmentProfileRevisionRow,
+) -> StoredAssessmentProfileRevision:
+    return StoredAssessmentProfileRevision(
+        revision_id=row.revision_id,
         sme_id=row.sme_id,
         profile_version=row.profile_version,
-        context=AssessmentContext.model_validate_json(
-            row.context_json
-        ),
+        context=AssessmentContext.model_validate_json(row.context_json),
         responses=tuple(
             CriterionResponse.model_validate(item)
-            for item in response_data
+            for item in json.loads(row.responses_json)
+        ),
+        record_snapshot=StructuredInvestmentRecord.model_validate_json(
+            row.record_snapshot_json
+        ),
+        approval_fingerprint=row.approval_fingerprint,
+        assessment_policy=AssessmentPolicy.model_validate_json(
+            row.assessment_policy_json
+        ),
+        normalization_policy=NormalizationPolicy.model_validate_json(
+            row.normalization_policy_json
         ),
         approved_by=row.approved_by,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
+        approved_at=row.approved_at,
+    )
+
+
+def _publication_from_row(
+    row: SMEAssessmentProfilePublicationRow,
+) -> AssessmentProfilePublication:
+    return AssessmentProfilePublication(
+        publication_id=row.publication_id,
+        sme_id=row.sme_id,
+        revision_id=row.revision_id,
+        active=row.active,
+        published_by=row.published_by,
+        published_at=row.published_at,
+        withdrawn_by=row.withdrawn_by,
+        withdrawn_at=row.withdrawn_at,
     )

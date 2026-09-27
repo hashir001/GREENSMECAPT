@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { useAuth } from './auth/useAuth'
@@ -7,6 +7,7 @@ import { AppShell } from './components/AppShell'
 import { ConfigurationPage } from './pages/ConfigurationPage'
 import { LoginPage } from './pages/LoginPage'
 import { isPreviewMode } from './lib/supabase'
+import type { ApplicationRole } from './types/api'
 
 const DashboardPage = lazy(() =>
   import('./pages/DashboardPage').then((module) => ({
@@ -74,6 +75,29 @@ function AssessmentBuilderRoute() {
   return <AssessmentBuilderPage />
 }
 
+function RoleRoute({
+  roles,
+  children,
+}: {
+  roles: ApplicationRole[]
+  children: ReactNode
+}) {
+  const { homePath, role } = usePermissions()
+
+  if (role === null || !roles.includes(role)) {
+    return <Navigate to={homePath} replace />
+  }
+
+  return children
+}
+
+function HomeRoute() {
+  const { homePath } = usePermissions()
+
+  if (homePath !== '/') return <Navigate to={homePath} replace />
+  return <DashboardPage />
+}
+
 function LoadingScreen() {
   return (
     <main className="loading-screen">
@@ -94,14 +118,34 @@ export default function App() {
     <AppShell>
       <Suspense fallback={<div className="page-loader">Loading workspace…</div>}>
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/companies" element={<CompaniesPage />} />
-          <Route path="/companies/:smeId" element={<CompanyDetailPage />} />
-          <Route path="/assessments" element={<AssessmentsPage />} />
+          <Route path="/" element={<HomeRoute />} />
+          <Route path="/companies" element={
+            <RoleRoute roles={['admin', 'reviewer', 'sme_user']}>
+              <CompaniesPage />
+            </RoleRoute>
+          } />
+          <Route path="/companies/:smeId" element={
+            <RoleRoute roles={['admin', 'reviewer', 'sme_user']}>
+              <CompanyDetailPage />
+            </RoleRoute>
+          } />
+          <Route path="/assessments" element={
+            <RoleRoute roles={['admin', 'reviewer', 'investor']}>
+              <AssessmentsPage />
+            </RoleRoute>
+          } />
           <Route path="/assessments/new" element={<AssessmentBuilderRoute />} />
           <Route path="/assessments/compare" element={<ApprovedComparisonRoute />} />
-          <Route path="/assessments/:runId" element={<AssessmentResultPage />} />
-          <Route path="/evidence" element={<EvidenceReviewPage />} />
+          <Route path="/assessments/:runId" element={
+            <RoleRoute roles={['admin', 'reviewer', 'investor']}>
+              <AssessmentResultPage />
+            </RoleRoute>
+          } />
+          <Route path="/evidence" element={
+            <RoleRoute roles={['admin', 'reviewer']}>
+              <EvidenceReviewPage />
+            </RoleRoute>
+          } />
           <Route path="/settings" element={<AccountPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

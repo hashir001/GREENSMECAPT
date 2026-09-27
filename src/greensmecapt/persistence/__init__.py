@@ -1,9 +1,18 @@
 """Persistent storage for GREENSMECAPT."""
 
+from greensmecapt.persistence.applications import (
+    ApplicationRepository,
+    ApplicationStatus,
+    ApplicationTransition,
+    SMEApplication,
+    SMEApplicationRow,
+)
 from greensmecapt.persistence.assessment_profiles import (
+    AssessmentProfilePublication,
     AssessmentProfileRepository,
-    SMEAssessmentProfileRow,
-    StoredAssessmentProfile,
+    SMEAssessmentProfilePublicationRow,
+    SMEAssessmentProfileRevisionRow,
+    StoredAssessmentProfileRevision,
 )
 from greensmecapt.persistence.assessment_runs import (
     AssessmentRunRecord,
@@ -29,6 +38,10 @@ from greensmecapt.persistence.tables import (
 )
 
 __all__ = [
+    "ApplicationRepository",
+    "ApplicationStatus",
+    "ApplicationTransition",
+    "AssessmentProfilePublication",
     "AssessmentProfileRepository",
     "AssessmentRunRecord",
     "AssessmentRunRepository",
@@ -44,8 +57,12 @@ __all__ = [
     "GreenSMERepository",
     "PersistenceConflictError",
     "PersistenceNotFoundError",
-    "SMEAssessmentProfileRow",
+    "SMEApplication",
+    "SMEApplicationRow",
+    "SMEAssessmentProfilePublicationRow",
+    "SMEAssessmentProfileRevisionRow",
     "SMERow",
-    "StoredAssessmentProfile",
+    "StoredAssessmentProfileRevision",
     "StoredDocumentRegistration",
 ]
+

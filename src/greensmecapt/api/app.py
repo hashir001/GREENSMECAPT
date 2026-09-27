@@ -48,13 +48,19 @@ from greensmecapt.domain import (
     StructuredInvestmentRecord,
 )
 from greensmecapt.persistence import (
+    ApplicationRepository,
+    ApplicationStatus,
+    ApplicationTransition,
+    AssessmentProfileRepository,
     Database,
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
+    SMEApplication,
     StoredDocumentRegistration,
 )
 from greensmecapt.security import (
+    ApplicationPermission,
     ApplicationRole,
     AuthPrincipal,
     IdentityAdmin,
@@ -63,7 +69,9 @@ from greensmecapt.security import (
     TokenVerifier,
     get_current_principal,
     identity_admin_from_environment,
+    require_permission,
     require_roles,
+    require_sme_permission,
     verifier_from_environment,
 )
 from greensmecapt.services import (
@@ -104,6 +112,19 @@ class EvidenceValidationRequest(BaseModel):
         default=None,
         min_length=1,
     )
+
+
+class ApplicationTransitionRequest(BaseModel):
+    """Request one revision-checked SME application transition."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    expected_revision: int = Field(ge=1)
+    target_status: ApplicationStatus
+    reason: str | None = Field(default=None, min_length=1)
 
 
 class DocumentUploadResponse(BaseModel):
@@ -192,7 +213,7 @@ def create_app(
 
     app = FastAPI(
         title="GREENSMECAPT API",
-        version="0.3.0",
+        version="0.4.0",
         description=(
             "Evidence-aware assessment and decision-support "
             "platform for green SMEs."
@@ -281,7 +302,9 @@ def create_app(
     def list_managed_users(
         principal: Annotated[
             AuthPrincipal,
-            Depends(require_roles(ApplicationRole.ADMIN)),
+            Depends(
+                require_permission(ApplicationPermission.MANAGE_USERS)
+            ),
         ],
     ) -> tuple[ManagedUser, ...]:
         """List users through the server-only Supabase admin boundary."""
@@ -305,7 +328,9 @@ def create_app(
         request: UserInvitationRequest,
         principal: Annotated[
             AuthPrincipal,
-            Depends(require_roles(ApplicationRole.ADMIN)),
+            Depends(
+                require_permission(ApplicationPermission.MANAGE_USERS)
+            ),
         ],
     ) -> ManagedUser:
         """Invite a user with validated role and SME access claims."""
@@ -333,7 +358,9 @@ def create_app(
         request: UserAccessRequest,
         principal: Annotated[
             AuthPrincipal,
-            Depends(require_roles(ApplicationRole.ADMIN)),
+            Depends(
+                require_permission(ApplicationPermission.MANAGE_USERS)
+            ),
         ],
     ) -> ManagedUser:
         """Replace role claims while preventing accidental self-lockout."""
@@ -402,7 +429,7 @@ def create_app(
         principal: Annotated[
             AuthPrincipal,
             Depends(
-                require_roles(ApplicationRole.ADMIN)
+                require_permission(ApplicationPermission.CREATE_SME)
             ),
         ],
     ) -> SME:
@@ -410,13 +437,24 @@ def create_app(
 
         try:
             repository.save_record(
-                StructuredInvestmentRecord(sme=sme)
+                StructuredInvestmentRecord(sme=sme),
+                commit=False,
             )
+            ApplicationRepository(session).create(
+                sme_id=sme.sme_id,
+                actor_id=principal.user_id,
+                commit=False,
+            )
+            session.commit()
         except PersistenceConflictError as error:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
+        except Exception:
+            session.rollback()
+            raise
 
         return repository.get_sme(sme.sme_id)
 
@@ -434,15 +472,100 @@ def create_app(
             Depends(get_current_principal),
         ],
     ) -> tuple[SME, ...]:
-        smes = GreenSMERepository(
-            session
-        ).list_smes()
+        smes = GreenSMERepository(session).list_smes()
+
+        if principal.role is ApplicationRole.INVESTOR:
+            published_ids = set(
+                AssessmentProfileRepository(
+                    session
+                ).list_published_sme_ids()
+            )
+            return tuple(
+                sme for sme in smes if sme.sme_id in published_ids
+            )
 
         return tuple(
             sme
             for sme in smes
             if principal.can_access_sme(sme.sme_id)
         )
+
+    @app.get(
+        "/smes/{sme_id}/application",
+        response_model=SMEApplication,
+    )
+    def get_sme_application(
+        sme_id: str,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> SMEApplication:
+        """Return lifecycle state only to raw-record participants."""
+
+        _require_sme_access(principal, sme_id)
+
+        try:
+            return ApplicationRepository(session).get(sme_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+    @app.patch(
+        "/smes/{sme_id}/application",
+        response_model=SMEApplication,
+    )
+    def transition_sme_application(
+        sme_id: str,
+        request: ApplicationTransitionRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_roles(
+                    ApplicationRole.ADMIN,
+                    ApplicationRole.REVIEWER,
+                    ApplicationRole.SME_USER,
+                )
+            ),
+        ],
+    ) -> SMEApplication:
+        """Apply a role-aware, revision-checked lifecycle transition."""
+
+        _require_sme_access(principal, sme_id)
+        _require_application_transition_role(
+            principal.role,
+            request.target_status,
+        )
+
+        try:
+            return ApplicationRepository(session).transition(
+                sme_id=sme_id,
+                transition=ApplicationTransition(
+                    target_status=request.target_status,
+                    reason=request.reason,
+                ),
+                actor_id=principal.user_id,
+                expected_revision=request.expected_revision,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
 
     @app.get(
         "/smes/{sme_id}",
@@ -512,10 +635,8 @@ def create_app(
         principal: Annotated[
             AuthPrincipal,
             Depends(
-                require_roles(
-                    ApplicationRole.ADMIN,
-                    ApplicationRole.REVIEWER,
-                    ApplicationRole.SME_USER,
+                require_sme_permission(
+                    ApplicationPermission.MANAGE_DOCUMENTS
                 )
             ),
         ],
@@ -708,10 +829,8 @@ def create_app(
         principal: Annotated[
             AuthPrincipal,
             Depends(
-                require_roles(
-                    ApplicationRole.ADMIN,
-                    ApplicationRole.REVIEWER,
-                    ApplicationRole.SME_USER,
+                require_sme_permission(
+                    ApplicationPermission.MANAGE_DOCUMENTS
                 )
             ),
         ],
@@ -765,10 +884,8 @@ def create_app(
         principal: Annotated[
             AuthPrincipal,
             Depends(
-                require_roles(
-                    ApplicationRole.ADMIN,
-                    ApplicationRole.REVIEWER,
-                    ApplicationRole.SME_USER,
+                require_sme_permission(
+                    ApplicationPermission.MANAGE_DOCUMENTS
                 )
             ),
         ],
@@ -931,10 +1048,8 @@ def create_app(
         principal: Annotated[
             AuthPrincipal,
             Depends(
-                require_roles(
-                    ApplicationRole.ADMIN,
-                    ApplicationRole.REVIEWER,
-                    ApplicationRole.SME_USER,
+                require_sme_permission(
+                    ApplicationPermission.MANAGE_DOCUMENTS
                 )
             ),
         ],
@@ -992,10 +1107,7 @@ def create_app(
         principal: Annotated[
             AuthPrincipal,
             Depends(
-                require_roles(
-                    ApplicationRole.ADMIN,
-                    ApplicationRole.REVIEWER,
-                )
+                require_permission(ApplicationPermission.VALIDATE_EVIDENCE)
             ),
         ],
     ) -> EvidenceItem:
@@ -1024,6 +1136,35 @@ def create_app(
             ) from error
 
     return app
+
+
+def _require_application_transition_role(
+    role: ApplicationRole,
+    target_status: ApplicationStatus,
+) -> None:
+    """Prevent actors from selecting lifecycle states they do not own."""
+
+    allowed_targets = {
+        ApplicationRole.ADMIN: set(ApplicationStatus),
+        ApplicationRole.REVIEWER: {
+            ApplicationStatus.UNDER_REVIEW,
+            ApplicationStatus.CHANGES_REQUESTED,
+            ApplicationStatus.APPROVED,
+        },
+        ApplicationRole.SME_USER: {
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.WITHDRAWN,
+        },
+    }
+
+    if target_status not in allowed_targets.get(role, set()):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "The authenticated role cannot select this "
+                "application status."
+            ),
+        )
 
 
 def _require_sme_access(

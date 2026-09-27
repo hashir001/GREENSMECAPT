@@ -1,7 +1,6 @@
 import { isPreviewMode } from '../lib/supabase'
+import type { ApplicationRole } from '../types/api'
 import { useAuth } from './useAuth'
-
-type ApplicationRole = 'admin' | 'reviewer' | 'investor' | 'sme_user'
 
 export function usePermissions() {
   const { user } = useAuth()
@@ -9,13 +8,26 @@ export function usePermissions() {
   const role = typeof claimedRole === 'string' ? claimedRole as ApplicationRole : null
   const documentRole = role !== null && ['admin', 'reviewer', 'sme_user'].includes(role)
   const reviewerRole = role !== null && ['admin', 'reviewer'].includes(role)
+  const effectiveRole: ApplicationRole | null = isPreviewMode ? 'reviewer' : role
   return {
-    role: isPreviewMode ? 'reviewer' as const : role,
+    role: effectiveRole,
+    homePath: effectiveRole === 'sme_user'
+      ? '/companies'
+      : effectiveRole === 'expert'
+        ? '/settings'
+        : '/',
+    canViewDashboard: isPreviewMode || reviewerRole || role === 'investor',
+    canViewSMEs: isPreviewMode || documentRole,
+    canViewAssessments: isPreviewMode || reviewerRole || role === 'investor',
+    canReviewEvidence: isPreviewMode || reviewerRole,
+    canCompleteExpertSurvey: role === 'expert',
     canCreateSMEs: isPreviewMode || role === 'admin',
     canUploadDocuments: isPreviewMode || documentRole,
     canProcessDocuments: isPreviewMode || documentRole,
     canValidateEvidence: isPreviewMode || reviewerRole,
     canRunAssessments: isPreviewMode || reviewerRole,
+    canApproveProfiles: isPreviewMode || reviewerRole,
+    canPublishProfiles: isPreviewMode || reviewerRole,
     canCompareApprovedProfiles: (
       isPreviewMode
       || reviewerRole

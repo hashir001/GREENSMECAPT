@@ -12,9 +12,12 @@ from greensmecapt.security.admin import (
 )
 from greensmecapt.security.dependencies import (
     get_current_principal,
+    require_permission,
     require_roles,
+    require_sme_permission,
 )
 from greensmecapt.security.models import (
+    ApplicationPermission,
     ApplicationRole,
     AuthPrincipal,
 )
@@ -28,6 +31,7 @@ from greensmecapt.security.verifier import (
 )
 
 __all__ = [
+    "ApplicationPermission",
     "ApplicationRole",
     "AuthPrincipal",
     "AuthenticationError",
@@ -44,6 +48,8 @@ __all__ = [
     "TokenVerifier",
     "get_current_principal",
     "identity_admin_from_environment",
+    "require_permission",
     "require_roles",
+    "require_sme_permission",
     "verifier_from_environment",
 ]

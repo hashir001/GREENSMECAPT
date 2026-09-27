@@ -102,6 +102,42 @@ def _submission(sme_id: str, rating: str) -> dict:
     }
 
 
+def _approve_and_publish(
+    client: TestClient,
+    sme_id: str,
+    rating: str,
+) -> None:
+    revision = 1
+    for target_status in ("submitted", "under_review", "approved"):
+        transition = client.patch(
+            f"/smes/{sme_id}/application",
+            headers=ADMIN_HEADERS,
+            json={
+                "expected_revision": revision,
+                "target_status": target_status,
+            },
+        )
+        assert transition.status_code == 200
+        revision = transition.json()["revision"]
+
+    approval = client.post(
+        f"/assessments/profiles/{sme_id}/approve",
+        headers=ADMIN_HEADERS,
+        json=_submission(sme_id, rating),
+    )
+    assert approval.status_code == 200
+
+    publication = client.post(
+        f"/assessments/profiles/{sme_id}/publish",
+        headers=ADMIN_HEADERS,
+        json={
+            "revision_id": approval.json()["revision_id"],
+            "expected_application_revision": revision,
+        },
+    )
+    assert publication.status_code == 200
+
+
 def test_compare_smes_through_api(tmp_path: Path) -> None:
     """The API should return all configured comparison methods."""
 
@@ -142,7 +178,7 @@ def test_compare_smes_through_api(tmp_path: Path) -> None:
 
 
 def test_retrieve_persisted_assessment_run(tmp_path: Path) -> None:
-    """Completed runs should remain available to investor accounts."""
+    """Investors should only retrieve comparison runs they requested."""
 
     with _client(tmp_path) as client:
         _create_sme(client, "sme_strong")
@@ -171,12 +207,17 @@ def test_retrieve_persisted_assessment_run(tmp_path: Path) -> None:
             "/assessments/runs/run_saved",
             headers=INVESTOR_HEADERS,
         )
+        admin_retrieve_response = client.get(
+            "/assessments/runs/run_saved",
+            headers=ADMIN_HEADERS,
+        )
 
     assert create_response.status_code == 200
     assert list_response.status_code == 200
-    assert list_response.json()[0]["run_id"] == "run_saved"
-    assert retrieve_response.status_code == 200
-    assert retrieve_response.json() == create_response.json()
+    assert list_response.json() == []
+    assert retrieve_response.status_code == 404
+    assert admin_retrieve_response.status_code == 200
+    assert admin_retrieve_response.json() == create_response.json()
 
 
 def test_investor_compares_centrally_approved_profiles(
@@ -188,20 +229,8 @@ def test_investor_compares_centrally_approved_profiles(
         _create_sme(client, "sme_strong")
         _create_sme(client, "sme_weaker")
 
-        governed_response = client.post(
-            "/assessments/compare",
-            headers=ADMIN_HEADERS,
-            json={
-                "run_id": "run_governed",
-                "cohort_id": "governed_cohort",
-                "version": "1.0",
-                "minimum_shared_criteria": 1,
-                "submissions": [
-                    _submission("sme_strong", "very_high"),
-                    _submission("sme_weaker", "low"),
-                ],
-            },
-        )
+        _approve_and_publish(client, "sme_strong", "very_high")
+        _approve_and_publish(client, "sme_weaker", "low")
         automatic_response = client.post(
             "/assessments/compare/automatic",
             headers=INVESTOR_HEADERS,
@@ -217,9 +246,18 @@ def test_investor_compares_centrally_approved_profiles(
                 ],
             },
         )
+        investor_runs = client.get(
+            "/assessments/runs",
+            headers=INVESTOR_HEADERS,
+        )
+        investor_run = client.get(
+            "/assessments/runs/run_investor",
+            headers=INVESTOR_HEADERS,
+        )
 
-    assert governed_response.status_code == 200
     assert automatic_response.status_code == 200
+    assert investor_runs.json()[0]["run_id"] == "run_investor"
+    assert investor_run.status_code == 200
 
     result = automatic_response.json()
 
@@ -256,7 +294,7 @@ def test_automatic_comparison_requires_approved_profiles(
         )
 
     assert response.status_code == 422
-    assert "no approved assessment profile" in response.json()["detail"]
+    assert "no published assessment profile" in response.json()["detail"]
 
 
 def test_investor_cannot_supply_assessment_inputs(

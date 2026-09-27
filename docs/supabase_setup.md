@@ -14,7 +14,8 @@ which applies role and SME-level authorization.
 3. Start the API once. SQLModel creates the application tables in the selected
    PostgreSQL database.
 4. In the Supabase SQL editor, run
-   `supabase/migrations/202609200001_platform_security.sql`.
+   `supabase/migrations/202609200001_platform_security.sql`, then
+   `supabase/migrations/202609270001_access_lifecycle.sql`.
 
 The migration creates the private `source-documents` bucket, prevents direct
 browser access to the application tables, and installs the controlled role
@@ -47,7 +48,9 @@ select public.set_greensmecapt_access(
 );
 ```
 
-Supported roles are `admin`, `reviewer`, `investor` and `sme_user`. SME users
+Supported roles are `admin`, `reviewer`, `expert`, `investor` and
+`sme_user`. Experts are isolated to expert-study work; investors can only
+access explicitly published profile snapshots. SME users
 must have at least one assigned SME identifier. Sign out and in again after a
 claim change so Supabase issues a fresh token.
 

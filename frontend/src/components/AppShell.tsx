@@ -14,14 +14,16 @@ import { useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { useAuth } from '../auth/useAuth'
+import { usePermissions } from '../auth/usePermissions'
 import { isPreviewMode } from '../lib/supabase'
+import type { ApplicationRole } from '../types/api'
 import { Brand } from './Brand'
 
 const navigation = [
-  { label: 'Overview', path: '/', icon: LayoutDashboard },
-  { label: 'SME portfolio', path: '/companies', icon: Building2 },
-  { label: 'Assessments', path: '/assessments', icon: BarChart3 },
-  { label: 'Evidence review', path: '/evidence', icon: FileSearch },
+  { label: 'Overview', path: '/', icon: LayoutDashboard, roles: ['admin', 'reviewer', 'investor'] },
+  { label: 'SME portfolio', path: '/companies', icon: Building2, roles: ['admin', 'reviewer', 'sme_user'] },
+  { label: 'Assessments', path: '/assessments', icon: BarChart3, roles: ['admin', 'reviewer', 'investor'] },
+  { label: 'Evidence review', path: '/evidence', icon: FileSearch, roles: ['admin', 'reviewer'] },
 ]
 
 function roleLabel(role: unknown): string {
@@ -31,6 +33,7 @@ function roleLabel(role: unknown): string {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth()
+  const { canReviewEvidence, role: applicationRole } = usePermissions()
   const [mobileOpen, setMobileOpen] = useState(false)
   const role = roleLabel(user?.app_metadata.greensmecapt_role)
   const email = user?.email ?? 'Authenticated user'
@@ -53,7 +56,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="sidebar__eyebrow">Investment intelligence</div>
 
         <nav className="sidebar__nav" aria-label="Primary navigation">
-          {navigation.map(({ label, path, icon: Icon }) => (
+          {navigation
+            .filter(({ roles }) => (
+              applicationRole !== null
+              && (roles as ApplicationRole[]).includes(applicationRole)
+            ))
+            .map(({ label, path, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
@@ -124,9 +132,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="topbar__actions">
-            <NavLink className="icon-button" to="/evidence" aria-label="Open evidence review queue">
-              <FileSearch size={18} />
-            </NavLink>
+            {canReviewEvidence && (
+              <NavLink className="icon-button" to="/evidence" aria-label="Open evidence review queue">
+                <FileSearch size={18} />
+              </NavLink>
+            )}
             <NavLink className="user-menu" to="/settings">
               <span className="user-menu__avatar">
                 {isPreviewMode ? 'P' : email.charAt(0).toUpperCase()}

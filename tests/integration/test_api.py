@@ -30,6 +30,14 @@ INVESTOR_HEADERS = {
     "Authorization": "Bearer investor-token",
 }
 
+REVIEWER_HEADERS = {
+    "Authorization": "Bearer reviewer-token",
+}
+
+EXPERT_HEADERS = {
+    "Authorization": "Bearer expert-token",
+}
+
 SME_PAYLOAD = {
     "sme_id": "sme_001",
     "legal_name": "EcoPack Manufacturing LLC",
@@ -68,6 +76,18 @@ class FakeTokenVerifier:
             return AuthPrincipal(
                 user_id="investor-user",
                 role=ApplicationRole.INVESTOR,
+            )
+
+        if token == "reviewer-token":
+            return AuthPrincipal(
+                user_id="reviewer-user",
+                role=ApplicationRole.REVIEWER,
+            )
+
+        if token == "expert-token":
+            return AuthPrincipal(
+                user_id="expert-user",
+                role=ApplicationRole.EXPERT,
             )
 
         raise AuthenticationError(
@@ -321,6 +341,84 @@ def test_create_and_retrieve_sme(tmp_path: Path) -> None:
     assert create_response.status_code == 201
     assert retrieve_response.status_code == 200
     assert retrieve_response.json() == SME_PAYLOAD
+
+
+def test_new_sme_has_revision_checked_application_lifecycle(
+    tmp_path: Path,
+) -> None:
+    """SME and reviewer actions should follow the governed state machine."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        draft = client.get(
+            "/smes/sme_001/application",
+            headers=SME_ONE_HEADERS,
+        )
+        submitted = client.patch(
+            "/smes/sme_001/application",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_revision": 1,
+                "target_status": "submitted",
+            },
+        )
+        under_review = client.patch(
+            "/smes/sme_001/application",
+            headers=REVIEWER_HEADERS,
+            json={
+                "expected_revision": 2,
+                "target_status": "under_review",
+            },
+        )
+        stale = client.patch(
+            "/smes/sme_001/application",
+            headers=REVIEWER_HEADERS,
+            json={
+                "expected_revision": 2,
+                "target_status": "approved",
+            },
+        )
+        forbidden = client.patch(
+            "/smes/sme_001/application",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_revision": 3,
+                "target_status": "approved",
+            },
+        )
+
+    assert draft.json()["status"] == "draft"
+    assert submitted.json()["status"] == "submitted"
+    assert submitted.json()["revision"] == 2
+    assert under_review.json()["status"] == "under_review"
+    assert under_review.json()["revision"] == 3
+    assert stale.status_code == 409
+    assert forbidden.status_code == 403
+
+
+def test_investor_and_expert_cannot_read_raw_sme_data(
+    tmp_path: Path,
+) -> None:
+    """Published-profile roles must not cross the raw-record boundary."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        investor_sme = client.get(
+            "/smes/sme_001",
+            headers=INVESTOR_HEADERS,
+        )
+        investor_record = client.get(
+            "/smes/sme_001/record",
+            headers=INVESTOR_HEADERS,
+        )
+        expert_record = client.get(
+            "/smes/sme_001/record",
+            headers=EXPERT_HEADERS,
+        )
+
+    assert investor_sme.status_code == 403
+    assert investor_record.status_code == 403
+    assert expert_record.status_code == 403
 
 
 def test_return_not_found_for_unknown_sme(

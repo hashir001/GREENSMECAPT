@@ -1,6 +1,7 @@
 """Tests for role and SME authorization."""
 
 from greensmecapt.security import (
+    ApplicationPermission,
     ApplicationRole,
     AuthPrincipal,
 )
@@ -15,13 +16,31 @@ def test_admin_can_access_every_sme() -> None:
     assert principal.can_access_sme("sme_anything")
 
 
-def test_investor_can_access_every_sme() -> None:
+def test_investor_can_only_access_published_profiles() -> None:
     principal = AuthPrincipal(
         user_id="investor_001",
         role=ApplicationRole.INVESTOR,
     )
 
-    assert principal.can_access_sme("sme_001")
+    assert not principal.can_access_sme("sme_001")
+    assert principal.has_permission(
+        ApplicationPermission.VIEW_PUBLISHED_PROFILES
+    )
+
+
+def test_expert_is_isolated_to_expert_studies() -> None:
+    principal = AuthPrincipal(
+        user_id="expert_001",
+        role=ApplicationRole.EXPERT,
+    )
+
+    assert not principal.can_access_sme("sme_001")
+    assert principal.has_permission(
+        ApplicationPermission.COMPLETE_EXPERT_SURVEY
+    )
+    assert not principal.has_permission(
+        ApplicationPermission.RUN_ASSESSMENTS
+    )
 
 
 def test_sme_user_can_access_assigned_sme() -> None:

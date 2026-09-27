@@ -72,6 +72,7 @@ class AssessmentRunRepository:
         run_id: str,
         result: CohortAssessmentResult,
         actor_id: str,
+        commit: bool = True,
     ) -> AssessmentRunRecord:
         """Save once; allow identical retries but reject replacement."""
 
@@ -123,10 +124,14 @@ class AssessmentRunRepository:
                     ),
                 )
             )
-            self._session.commit()
+            if commit:
+                self._session.commit()
+            else:
+                self._session.flush()
             self._session.refresh(row)
         except Exception:
-            self._session.rollback()
+            if commit:
+                self._session.rollback()
             raise
 
         return _record_from_row(row)
@@ -141,8 +146,19 @@ class AssessmentRunRepository:
 
         return _record_from_row(row)
 
-    def list(self) -> tuple[AssessmentRunSummary, ...]:
-        rows = self._session.exec(select(AssessmentRunRow)).all()
+    def list(
+        self,
+        *,
+        requested_by: str | None = None,
+    ) -> tuple[AssessmentRunSummary, ...]:
+        statement = select(AssessmentRunRow)
+
+        if requested_by is not None:
+            statement = statement.where(
+                AssessmentRunRow.requested_by == requested_by
+            )
+
+        rows = self._session.exec(statement).all()
         ordered = sorted(
             rows,
             key=lambda row: (row.created_at, row.run_id),
@@ -180,3 +196,4 @@ def _record_from_row(row: AssessmentRunRow) -> AssessmentRunRecord:
             row.result_json
         ),
     )
+

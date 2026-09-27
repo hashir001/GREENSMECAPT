@@ -58,6 +58,8 @@ class GreenSMERepository:
     def save_record(
         self,
         record: StructuredInvestmentRecord,
+        *,
+        commit: bool = True,
     ) -> None:
         """Persist a record atomically and idempotently."""
 
@@ -70,9 +72,13 @@ class GreenSMERepository:
             for evidence in record.evidence_items:
                 self._save_evidence(evidence)
 
-            self._session.commit()
+            if commit:
+                self._session.commit()
+            else:
+                self._session.flush()
         except Exception:
-            self._session.rollback()
+            if commit:
+                self._session.rollback()
             raise
 
     def attach_document(
@@ -1595,3 +1601,4 @@ def _document_batch_signature(
         row.attempt_count,
         row.max_attempts,
     )
+

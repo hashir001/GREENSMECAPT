@@ -25,6 +25,10 @@ from greensmecapt.assessment.workflow import (
     PreparedAssessment,
 )
 from greensmecapt.persistence import (
+    ApplicationRepository,
+    ApplicationStatus,
+    ApplicationTransition,
+    AssessmentProfilePublication,
     AssessmentProfileRepository,
     AssessmentRunRecord,
     AssessmentRunRepository,
@@ -32,11 +36,13 @@ from greensmecapt.persistence import (
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
+    StoredAssessmentProfileRevision,
 )
 from greensmecapt.security import (
+    ApplicationPermission,
     ApplicationRole,
     AuthPrincipal,
-    require_roles,
+    require_permission,
 )
 
 
@@ -108,6 +114,19 @@ class AssessmentConfigurationResponse(BaseModel):
     normalization_policy: NormalizationPolicy
 
 
+class ProfilePublicationRequest(BaseModel):
+    """Publish one approved revision with an optimistic lifecycle check."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+    )
+
+    revision_id: str = Field(min_length=1)
+    expected_application_revision: int = Field(ge=1)
+
+
 def build_assessment_router(
     *,
     get_session: Callable[[], Iterator[Session]],
@@ -116,14 +135,17 @@ def build_assessment_router(
     """Build assessment routes with application-owned dependencies."""
 
     router = APIRouter(prefix="/assessments", tags=["assessments"])
-    reviewer_dependency = require_roles(
-        ApplicationRole.ADMIN,
-        ApplicationRole.REVIEWER,
+    assessment_dependency = require_permission(
+        ApplicationPermission.RUN_ASSESSMENTS
     )
-    results_dependency = require_roles(
-        ApplicationRole.ADMIN,
-        ApplicationRole.REVIEWER,
-        ApplicationRole.INVESTOR,
+    approval_dependency = require_permission(
+        ApplicationPermission.APPROVE_PROFILES
+    )
+    publication_dependency = require_permission(
+        ApplicationPermission.PUBLISH_PROFILES
+    )
+    results_dependency = require_permission(
+        ApplicationPermission.VIEW_PUBLISHED_PROFILES
     )
 
     @router.get(
@@ -133,7 +155,7 @@ def build_assessment_router(
     def get_assessment_configuration(
         principal: Annotated[
             AuthPrincipal,
-            Depends(reviewer_dependency),
+            Depends(assessment_dependency),
         ],
     ) -> AssessmentConfigurationResponse:
         """Describe the authoritative questions, criteria and rating scale."""
@@ -153,7 +175,7 @@ def build_assessment_router(
         session: Annotated[Session, Depends(get_session)],
         principal: Annotated[
             AuthPrincipal,
-            Depends(reviewer_dependency),
+            Depends(assessment_dependency),
         ],
     ) -> PreparedAssessment:
         """Prepare one reviewer-controlled assessment without ranking it."""
@@ -180,6 +202,128 @@ def build_assessment_router(
             ) from error
 
     @router.post(
+        "/profiles/{sme_id}/approve",
+        response_model=StoredAssessmentProfileRevision,
+    )
+    def approve_assessment_profile(
+        sme_id: str,
+        submission: AssessmentSubmission,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(approval_dependency),
+        ],
+    ) -> StoredAssessmentProfileRevision:
+        """Approve an immutable snapshot after validating all inputs."""
+
+        if submission.context.sme_id != sme_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="The path and assessment context SME IDs must match.",
+            )
+
+        try:
+            application = ApplicationRepository(session).get(sme_id)
+            if application.status is not ApplicationStatus.APPROVED:
+                raise ValueError(
+                    "The SME application must be approved before its "
+                    "assessment profile can be approved."
+                )
+            record = GreenSMERepository(session).get_record(sme_id)
+            workflow.prepare(
+                record=record,
+                context=submission.context,
+                responses=submission.responses,
+            )
+            revision = AssessmentProfileRepository(session).approve(
+                context=submission.context,
+                responses=submission.responses,
+                record_snapshot=record,
+                assessment_policy=workflow.assessment_policy,
+                normalization_policy=workflow.normalization_policy,
+                actor_id=principal.user_id,
+                commit=False,
+            )
+            session.commit()
+            return revision
+        except PersistenceNotFoundError as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except (AssessmentWorkflowError, ValueError) as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+        except Exception:
+            session.rollback()
+            raise
+
+    @router.post(
+        "/profiles/{sme_id}/publish",
+        response_model=AssessmentProfilePublication,
+    )
+    def publish_assessment_profile(
+        sme_id: str,
+        request: ProfilePublicationRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(publication_dependency),
+        ],
+    ) -> AssessmentProfilePublication:
+        """Atomically publish a revision and advance the application."""
+
+        try:
+            publication = AssessmentProfileRepository(session).publish(
+                sme_id=sme_id,
+                revision_id=request.revision_id,
+                actor_id=principal.user_id,
+                commit=False,
+            )
+            ApplicationRepository(session).transition(
+                sme_id=sme_id,
+                transition=ApplicationTransition(
+                    target_status=ApplicationStatus.PUBLISHED
+                ),
+                actor_id=principal.user_id,
+                expected_revision=request.expected_application_revision,
+                commit=False,
+            )
+            session.commit()
+            return publication
+        except PersistenceNotFoundError as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except ValueError as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+        except Exception:
+            session.rollback()
+            raise
+
+    @router.post(
         "/compare",
         response_model=AssessmentRunRecord,
     )
@@ -188,7 +332,7 @@ def build_assessment_router(
         session: Annotated[Session, Depends(get_session)],
         principal: Annotated[
             AuthPrincipal,
-            Depends(reviewer_dependency),
+            Depends(assessment_dependency),
         ],
     ) -> AssessmentRunRecord:
         """Prepare and compare SMEs from one consistent policy snapshot."""
@@ -220,17 +364,6 @@ def build_assessment_router(
                     ),
                 ),
             )
-
-            profile_repository = AssessmentProfileRepository(
-                session
-            )
-
-            for submission in request.submissions:
-                profile_repository.save(
-                    context=submission.context,
-                    responses=submission.responses,
-                    actor_id=principal.user_id,
-                )
 
             return AssessmentRunRepository(session).save(
                 run_id=request.run_id,
@@ -279,19 +412,31 @@ def build_assessment_router(
                 detail="SME IDs must be unique within a comparison.",
             )
 
-        record_repository = GreenSMERepository(session)
         profile_repository = AssessmentProfileRepository(session)
 
         try:
             profiles = tuple(
-                profile_repository.get(sme_id)
+                profile_repository.get_published(sme_id)
                 for sme_id in request.sme_ids
             )
+            for profile in profiles:
+                if (
+                    profile.assessment_policy.policy_id
+                    != workflow.assessment_policy.policy_id
+                    or profile.assessment_policy.version
+                    != workflow.assessment_policy.version
+                    or profile.normalization_policy.policy_id
+                    != workflow.normalization_policy.policy_id
+                    or profile.normalization_policy.version
+                    != workflow.normalization_policy.version
+                ):
+                    raise ValueError(
+                        f"Published profile for SME {profile.sme_id!r} "
+                        "uses an older policy and requires reapproval."
+                    )
             preparations = tuple(
                 workflow.prepare(
-                    record=record_repository.get_record(
-                        profile.sme_id
-                    ),
+                    record=profile.record_snapshot,
                     context=profile.context,
                     responses=profile.responses,
                 )
@@ -351,8 +496,14 @@ def build_assessment_router(
     ) -> tuple[AssessmentRunSummary, ...]:
         """List completed comparisons without returning large matrices."""
 
-        del principal
-        return AssessmentRunRepository(session).list()
+        requested_by = (
+            principal.user_id
+            if principal.role is ApplicationRole.INVESTOR
+            else None
+        )
+        return AssessmentRunRepository(session).list(
+            requested_by=requested_by
+        )
 
     @router.get(
         "/runs/{run_id}",
@@ -368,10 +519,16 @@ def build_assessment_router(
     ) -> AssessmentRunRecord:
         """Return a complete immutable comparison for inspection."""
 
-        del principal
-
         try:
-            return AssessmentRunRepository(session).get(run_id)
+            record = AssessmentRunRepository(session).get(run_id)
+            if (
+                principal.role is ApplicationRole.INVESTOR
+                and record.requested_by != principal.user_id
+            ):
+                raise PersistenceNotFoundError(
+                    f"Assessment run {run_id!r} was not found."
+                )
+            return record
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

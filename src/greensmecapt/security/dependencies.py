@@ -15,6 +15,7 @@ from fastapi.security import (
 )
 
 from greensmecapt.security.models import (
+    ApplicationPermission,
     ApplicationRole,
     AuthPrincipal,
 )
@@ -70,6 +71,57 @@ def require_roles(
                 detail=(
                     "The authenticated user does not have "
                     "permission for this operation."
+                ),
+            )
+
+        return principal
+
+    return dependency
+
+
+def require_permission(
+    permission: ApplicationPermission,
+) -> Callable[..., AuthPrincipal]:
+    """Create a dependency for one global application capability."""
+
+    def dependency(
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> AuthPrincipal:
+        if not principal.has_permission(permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "The authenticated user does not have "
+                    "permission for this operation."
+                ),
+            )
+
+        return principal
+
+    return dependency
+
+
+def require_sme_permission(
+    permission: ApplicationPermission,
+) -> Callable[..., AuthPrincipal]:
+    """Create a capability dependency bound to an SME path parameter."""
+
+    def dependency(
+        sme_id: str,
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(get_current_principal),
+        ],
+    ) -> AuthPrincipal:
+        if not principal.has_permission(permission, sme_id=sme_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "The authenticated user does not have "
+                    "permission for this SME operation."
                 ),
             )
 

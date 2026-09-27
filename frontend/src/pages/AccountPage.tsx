@@ -31,6 +31,7 @@ function humanize(value: string | null) {
 const roles: ApplicationRole[] = [
   'admin',
   'reviewer',
+  'expert',
   'investor',
   'sme_user',
 ]
