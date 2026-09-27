@@ -1,19 +1,19 @@
 {
   "calibration_id": "greensmecapt_mcdm_development",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "status": "development",
   "created_for": "GREENSMECAPT working prototype",
-  "statement": "These are transparent model-informed starting values, not claimed expert consensus or empirical validation.",
+  "statement": "These are provisional performance-comparison values, separate from readiness DEMATEL and not claimed as expert consensus or empirical validation.",
   "assumptions": [
     "Normalized criterion performance lies between zero and one.",
-    "Development weights express defensible initial importance and remain replaceable.",
+    "Development performance weights remain replaceable and are not derived from DEMATEL prominence.",
     "ELECTRE thresholds represent materially different performance on the normalized scale.",
-    "Formal approval requires structured expert elicitation and sensitivity review."
+    "Formal approval requires structured expert elicitation, benchmark validation and sensitivity review."
   ],
   "artifacts": [
     {
       "artifact_id": "normalization_policy",
-      "artifact_version": "0.2.0",
+      "artifact_version": "0.3.0",
       "file_name": "normalization_policy.development.json",
       "purpose": "Criterion normalization and provisional criterion weights",
       "basis": "model_informed",
@@ -24,14 +24,6 @@
       "artifact_version": "0.3.0",
       "file_name": "electre_iii.development.json",
       "purpose": "Credibility, discrimination, indifference, preference and veto thresholds",
-      "basis": "model_informed",
-      "review_required": true
-    },
-    {
-      "artifact_id": "dematel_criterion_mapping",
-      "artifact_version": "0.1.0",
-      "file_name": "dematel_criterion_mapping.development.json",
-      "purpose": "Explicit allocation from broad DEMATEL drivers to operational criteria",
       "basis": "model_informed",
       "review_required": true
     }

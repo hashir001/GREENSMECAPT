@@ -1,8 +1,8 @@
 {
   "mapping_id": "greensmecapt_driver_to_criterion",
   "version": "0.1.0",
-  "status": "development",
-  "source": "Model-informed prototype allocation pending structured expert review",
+  "status": "deprecated",
+  "source": "Historical model-informed prototype allocation; retained only for reproducibility.",
   "review_required": true,
   "allocations": [
     {
@@ -53,5 +53,6 @@
       },
       "rationale": "Internal capability controls measurement, operations, resource recovery and execution discipline."
     }
-  ]
+  ],
+  "deprecated_reason": "DEMATEL readiness prominence must not be converted automatically into SME environmental or financial performance weights."
 }

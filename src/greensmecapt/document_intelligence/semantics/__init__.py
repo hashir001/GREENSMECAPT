@@ -8,12 +8,14 @@ from greensmecapt.document_intelligence.semantics.extractor import (
     SemanticMetricExtractor,
 )
 from greensmecapt.document_intelligence.semantics.models import (
+    MetricAssessmentUse,
     MetricCatalog,
     MetricDefinition,
     UnitRule,
 )
 
 __all__ = [
+    "MetricAssessmentUse",
     "MetricCatalog",
     "MetricCatalogError",
     "MetricDefinition",

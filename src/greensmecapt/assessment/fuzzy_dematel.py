@@ -52,6 +52,28 @@ class StakeholderAggregation(StrEnum):
     EXPERT_WEIGHTED = "expert_weighted"
 
 
+class DematelDomain(DematelModel):
+    """Group research-grounded readiness factors without scoring them."""
+
+    domain_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+
+
+class DematelFactorDefinition(DematelModel):
+    """Define one readiness factor and its research provenance."""
+
+    factor_id: str = Field(min_length=1)
+    domain_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    definition: str = Field(min_length=1)
+    source_status: Literal[
+        "research_grounded",
+        "research_synthesized",
+        "provisional",
+    ]
+
+
 class FactorRole(StrEnum):
     """Describe whether a factor primarily causes or receives influence."""
 
@@ -94,6 +116,17 @@ class DematelSpecification(DematelModel):
     specification_id: str = Field(min_length=1)
     version: str = Field(min_length=1)
     status: Literal["development", "approved"] = "development"
+    research_basis: str | None = Field(default=None, min_length=1)
+    calibration_status: Literal[
+        "requires_expert_calibration",
+        "calibrated",
+    ] = "requires_expert_calibration"
+    linguistic_scale_status: Literal[
+        "development_placeholder",
+        "approved",
+    ] = "development_placeholder"
+    domains: tuple[DematelDomain, ...] = ()
+    factors: tuple[DematelFactorDefinition, ...] = ()
     factor_ids: tuple[str, ...] = Field(min_length=2)
     stakeholder_groups: tuple[str, ...] = Field(min_length=1)
     aggregation: StakeholderAggregation = (
@@ -121,6 +154,41 @@ class DematelSpecification(DematelModel):
             if len(values) != len(set(values)):
                 raise ValueError(
                     f"Duplicate {label} IDs are not allowed."
+                )
+
+        if bool(self.domains) != bool(self.factors):
+            raise ValueError(
+                "Domains and factor definitions must be supplied together."
+            )
+
+        if self.domains:
+            domain_ids = [domain.domain_id for domain in self.domains]
+            metadata_factor_ids = [
+                factor.factor_id for factor in self.factors
+            ]
+
+            if len(domain_ids) != len(set(domain_ids)):
+                raise ValueError("DEMATEL domain IDs must be unique.")
+
+            if len(metadata_factor_ids) != len(set(metadata_factor_ids)):
+                raise ValueError(
+                    "DEMATEL factor definition IDs must be unique."
+                )
+
+            if set(metadata_factor_ids) != set(self.factor_ids):
+                raise ValueError(
+                    "Factor definitions must match factor_ids exactly."
+                )
+
+            unknown_domains = {
+                factor.domain_id
+                for factor in self.factors
+                if factor.domain_id not in set(domain_ids)
+            }
+
+            if unknown_domains:
+                raise ValueError(
+                    "Every DEMATEL factor must reference a known domain."
                 )
 
         casefolded_labels = [

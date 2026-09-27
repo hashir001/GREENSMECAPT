@@ -1,5 +1,6 @@
 """Versioned semantic definitions for document metrics."""
 
+from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -40,6 +41,14 @@ class UnitRule(SemanticModel):
         return self
 
 
+class MetricAssessmentUse(StrEnum):
+    """Describe whether a metric is ready for comparative assessment."""
+
+    DIRECT_RATIO = "direct_ratio"
+    REQUIRES_COMPARISON_CONTEXT = "requires_comparison_context"
+    EVIDENCE_ONLY = "evidence_only"
+
+
 class MetricDefinition(SemanticModel):
     """Describe one assessment metric and its language variants."""
 
@@ -48,6 +57,8 @@ class MetricDefinition(SemanticModel):
     name: str = Field(min_length=1)
     aliases: tuple[str, ...] = Field(min_length=1)
     units: tuple[UnitRule, ...] = Field(min_length=1)
+    assessment_use: MetricAssessmentUse = MetricAssessmentUse.EVIDENCE_ONLY
+    comparison_requirements: tuple[str, ...] = ()
 
     minimum: float | None = None
     maximum: float | None = None
@@ -90,6 +101,23 @@ class MetricDefinition(SemanticModel):
                 "to the same canonical unit."
             )
 
+        if len(self.comparison_requirements) != len(
+            set(self.comparison_requirements)
+        ):
+            raise ValueError(
+                "Metric comparison requirements must be unique."
+            )
+
+        if (
+            self.assessment_use
+            is MetricAssessmentUse.REQUIRES_COMPARISON_CONTEXT
+            and not self.comparison_requirements
+        ):
+            raise ValueError(
+                "Context-dependent metrics must declare comparison "
+                "requirements."
+            )
+
         if (
             self.minimum is not None
             and self.maximum is not None
@@ -100,6 +128,15 @@ class MetricDefinition(SemanticModel):
             )
 
         return self
+
+    @property
+    def requires_comparison_context(self) -> bool:
+        """Return whether the raw value is insufficient for comparison."""
+
+        return (
+            self.assessment_use
+            is MetricAssessmentUse.REQUIRES_COMPARISON_CONTEXT
+        )
 
     @property
     def canonical_unit(self) -> str:

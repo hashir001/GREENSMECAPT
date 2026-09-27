@@ -1,6 +1,6 @@
 {
   "catalog_id": "greensmecapt_environmental_metrics",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "metrics": [
     {
       "indicator_id": "renewable_energy_percentage",
@@ -22,11 +22,16 @@
             "percent",
             "percentage"
           ],
-          "multiplier": 1.0
+          "multiplier": 1
         }
       ],
-      "minimum": 0.0,
-      "maximum": 100.0
+      "minimum": 0,
+      "maximum": 100,
+      "assessment_use": "direct_ratio",
+      "comparison_requirements": [
+        "reporting_period",
+        "operational_scope"
+      ]
     },
     {
       "indicator_id": "electricity_consumption_kwh",
@@ -46,7 +51,7 @@
             "kilowatt hour",
             "kilowatt hours"
           ],
-          "multiplier": 1.0
+          "multiplier": 1
         },
         {
           "canonical_unit": "kwh",
@@ -55,7 +60,7 @@
             "megawatt hour",
             "megawatt hours"
           ],
-          "multiplier": 1000.0
+          "multiplier": 1000
         },
         {
           "canonical_unit": "kwh",
@@ -64,11 +69,18 @@
             "gigawatt hour",
             "gigawatt hours"
           ],
-          "multiplier": 1000000.0
+          "multiplier": 1000000
         }
       ],
-      "minimum": 0.0,
-      "maximum": null
+      "minimum": 0,
+      "maximum": null,
+      "assessment_use": "requires_comparison_context",
+      "comparison_requirements": [
+        "reporting_period",
+        "operational_scope",
+        "denominator_or_activity_level",
+        "baseline_trend_or_sector_benchmark"
+      ]
     },
     {
       "indicator_id": "water_consumption_m3",
@@ -91,7 +103,7 @@
             "cubic metre",
             "cubic metres"
           ],
-          "multiplier": 1.0
+          "multiplier": 1
         },
         {
           "canonical_unit": "m3",
@@ -105,8 +117,15 @@
           "multiplier": 0.001
         }
       ],
-      "minimum": 0.0,
-      "maximum": null
+      "minimum": 0,
+      "maximum": null,
+      "assessment_use": "requires_comparison_context",
+      "comparison_requirements": [
+        "reporting_period",
+        "operational_scope",
+        "denominator_or_activity_level",
+        "sector_applicability_and_baseline_or_benchmark"
+      ]
     },
     {
       "indicator_id": "total_ghg_emissions_tco2e",
@@ -128,7 +147,7 @@
             "tons co2e",
             "metric tonnes co2e"
           ],
-          "multiplier": 1.0
+          "multiplier": 1
         },
         {
           "canonical_unit": "tco2e",
@@ -140,8 +159,15 @@
           "multiplier": 0.001
         }
       ],
-      "minimum": 0.0,
-      "maximum": null
+      "minimum": 0,
+      "maximum": null,
+      "assessment_use": "requires_comparison_context",
+      "comparison_requirements": [
+        "reporting_period",
+        "emissions_scope",
+        "organisational_boundary",
+        "denominator_baseline_or_benchmark"
+      ]
     },
     {
       "indicator_id": "waste_diversion_percentage",
@@ -161,11 +187,18 @@
             "percent",
             "percentage"
           ],
-          "multiplier": 1.0
+          "multiplier": 1
         }
       ],
-      "minimum": 0.0,
-      "maximum": 100.0
+      "minimum": 0,
+      "maximum": 100,
+      "assessment_use": "requires_comparison_context",
+      "comparison_requirements": [
+        "reporting_period",
+        "waste_boundary",
+        "denominator_definition",
+        "material_scope_and_baseline_or_benchmark"
+      ]
     }
   ]
 }

@@ -1,8 +1,8 @@
 {
   "policy_id": "greensmecapt_activity_profiles",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "status": "development",
-  "description": "Development routing policy, not the approved paper indicator catalogue or a scoring model. Activity modules route assessment topics; they are not the research driver dimensions. Add calibrated scoring rules separately.",
+  "description": "Development routing policy separating environmental performance, SME financial health and readiness/context evidence. Activity modules route assessment topics; they are not DEMATEL driver domains and do not themselves score applicants.",
   "fact_questions": {
     "manufactures_or_processes": "Do you manufacture or process physical products?",
     "burns_fuel_on_site": "Do your operations burn fuel on site, for example in a generator or boiler?",
@@ -20,16 +20,99 @@
     "plans_operational_transition": "Does your application include an operational environmental improvement project?"
   },
   "modules": [
-    {"module_id": "resource_operations", "title": "Resource-intensive operations", "when": {"any_true": ["manufactures_or_processes", "handles_materials_or_waste"]}},
-    {"module_id": "clean_energy", "title": "Clean-energy provision", "when": {"all_true": ["provides_clean_energy"]}},
-    {"module_id": "circularity", "title": "Circular economy", "when": {"all_true": ["provides_circular_services"]}},
-    {"module_id": "buildings", "title": "Buildings and construction", "when": {"all_true": ["works_on_buildings"]}},
-    {"module_id": "transport", "title": "Transport operations", "when": {"all_true": ["operates_vehicle_fleet"]}},
-    {"module_id": "agriculture_food", "title": "Agriculture, food and land", "when": {"all_true": ["works_in_agriculture_food_land"]}},
-    {"module_id": "digital_services", "title": "Digital and professional services", "when": {"all_true": ["provides_digital_services"]}},
-    {"module_id": "environmental_enabler", "title": "Environmental products and services", "when": {"any_true": ["offers_environmental_solution", "provides_clean_energy", "provides_circular_services"]}},
-    {"module_id": "retail_hospitality", "title": "Retail and hospitality", "when": {"all_true": ["operates_retail_or_hospitality"]}},
-    {"module_id": "transition", "title": "Operational transition", "when": {"all_true": ["plans_operational_transition"]}}
+    {
+      "module_id": "resource_operations",
+      "title": "Resource-intensive operations",
+      "when": {
+        "any_true": [
+          "manufactures_or_processes",
+          "handles_materials_or_waste"
+        ]
+      }
+    },
+    {
+      "module_id": "clean_energy",
+      "title": "Clean-energy provision",
+      "when": {
+        "all_true": [
+          "provides_clean_energy"
+        ]
+      }
+    },
+    {
+      "module_id": "circularity",
+      "title": "Circular economy",
+      "when": {
+        "all_true": [
+          "provides_circular_services"
+        ]
+      }
+    },
+    {
+      "module_id": "buildings",
+      "title": "Buildings and construction",
+      "when": {
+        "all_true": [
+          "works_on_buildings"
+        ]
+      }
+    },
+    {
+      "module_id": "transport",
+      "title": "Transport operations",
+      "when": {
+        "all_true": [
+          "operates_vehicle_fleet"
+        ]
+      }
+    },
+    {
+      "module_id": "agriculture_food",
+      "title": "Agriculture, food and land",
+      "when": {
+        "all_true": [
+          "works_in_agriculture_food_land"
+        ]
+      }
+    },
+    {
+      "module_id": "digital_services",
+      "title": "Digital and professional services",
+      "when": {
+        "all_true": [
+          "provides_digital_services"
+        ]
+      }
+    },
+    {
+      "module_id": "environmental_enabler",
+      "title": "Environmental products and services",
+      "when": {
+        "any_true": [
+          "offers_environmental_solution",
+          "provides_clean_energy",
+          "provides_circular_services"
+        ]
+      }
+    },
+    {
+      "module_id": "retail_hospitality",
+      "title": "Retail and hospitality",
+      "when": {
+        "all_true": [
+          "operates_retail_or_hospitality"
+        ]
+      }
+    },
+    {
+      "module_id": "transition",
+      "title": "Operational transition",
+      "when": {
+        "all_true": [
+          "plans_operational_transition"
+        ]
+      }
+    }
   ],
   "criteria": [
     {
@@ -39,7 +122,13 @@
       "requirement": "core",
       "when": {},
       "question": "What environmental benefit does your activity provide, and what example or record can you share?",
-      "evidence_routes": ["activity_description", "project_or_customer_record", "pilot_result", "structured_declaration", "unknown"],
+      "evidence_routes": [
+        "activity_description",
+        "project_or_customer_record",
+        "pilot_result",
+        "structured_declaration",
+        "unknown"
+      ],
       "assessment_note": "Collect the contribution and evidence basis. A green label alone is not a performance score. No-emissions data is not no-green-contribution."
     },
     {
@@ -49,7 +138,13 @@
       "requirement": "core",
       "when": {},
       "question": "Describe your current business stage, financial position and intended use of any funding.",
-      "evidence_routes": ["accounts_or_cash_records", "orders_or_contracts", "funding_plan", "structured_declaration", "unknown"],
+      "evidence_routes": [
+        "accounts_or_cash_records",
+        "orders_or_contracts",
+        "funding_plan",
+        "structured_declaration",
+        "unknown"
+      ],
       "assessment_note": "Pre-revenue is a business stage, not an automatic adverse outcome. Revenue is not itself a universally beneficial score."
     },
     {
@@ -57,10 +152,25 @@
       "title": "Direct operational emissions assessment route",
       "output": "green",
       "requirement": "conditional",
-      "module_ids": ["resource_operations", "transport"],
-      "when": {"any_true": ["burns_fuel_on_site", "operates_vehicle_fleet", "manufactures_or_processes"]},
+      "module_ids": [
+        "resource_operations",
+        "transport"
+      ],
+      "when": {
+        "any_true": [
+          "burns_fuel_on_site",
+          "operates_vehicle_fleet",
+          "manufactures_or_processes"
+        ]
+      },
       "question": "What can you share about fuel use or process emissions: a calculation, fuel records, an approximate range, or an explanation of what is not measured?",
-      "evidence_routes": ["emissions_calculation", "fuel_or_process_records", "bounded_activity_estimate", "not_measured", "explain_not_applicable"],
+      "evidence_routes": [
+        "emissions_calculation",
+        "fuel_or_process_records",
+        "bounded_activity_estimate",
+        "not_measured",
+        "explain_not_applicable"
+      ],
       "assessment_note": "Manufacturing activates investigation; it does not prove direct emissions exist. A reviewed override can narrow the route. Qualitative management evidence cannot become tonnes of emissions."
     },
     {
@@ -68,11 +178,28 @@
       "title": "Purchased energy and cloud-service management",
       "output": "green",
       "requirement": "conditional",
-      "module_ids": ["digital_services", "buildings", "retail_hospitality"],
-      "indicator_ids": ["renewable_energy_percentage"],
-      "when": {"any_true": ["operates_facility", "uses_cloud_services"]},
+      "module_ids": [
+        "digital_services",
+        "buildings",
+        "retail_hospitality"
+      ],
+      "indicator_ids": [
+        "renewable_energy_percentage"
+      ],
+      "when": {
+        "any_true": [
+          "operates_facility",
+          "uses_cloud_services"
+        ]
+      },
       "question": "How do you obtain and manage electricity or cloud services? Share bills, supplier details, monitoring practices or an approximate usage range if available.",
-      "evidence_routes": ["utility_or_supplier_record", "bounded_usage_estimate", "management_description", "not_measured", "explain_not_applicable"],
+      "evidence_routes": [
+        "utility_or_supplier_record",
+        "bounded_usage_estimate",
+        "management_description",
+        "not_measured",
+        "explain_not_applicable"
+      ],
       "assessment_note": "Management practices and physical consumption become separate observations later. No direct combustion does not remove purchased-energy impacts."
     },
     {
@@ -80,10 +207,31 @@
       "title": "Material use, waste and recovery",
       "output": "green",
       "requirement": "conditional",
-      "module_ids": ["resource_operations", "circularity", "agriculture_food", "buildings", "retail_hospitality"],
-      "when": {"any_true": ["handles_materials_or_waste", "provides_circular_services", "works_in_agriculture_food_land", "works_on_buildings", "operates_retail_or_hospitality"]},
+      "module_ids": [
+        "resource_operations",
+        "circularity",
+        "agriculture_food",
+        "buildings",
+        "retail_hospitality"
+      ],
+      "when": {
+        "any_true": [
+          "handles_materials_or_waste",
+          "provides_circular_services",
+          "works_in_agriculture_food_land",
+          "works_on_buildings",
+          "operates_retail_or_hospitality"
+        ]
+      },
       "question": "Describe material inputs, waste or recovery in your operations. What records, quantities or approximate ranges are available?",
-      "evidence_routes": ["purchase_or_recovery_record", "measured_quantity", "bounded_quantity_estimate", "process_description", "not_measured", "explain_not_applicable"],
+      "evidence_routes": [
+        "purchase_or_recovery_record",
+        "measured_quantity",
+        "bounded_quantity_estimate",
+        "process_description",
+        "not_measured",
+        "explain_not_applicable"
+      ],
       "assessment_note": "Recovery and recycling are not automatically equivalent. Denominators, material types and reporting periods must be established before quantitative comparison."
     },
     {
@@ -91,22 +239,51 @@
       "title": "Environmental effect delivered to customers",
       "output": "green",
       "requirement": "conditional",
-      "module_ids": ["environmental_enabler", "clean_energy", "circularity"],
-      "when": {"any_true": ["offers_environmental_solution", "provides_clean_energy", "provides_circular_services"]},
+      "module_ids": [
+        "environmental_enabler",
+        "clean_energy",
+        "circularity"
+      ],
+      "when": {
+        "any_true": [
+          "offers_environmental_solution",
+          "provides_clean_energy",
+          "provides_circular_services"
+        ]
+      },
       "question": "What changes for customers using your solution? Share a deployment, pilot, test, customer record or clearly labelled estimate.",
-      "evidence_routes": ["customer_or_deployment_record", "pilot_result", "technical_calculation", "bounded_estimate", "structured_declaration", "unknown"],
+      "evidence_routes": [
+        "customer_or_deployment_record",
+        "pilot_result",
+        "technical_calculation",
+        "bounded_estimate",
+        "structured_declaration",
+        "unknown"
+      ],
       "assessment_note": "Separate demonstrated impact from potential, and establish a baseline. Installed capacity is not automatically generated energy or avoided emissions."
     },
     {
       "criterion_id": "transition_execution",
       "title": "Feasibility of an operational transition",
-      "output": "green",
+      "output": "context",
       "requirement": "conditional",
-      "module_ids": ["transition"],
-      "when": {"all_true": ["plans_operational_transition"]},
+      "module_ids": [
+        "transition"
+      ],
+      "when": {
+        "all_true": [
+          "plans_operational_transition"
+        ]
+      },
       "question": "What change will you implement, who will deliver it, and what budget, quotation, schedule or baseline supports it?",
-      "evidence_routes": ["implementation_plan", "supplier_quotation", "baseline_record", "structured_declaration", "unknown"],
-      "assessment_note": "Targets inform transition feasibility; they cannot be counted as achieved performance."
+      "evidence_routes": [
+        "implementation_plan",
+        "supplier_quotation",
+        "baseline_record",
+        "structured_declaration",
+        "unknown"
+      ],
+      "assessment_note": "This records project-execution readiness and evidence. Targets inform feasibility; they cannot be counted as achieved environmental performance or converted automatically from DEMATEL prominence."
     }
   ]
 }

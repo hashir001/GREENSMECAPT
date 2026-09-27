@@ -1,17 +1,17 @@
 {
   "policy_id": "greensmecapt_normalization",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "status": "development",
-  "weight_source": "model_informed_development_weights_pending_expert_calibration",
+  "weight_source": "model_informed_performance_weights_independent_of_dematel_pending_expert_calibration",
   "minimum_coverage_ratio": 0.6,
   "default_linguistic_scale": {
     "very_low": {
-      "lower": 0.0,
-      "modal": 0.0,
+      "lower": 0,
+      "modal": 0,
       "upper": 0.25
     },
     "low": {
-      "lower": 0.0,
+      "lower": 0,
       "modal": 0.25,
       "upper": 0.5
     },
@@ -23,12 +23,12 @@
     "high": {
       "lower": 0.5,
       "modal": 0.75,
-      "upper": 1.0
+      "upper": 1
     },
     "very_high": {
       "lower": 0.75,
-      "modal": 1.0,
-      "upper": 1.0
+      "modal": 1,
+      "upper": 1
     }
   },
   "rules": [
@@ -47,8 +47,8 @@
       "base_weight": 0.12,
       "allow_linguistic": true,
       "numeric_scale": {
-        "lower_bound": 0.0,
-        "upper_bound": 100.0,
+        "lower_bound": 0,
+        "upper_bound": 100,
         "direction": "benefit",
         "allowed_units": [
           "percent"
@@ -66,11 +66,6 @@
     {
       "criterion_id": "customer_environmental_effect",
       "base_weight": 0.22,
-      "allow_linguistic": true
-    },
-    {
-      "criterion_id": "transition_execution",
-      "base_weight": 0.13,
       "allow_linguistic": true
     }
   ]

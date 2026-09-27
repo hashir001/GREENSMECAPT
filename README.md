@@ -1,45 +1,30 @@
-```markdown
 # GREENSMECAPT
 
-GREENSMECAPT is an evidence-aware decision-support platform for assessing and
-ranking green small and medium-sized enterprises.
+GREENSMECAPT is an evidence-first decision-support platform for assessing green SMEs and funding applications. It extracts structured evidence from submitted documents, routes it through human review, assesses environmental and financial performance, and supports investor comparison with TOPSIS, Fuzzy TOPSIS, ELECTRE III and robustness analysis.
 
-The platform is intended to help investors and other authorized decision-makers
-combine sustainability, operational, financial, and contextual evidence into
-structured and explainable SME assessments.
+## Decision boundaries
 
-## MVP scope
+The platform keeps three concepts separate:
 
-The initial MVP will provide:
+- **Readiness drivers and subdrivers:** external and internal conditions such as finance access, regulation, organisational capability and market pressure. Expert directional judgments are analysed with Fuzzy DEMATEL.
+- **Assessment criteria:** the SME's environmental performance, financial health and transaction characteristics. These feed performance assessment and MCDM comparison.
+- **Measures and evidence:** electricity, water, waste, emissions, financial values and source documents. Measures support criteria only when their scope and comparison context are established.
 
-- validated SME, criterion, evidence, and assessment models;
-- fuzzy DEMATEL structures for expert-informed causal weighting;
-- TOPSIS-based SME ranking;
-- ELECTRE III outranking analysis;
-- transparent intermediate calculations and explanations;
-- synthetic demonstration data;
-- tested application services;
-- an API boundary for future interfaces and integrations.
+DEMATEL is a causal readiness-intelligence layer. It does not automatically generate Green Score weights. The research-grounded taxonomy is present, while pairwise relationships and the linguistic scale remain explicitly marked for expert calibration.
 
-## Current status
+## Current workflow
 
-The project is in its initial architecture and development-environment stage.
+1. Documents are ingested and processed through native extraction, OCR and configured analysis.
+2. Extracted evidence is reviewed and validated by a human.
+3. Applicability and assessment observations are established.
+4. Environmental performance observations are normalized under the versioned development policy.
+5. TOPSIS, Fuzzy TOPSIS and ELECTRE III generate comparison views.
+6. Robustness analysis tests ranking sensitivity.
 
-## Repository structure
+Applicant readiness now has a separate evidence model that records enabling, constraining, mixed, unknown, not-applicable and review-needed states. It can be joined to DEMATEL influence results after expert calibration without turning readiness into an environmental performance score.
 
-- `src/greensmecapt/domain`: core concepts and business rules;
-- `src/greensmecapt/mcdm`: decision-support algorithms;
-- `src/greensmecapt/data`: ingestion and persistence adapters;
-- `src/greensmecapt/services`: application workflows;
-- `src/greensmecapt/api`: future HTTP interface;
-- `tests`: unit and integration tests;
-- `configs`: non-secret configuration;
-- `data`: separated data-processing stages;
-- `docs`: architecture and design decisions.
+## Configuration status
 
-## Development setup
+Files under `config/` are versioned development contracts. Provisional weights, benchmarks and outranking thresholds are not presented as research findings. The deprecated DEMATEL-to-criterion mapping remains in the repository only for historical reproducibility and cannot be executed.
 
-```bash
-cd ~/projects/GREENSMECAPT
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
+See `docs/architecture.md` and `docs/readiness_and_performance.md` for the system boundaries and unresolved calibration inputs.

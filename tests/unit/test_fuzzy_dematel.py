@@ -273,11 +273,17 @@ def test_load_project_driver_specification() -> None:
         SPECIFICATION_PATH
     )
 
-    assert specification.factor_ids == (
-        "policy",
-        "social",
-        "technology",
-        "internal",
+    assert len(specification.domains) == 4
+    assert len(specification.factors) == 28
+    assert set(specification.factor_ids) == {
+        factor.factor_id for factor in specification.factors
+    }
+    assert (
+        specification.calibration_status
+        == "requires_expert_calibration"
+    )
+    assert specification.linguistic_scale_status == (
+        "development_placeholder"
     )
 
     assert specification.stakeholder_groups == (

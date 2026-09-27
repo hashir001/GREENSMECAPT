@@ -9,7 +9,13 @@ paths:
   sample_data: data/samples
 
 decision_support:
-  weighting_method: fuzzy_dematel
-  ranking_methods:
-    - topsis
-    - electre_iii
+  readiness:
+    method: fuzzy_dematel
+    role: causal_interpretation
+    calibration_status: requires_expert_calibration
+  performance:
+    weighting_method: provisional_policy
+    ranking_methods:
+      - topsis
+      - fuzzy_topsis
+      - electre_iii

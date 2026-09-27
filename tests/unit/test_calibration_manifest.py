@@ -8,9 +8,6 @@ from greensmecapt.assessment.calibration import (
     load_calibration_manifest,
 )
 from greensmecapt.assessment.electre_iii import load_electre_configuration
-from greensmecapt.assessment.hierarchical_weights import (
-    load_dematel_criterion_mapping,
-)
 from greensmecapt.assessment.normalization import load_normalization_policy
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -32,7 +29,6 @@ def test_load_development_calibration_manifest() -> None:
     assert {item.artifact_id for item in manifest.artifacts} == {
         "normalization_policy",
         "electre_iii",
-        "dematel_criterion_mapping",
     }
 
 
@@ -48,10 +44,4 @@ def test_manifest_versions_match_live_configurations() -> None:
     ).version
     assert versions["electre_iii"] == load_electre_configuration(
         PROJECT_ROOT / "config/electre_iii.development.json"
-    ).version
-    assert versions[
-        "dematel_criterion_mapping"
-    ] == load_dematel_criterion_mapping(
-        PROJECT_ROOT
-        / "config/dematel_criterion_mapping.development.json"
     ).version

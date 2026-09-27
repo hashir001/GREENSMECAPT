@@ -50,8 +50,9 @@ class DematelCriterionMapping(WeightModel):
 
     mapping_id: str = Field(min_length=1)
     version: str = Field(min_length=1)
-    status: Literal["development", "approved"] = "development"
+    status: Literal["development", "approved", "deprecated"] = "development"
     source: str = Field(min_length=1)
+    deprecated_reason: str | None = Field(default=None, min_length=1)
     review_required: bool = True
     allocations: tuple[DriverCriterionAllocation, ...] = Field(
         min_length=1
@@ -59,6 +60,11 @@ class DematelCriterionMapping(WeightModel):
 
     @model_validator(mode="after")
     def validate_mapping(self) -> Self:
+        if self.status == "deprecated" and self.deprecated_reason is None:
+            raise ValueError(
+                "Deprecated mappings must state a deprecation reason."
+            )
+
         driver_ids = [item.driver_id for item in self.allocations]
 
         if len(driver_ids) != len(set(driver_ids)):
@@ -104,6 +110,11 @@ def derive_criterion_weights(
     mapping: DematelCriterionMapping,
 ) -> DerivedCriterionWeights:
     """Distribute DEMATEL driver weights through the explicit mapping."""
+
+    if mapping.status == "deprecated":
+        raise HierarchicalWeightError(
+            "Deprecated DEMATEL mappings cannot produce performance weights."
+        )
 
     driver_weights = result.normalized_weights
     mapping_drivers = {item.driver_id for item in mapping.allocations}
