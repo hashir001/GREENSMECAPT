@@ -81,12 +81,75 @@ class GreenSMERepository:
                 self._session.rollback()
             raise
 
+    def update_sme(
+        self,
+        *,
+        sme_id: str,
+        legal_name: str,
+        sector: str,
+        jurisdiction: str,
+        actor_id: str,
+        reason: str | None = None,
+        commit: bool = True,
+    ) -> SME:
+        """Update mutable SME metadata while preserving its identifier."""
+
+        row = self._session.get(SMERow, sme_id)
+
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"SME {sme_id!r} was not found."
+            )
+
+        previous = {
+            "legal_name": row.legal_name,
+            "sector": row.sector,
+            "jurisdiction": row.jurisdiction,
+        }
+        row.legal_name = legal_name
+        row.sector = sector
+        row.jurisdiction = jurisdiction
+        row.updated_at = datetime.now(UTC)
+        self._session.add(row)
+        self._session.add(
+            AuditEventRow(
+                sme_id=sme_id,
+                entity_type="sme",
+                entity_id=sme_id,
+                action="sme_updated",
+                actor_id=actor_id,
+                reason=reason,
+                previous_value_json=json.dumps(previous, sort_keys=True),
+                new_value_json=json.dumps(
+                    {
+                        "legal_name": legal_name,
+                        "sector": sector,
+                        "jurisdiction": jurisdiction,
+                    },
+                    sort_keys=True,
+                ),
+            )
+        )
+
+        try:
+            if commit:
+                self._session.commit()
+            else:
+                self._session.flush()
+        except Exception:
+            if commit:
+                self._session.rollback()
+            raise
+
+        return _sme_from_row(row)
+
     def attach_document(
         self,
         *,
         document: SourceDocument,
         storage_key: str,
         actor_id: str,
+        commit: bool = True,
     ) -> SourceDocument:
         """Persist uploaded metadata and its storage reference."""
 
@@ -150,9 +213,13 @@ class GreenSMERepository:
                     ),
                 )
             )
-            self._session.commit()
+            if commit:
+                self._session.commit()
+            else:
+                self._session.flush()
         except Exception:
-            self._session.rollback()
+            if commit:
+                self._session.rollback()
             raise
 
         return document
@@ -1601,4 +1668,3 @@ def _document_batch_signature(
         row.attempt_count,
         row.max_attempts,
     )
-

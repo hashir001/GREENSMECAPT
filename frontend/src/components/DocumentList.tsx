@@ -1,4 +1,4 @@
-import { BrainCircuit, FileImage, FileText, LoaderCircle, Play, RefreshCw } from 'lucide-react'
+import { BrainCircuit, FileImage, FileText, LoaderCircle, Play, RefreshCw, Trash2 } from 'lucide-react'
 
 import type { DocumentProcessingResult, SourceDocument } from '../types/api'
 import type { DocumentJobProgress } from '../types/jobs'
@@ -9,10 +9,12 @@ type DocumentListProps = {
   processing: Record<string, DocumentProcessingResult>
   jobs: Record<string, DocumentJobProgress>
   canProcess: boolean
+  canDelete: boolean
   busyId: string
   selectedDocumentId: string
   onProcess: (documentId: string) => void
   onInspect: (documentId: string) => void
+  onDelete: (documentId: string) => void
 }
 
 function tone(status: string) {
@@ -22,7 +24,7 @@ function tone(status: string) {
   return 'neutral' as const
 }
 
-export function DocumentList({ documents, processing, jobs, canProcess, busyId, selectedDocumentId, onProcess, onInspect }: DocumentListProps) {
+export function DocumentList({ documents, processing, jobs, canProcess, canDelete, busyId, selectedDocumentId, onProcess, onInspect, onDelete }: DocumentListProps) {
   return (
     <section className="panel document-panel">
       <div className="panel__header">
@@ -82,6 +84,14 @@ export function DocumentList({ documents, processing, jobs, canProcess, busyId, 
                     {busy ? <LoaderCircle className="spin" size={17} /> : status === 'failed' ? <RefreshCw size={17} /> : <Play size={17} />}
                   </button>
                 )}
+                {canDelete
+                  && status !== 'running'
+                  && status !== 'queued'
+                  && (
+                    <button className="icon-button icon-button--danger" type="button" disabled={busy} aria-label={`Delete ${document.file_name}`} onClick={() => onDelete(document.document_id)}>
+                      <Trash2 size={17} />
+                    </button>
+                  )}
               </div>
             </article>
           )

@@ -57,10 +57,18 @@ _ALLOWED_TRANSITIONS: dict[ApplicationStatus, frozenset[ApplicationStatus]] = {
         {ApplicationStatus.SUBMITTED, ApplicationStatus.WITHDRAWN}
     ),
     ApplicationStatus.APPROVED: frozenset(
-        {ApplicationStatus.PUBLISHED, ApplicationStatus.ARCHIVED}
+        {
+            ApplicationStatus.PUBLISHED,
+            ApplicationStatus.CHANGES_REQUESTED,
+            ApplicationStatus.ARCHIVED,
+        }
     ),
     ApplicationStatus.PUBLISHED: frozenset(
-        {ApplicationStatus.APPROVED, ApplicationStatus.ARCHIVED}
+        {
+            ApplicationStatus.APPROVED,
+            ApplicationStatus.CHANGES_REQUESTED,
+            ApplicationStatus.ARCHIVED,
+        }
     ),
     ApplicationStatus.WITHDRAWN: frozenset(
         {ApplicationStatus.DRAFT, ApplicationStatus.ARCHIVED}
@@ -258,6 +266,65 @@ class ApplicationRepository:
         self._finish(commit)
         return _application_from_row(row)
 
+    def record_change(
+        self,
+        *,
+        sme_id: str,
+        actor_id: str,
+        expected_revision: int,
+        reason: str,
+        commit: bool = True,
+    ) -> SMEApplication:
+        """Advance the optimistic revision after application data changes."""
+
+        row = self._session.exec(
+            select(SMEApplicationRow).where(
+                SMEApplicationRow.sme_id == sme_id
+            )
+        ).first()
+
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"SME {sme_id!r} has no application."
+            )
+
+        if row.revision != expected_revision:
+            raise PersistenceConflictError(
+                "The application changed after it was loaded."
+            )
+
+        previous_revision = row.revision
+        row.revision += 1
+        row.updated_by = actor_id
+        row.updated_at = _utc_now()
+        self._session.add(row)
+        self._session.add(
+            AuditEventRow(
+                sme_id=sme_id,
+                entity_type="sme_application",
+                entity_id=row.application_id,
+                action="application_record_changed",
+                actor_id=actor_id,
+                reason=reason,
+                previous_value_json=json.dumps(
+                    {
+                        "status": row.status,
+                        "revision": previous_revision,
+                    },
+                    sort_keys=True,
+                ),
+                new_value_json=json.dumps(
+                    {
+                        "status": row.status,
+                        "revision": row.revision,
+                    },
+                    sort_keys=True,
+                ),
+            )
+        )
+        self._finish(commit)
+        return _application_from_row(row)
+
     def _finish(self, commit: bool) -> None:
         try:
             if commit:
@@ -281,4 +348,3 @@ def _application_from_row(row: SMEApplicationRow) -> SMEApplication:
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
-

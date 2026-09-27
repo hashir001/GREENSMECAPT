@@ -414,6 +414,41 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
 .company-create-grid { padding: 24px 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 .company-create-dialog footer { padding: 15px 25px; display: flex; justify-content: flex-end; gap: 8px; background: #f8faf8; border-top: 1px solid #e7ede9; }
 
+.company-hero__actions {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.secondary-button--light {
+  color: #e9fff3;
+  background: rgba(255, 255, 255, .08);
+  border-color: rgba(255, 255, 255, .2);
+}
+
+.danger-button {
+  min-height: 38px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #fff;
+  background: #a74434;
+  border: 1px solid #923828;
+  border-radius: 10px;
+  font: 700 10px 'Manrope', sans-serif;
+  cursor: pointer;
+}
+
+.danger-button:disabled { opacity: .55; cursor: not-allowed; }
+.danger-button--compact { min-height: 33px; padding: 0 11px; }
+.icon-button--danger { color: #a74434; background: #fff2ef; border-color: #f0d3cc; }
+.destructive-dialog header { background: linear-gradient(145deg, #fff4f1, #fffaf8); }
+.destructive-dialog__body { padding: 24px 25px; }
+
 .document-row--selected {
   background: linear-gradient(135deg, #f1faf5, #fbfdfb);
   border-color: #77b894;

@@ -2,6 +2,7 @@ import type {
   AssessmentConfiguration,
   AssessmentRunRecord,
   AssessmentRunSummary,
+  ApplicationStatus,
   CohortAssessmentRequest,
   DocumentProcessingManifest,
   DocumentProcessingResult,
@@ -10,6 +11,8 @@ import type {
   DocumentUploadResponse,
   EvidenceItem,
   SME,
+  SMEApplication,
+  SMEUpdateResponse,
   StructuredInvestmentRecord,
 } from '../types/api'
 
@@ -140,6 +143,22 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
 }
 
 const now = () => new Date().toISOString()
+
+const previewApplications: Record<string, SMEApplication> = Object.fromEntries(
+  previewSMEs.map((sme) => [
+    sme.sme_id,
+    {
+      application_id: `preview_application_${sme.sme_id}`,
+      sme_id: sme.sme_id,
+      status: 'under_review',
+      revision: 1,
+      created_by: 'preview_admin',
+      updated_by: 'preview_reviewer',
+      created_at: now(),
+      updated_at: now(),
+    },
+  ]),
+)
 
 function evidence(
   values: Partial<EvidenceItem> & Pick<EvidenceItem, 'evidence_id' | 'sme_id' | 'document_id' | 'indicator_id' | 'raw_value' | 'normalized_value'>,
@@ -319,7 +338,64 @@ export async function createPreviewSME(sme: SME): Promise<SME> {
     documents: [],
     evidence_items: [],
   }
+  previewApplications[sme.sme_id] = {
+    application_id: `preview_application_${sme.sme_id}`,
+    sme_id: sme.sme_id,
+    status: 'draft',
+    revision: 1,
+    created_by: 'preview_user',
+    updated_by: 'preview_user',
+    created_at: now(),
+    updated_at: now(),
+  }
   return clone(sme)
+}
+
+export async function getPreviewApplication(
+  smeId: string,
+): Promise<SMEApplication> {
+  requirePreviewRecord(smeId)
+  const application = previewApplications[smeId]
+  if (!application) throw new Error('SME application was not found.')
+  return clone(application)
+}
+
+export async function transitionPreviewApplication(
+  smeId: string,
+  targetStatus: ApplicationStatus,
+): Promise<SMEApplication> {
+  requirePreviewRecord(smeId)
+  const application = previewApplications[smeId]
+  application.status = targetStatus
+  application.revision += 1
+  application.updated_by = 'preview_user'
+  application.updated_at = now()
+  return clone(application)
+}
+
+export async function updatePreviewSME(
+  smeId: string,
+  update: Partial<Pick<SME, 'legal_name' | 'sector' | 'jurisdiction'>>,
+): Promise<SMEUpdateResponse> {
+  const record = requirePreviewRecord(smeId)
+  const application = previewApplications[smeId]
+  record.sme = { ...record.sme, ...update }
+  const index = previewSMEs.findIndex((item) => item.sme_id === smeId)
+  if (index !== -1) previewSMEs[index] = record.sme
+  application.revision += 1
+  application.updated_at = now()
+  return clone({ sme: record.sme, application })
+}
+
+export async function deletePreviewSME(smeId: string): Promise<void> {
+  const record = requirePreviewRecord(smeId)
+  if (record.documents.length) {
+    throw new Error('Delete the SME documents before deleting its workspace.')
+  }
+  delete previewRecords[smeId]
+  delete previewApplications[smeId]
+  const index = previewSMEs.findIndex((item) => item.sme_id === smeId)
+  if (index !== -1) previewSMEs.splice(index, 1)
 }
 
 function buildPreviewReconciliation(smeId: string) {
@@ -385,8 +461,31 @@ export async function uploadPreviewDocument(smeId: string, file: File, documentT
     sha256: crypto.randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64), document_type: documentType,
   }
   record.documents.push(document)
+  const application = previewApplications[smeId]
+  application.revision += 1
+  application.updated_at = now()
   previewProcessing[documentId] = { state: processingState(documentId, smeId, 'stored'), report: null, evidence_items: [], reconciliation: buildPreviewReconciliation(smeId) }
-  return clone({ document, storage_key: `${smeId}/${documentId}/${document.sha256}`, processing_status: 'stored' })
+  return clone({ document, storage_key: `${smeId}/${documentId}/${document.sha256}`, processing_status: 'stored', application })
+}
+
+export async function deletePreviewDocument(
+  smeId: string,
+  documentId: string,
+): Promise<SMEApplication> {
+  const record = requirePreviewRecord(smeId)
+  const index = record.documents.findIndex(
+    (item) => item.document_id === documentId,
+  )
+  if (index === -1) throw new Error('Document was not found.')
+  record.documents.splice(index, 1)
+  record.evidence_items = record.evidence_items.filter(
+    (item) => item.document_id !== documentId,
+  )
+  delete previewProcessing[documentId]
+  const application = previewApplications[smeId]
+  application.revision += 1
+  application.updated_at = now()
+  return clone(application)
 }
 
 export async function processPreviewDocument(smeId: string, documentId: string): Promise<DocumentProcessingResult> {

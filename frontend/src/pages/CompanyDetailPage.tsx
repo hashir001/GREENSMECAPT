@@ -4,41 +4,112 @@ import {
   Building2,
   CheckCircle2,
   FileStack,
+  LoaderCircle,
   MapPin,
+  Pencil,
   RefreshCw,
   ScanSearch,
+  Trash2,
+  X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { DocumentIntelligencePanel } from '../components/DocumentIntelligencePanel'
 import { DocumentList } from '../components/DocumentList'
 import { DocumentUploadPanel } from '../components/DocumentUploadPanel'
 import { EvidenceReviewPanel } from '../components/EvidenceReviewPanel'
+import { StatusPill } from '../components/StatusPill'
 import { usePermissions } from '../auth/usePermissions'
 import { api } from '../lib/api'
 import type {
   DocumentProcessingResult,
+  ApplicationRole,
+  ApplicationStatus,
+  SME,
+  SMEApplication,
   StructuredInvestmentRecord,
 } from '../types/api'
 import type { DocumentJobProgress } from '../types/jobs'
 
+type LifecycleAction = {
+  target: ApplicationStatus
+  label: string
+  reasonRequired?: boolean
+}
+
+function lifecycleActions(
+  status: ApplicationStatus,
+  role: ApplicationRole | null,
+): LifecycleAction[] {
+  const submit = { target: 'submitted' as const, label: 'Submit for review' }
+  const review = { target: 'under_review' as const, label: 'Start review' }
+  const approve = { target: 'approved' as const, label: 'Approve application' }
+  const changes = { target: 'changes_requested' as const, label: 'Request changes', reasonRequired: true }
+  const withdraw = { target: 'withdrawn' as const, label: 'Withdraw', reasonRequired: true }
+  const archive = { target: 'archived' as const, label: 'Archive', reasonRequired: true }
+  const unpublish = { target: 'approved' as const, label: 'Unpublish profile' }
+  const restore = { target: 'draft' as const, label: 'Restore draft' }
+
+  if (role === 'sme_user') {
+    if (status === 'draft' || status === 'changes_requested') return [submit, withdraw]
+    if (status === 'submitted' || status === 'under_review') return [withdraw]
+    return []
+  }
+
+  if (role === 'reviewer') {
+    if (status === 'submitted') return [review, changes]
+    if (status === 'under_review') return [approve, changes]
+    if (status === 'approved' || status === 'published') return [changes]
+    return []
+  }
+
+  if (role === 'admin') {
+    if (status === 'draft') return [submit, withdraw]
+    if (status === 'submitted') return [review, changes, withdraw]
+    if (status === 'under_review') return [approve, changes, withdraw]
+    if (status === 'changes_requested') return [submit, withdraw]
+    if (status === 'approved') return [changes, archive]
+    if (status === 'published') return [unpublish, changes, archive]
+    if (status === 'withdrawn') return [restore, archive]
+  }
+
+  return []
+}
+
 export function CompanyDetailPage() {
   const { smeId = '' } = useParams()
+  const navigate = useNavigate()
   const permissions = usePermissions()
   const [record, setRecord] = useState<StructuredInvestmentRecord | null>(null)
+  const [application, setApplication] = useState<SMEApplication | null>(null)
   const [processing, setProcessing] = useState<Record<string, DocumentProcessingResult>>({})
   const [jobs, setJobs] = useState<Record<string, DocumentJobProgress>>({})
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
   const [selectedDocumentId, setSelectedDocumentId] = useState('')
   const [error, setError] = useState('')
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false)
+  const [deleteDocumentId, setDeleteDocumentId] = useState('')
+  const [mutationBusy, setMutationBusy] = useState(false)
+  const [reason, setReason] = useState('')
+  const [transitionTarget, setTransitionTarget] = useState<LifecycleAction | null>(null)
+  const [editDraft, setEditDraft] = useState<Omit<SME, 'sme_id'>>({
+    legal_name: '',
+    sector: '',
+    jurisdiction: '',
+  })
 
   const load = useCallback(async () => {
     setError('')
     try {
-      const nextRecord = await api.getSMERecord(smeId)
+      const [nextRecord, nextApplication] = await Promise.all([
+        api.getSMERecord(smeId),
+        api.getSMEApplication(smeId),
+      ])
       setRecord(nextRecord)
+      setApplication(nextApplication)
       const snapshots = await Promise.all(
         nextRecord.documents.map(async (document) => {
           const [result, job] = await Promise.all([
@@ -120,6 +191,40 @@ export function CompanyDetailPage() {
   const selectedDocument = record?.documents.find(
     (document) => document.document_id === selectedDocumentId,
   ) ?? null
+  const mutableStatuses = new Set([
+    'draft',
+    'changes_requested',
+  ])
+  const documentMutableStatuses = new Set([
+    'draft',
+    'submitted',
+    'under_review',
+    'changes_requested',
+    'withdrawn',
+  ])
+  const canEditSME = Boolean(
+    application
+    && permissions.canUpdateSMEs
+    && (
+      permissions.role === 'admin'
+        ? documentMutableStatuses.has(application.status)
+        : mutableStatuses.has(application.status)
+    ),
+  )
+  const canDeleteDocuments = Boolean(
+    application
+    && permissions.canDeleteDocuments
+    && documentMutableStatuses.has(application.status),
+  )
+  const canDeleteWorkspace = Boolean(
+    application
+    && permissions.canDeleteSMEs
+    && ['draft', 'withdrawn'].includes(application.status)
+    && record?.documents.length === 0,
+  )
+  const availableTransitions = application
+    ? lifecycleActions(application.status, permissions.role)
+    : []
 
   async function processDocument(documentId: string) {
     setBusyId(documentId)
@@ -167,6 +272,111 @@ export function CompanyDetailPage() {
     await load()
   }
 
+  function openEdit() {
+    if (!record) return
+    setEditDraft({
+      legal_name: record.sme.legal_name,
+      sector: record.sme.sector,
+      jurisdiction: record.sme.jurisdiction,
+    })
+    setReason('')
+    setEditOpen(true)
+  }
+
+  async function saveSME(event: FormEvent) {
+    event.preventDefault()
+    if (!application) return
+    setMutationBusy(true)
+    setError('')
+    try {
+      await api.updateSME(
+        smeId,
+        application.revision,
+        editDraft,
+        reason || undefined,
+      )
+      setEditOpen(false)
+      await load()
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Company details could not be updated.')
+    } finally {
+      setMutationBusy(false)
+    }
+  }
+
+  async function confirmDocumentDelete() {
+    if (!application || !deleteDocumentId || !reason.trim()) return
+    setMutationBusy(true)
+    setError('')
+    try {
+      await api.deleteDocument(
+        smeId,
+        deleteDocumentId,
+        application.revision,
+        reason.trim(),
+      )
+      setDeleteDocumentId('')
+      setReason('')
+      await load()
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The document could not be deleted.')
+    } finally {
+      setMutationBusy(false)
+    }
+  }
+
+  async function confirmWorkspaceDelete() {
+    if (!application || !reason.trim()) return
+    setMutationBusy(true)
+    setError('')
+    try {
+      await api.deleteSME(
+        smeId,
+        application.revision,
+        reason.trim(),
+      )
+      void navigate('/companies', { replace: true })
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The company workspace could not be deleted.')
+      setDeleteWorkspaceOpen(false)
+    } finally {
+      setMutationBusy(false)
+    }
+  }
+
+  async function applyTransition(
+    action: LifecycleAction,
+    transitionReason?: string,
+  ) {
+    if (!application) return
+    setMutationBusy(true)
+    setError('')
+    try {
+      await api.transitionSMEApplication(
+        smeId,
+        application.revision,
+        action.target,
+        transitionReason,
+      )
+      setTransitionTarget(null)
+      setReason('')
+      await load()
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The application status could not be changed.')
+    } finally {
+      setMutationBusy(false)
+    }
+  }
+
+  function requestTransition(action: LifecycleAction) {
+    if (action.reasonRequired) {
+      setReason('')
+      setTransitionTarget(action)
+      return
+    }
+    void applyTransition(action)
+  }
+
   if (loading) {
     return <div className="company-detail-loading"><div className="skeleton company-hero-skeleton" /><div className="skeleton workspace-skeleton" /></div>
   }
@@ -185,6 +395,63 @@ export function CompanyDetailPage() {
     <>
       <div className="breadcrumbs"><Link to="/companies"><ArrowLeft size={14} /> SME portfolio</Link><span>/</span><span>{record.sme.legal_name}</span></div>
 
+      {editOpen && (
+        <div className="company-create-backdrop" role="presentation" onMouseDown={() => setEditOpen(false)}>
+          <form className="company-create-dialog" onSubmit={(event) => void saveSME(event)} onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div><span className="eyebrow">Application record</span><h2>Edit company details</h2><p>The SME identifier remains immutable.</p></div>
+              <button className="icon-button" type="button" aria-label="Close edit form" onClick={() => setEditOpen(false)}><X size={17} /></button>
+            </header>
+            <div className="company-create-grid">
+              <label className="builder-field">Legal name<input required value={editDraft.legal_name} onChange={(event) => setEditDraft((current) => ({ ...current, legal_name: event.target.value }))} /></label>
+              <label className="builder-field">Sector<input required value={editDraft.sector} onChange={(event) => setEditDraft((current) => ({ ...current, sector: event.target.value }))} /></label>
+              <label className="builder-field">Jurisdiction<input required value={editDraft.jurisdiction} onChange={(event) => setEditDraft((current) => ({ ...current, jurisdiction: event.target.value }))} /></label>
+              <label className="builder-field">Reason (optional)<input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Why these details changed" /></label>
+            </div>
+            <footer>
+              <button className="secondary-button" type="button" onClick={() => setEditOpen(false)}>Cancel</button>
+              <button className="primary-button" type="submit" disabled={mutationBusy}>{mutationBusy && <LoaderCircle className="spin" size={16} />} Save changes</button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {(deleteDocumentId || deleteWorkspaceOpen) && (
+        <div className="company-create-backdrop" role="presentation" onMouseDown={() => { setDeleteDocumentId(''); setDeleteWorkspaceOpen(false) }}>
+          <div className="company-create-dialog destructive-dialog" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div><span className="eyebrow">Permanent deletion</span><h2>{deleteWorkspaceOpen ? 'Delete company workspace?' : 'Delete source document?'}</h2><p>{deleteWorkspaceOpen ? 'Only an empty draft or withdrawn workspace can be deleted.' : 'Derived evidence and processing history for this document will also be removed.'}</p></div>
+              <button className="icon-button" type="button" aria-label="Close deletion form" onClick={() => { setDeleteDocumentId(''); setDeleteWorkspaceOpen(false) }}><X size={17} /></button>
+            </header>
+            <div className="destructive-dialog__body">
+              <label className="builder-field">Deletion reason<input required value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required for the audit trail" /></label>
+            </div>
+            <footer>
+              <button className="secondary-button" type="button" onClick={() => { setDeleteDocumentId(''); setDeleteWorkspaceOpen(false) }}>Cancel</button>
+              <button className="danger-button" type="button" disabled={mutationBusy || !reason.trim()} onClick={() => void (deleteWorkspaceOpen ? confirmWorkspaceDelete() : confirmDocumentDelete())}>{mutationBusy ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />} Delete permanently</button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {transitionTarget && (
+        <div className="company-create-backdrop" role="presentation" onMouseDown={() => setTransitionTarget(null)}>
+          <div className="company-create-dialog" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div><span className="eyebrow">Application lifecycle</span><h2>{transitionTarget.label}?</h2><p>This decision is revision-checked and retained in the audit trail.</p></div>
+              <button className="icon-button" type="button" aria-label="Close transition form" onClick={() => setTransitionTarget(null)}><X size={17} /></button>
+            </header>
+            <div className="destructive-dialog__body">
+              <label className="builder-field">Reason<input required value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain this decision" /></label>
+            </div>
+            <footer>
+              <button className="secondary-button" type="button" onClick={() => setTransitionTarget(null)}>Cancel</button>
+              <button className="primary-button" type="button" disabled={mutationBusy || !reason.trim()} onClick={() => void applyTransition(transitionTarget, reason.trim())}>{mutationBusy && <LoaderCircle className="spin" size={16} />} Confirm</button>
+            </footer>
+          </div>
+        </div>
+      )}
+
       <section className="company-hero">
         <div className="company-hero__identity">
           <span className="company-hero__avatar"><Building2 size={28} /></span>
@@ -193,6 +460,12 @@ export function CompanyDetailPage() {
             <h1>{record.sme.legal_name}</h1>
             <p><span>{record.sme.sector}</span><span><MapPin size={14} /> {record.sme.jurisdiction}</span><span>{record.sme.sme_id}</span></p>
           </div>
+        </div>
+        <div className="company-hero__actions">
+          {application && <StatusPill label={application.status.replaceAll('_', ' ')} tone={application.status === 'published' || application.status === 'approved' ? 'positive' : 'neutral'} />}
+          {availableTransitions.map((action) => <button className="secondary-button secondary-button--light" type="button" key={action.target} disabled={mutationBusy} onClick={() => requestTransition(action)}>{action.label}</button>)}
+          {canEditSME && <button className="secondary-button secondary-button--light" type="button" onClick={openEdit}><Pencil size={15} /> Edit details</button>}
+          {canDeleteWorkspace && <button className="danger-button danger-button--compact" type="button" onClick={() => { setReason(''); setDeleteWorkspaceOpen(true) }}><Trash2 size={15} /> Delete workspace</button>}
         </div>
         <div className="company-hero__metrics">
           <div><FileStack size={18} /><strong>{record.documents.length}</strong><span>documents</span></div>
@@ -217,8 +490,8 @@ export function CompanyDetailPage() {
       )}
 
       <div className="workspace-grid">
-        <DocumentUploadPanel smeId={smeId} disabled={!permissions.canUploadDocuments} onCompleted={uploadCompleted} />
-        <DocumentList documents={record.documents} processing={processing} jobs={jobs} canProcess={permissions.canProcessDocuments} busyId={busyId} selectedDocumentId={selectedDocumentId} onInspect={setSelectedDocumentId} onProcess={(documentId) => { setSelectedDocumentId(documentId); void processDocument(documentId) }} />
+        <DocumentUploadPanel smeId={smeId} applicationRevision={application?.revision ?? 1} disabled={!permissions.canUploadDocuments || !canDeleteDocuments} onCompleted={uploadCompleted} />
+        <DocumentList documents={record.documents} processing={processing} jobs={jobs} canProcess={permissions.canProcessDocuments} canDelete={canDeleteDocuments} busyId={busyId} selectedDocumentId={selectedDocumentId} onInspect={setSelectedDocumentId} onProcess={(documentId) => { setSelectedDocumentId(documentId); void processDocument(documentId) }} onDelete={(documentId) => { setReason(''); setDeleteDocumentId(documentId) }} />
       </div>
 
       <DocumentIntelligencePanel

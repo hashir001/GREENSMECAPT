@@ -179,6 +179,7 @@ export type DocumentUploadResponse = {
   document: SourceDocument
   storage_key: string
   processing_status: string
+  application: SMEApplication
 }
 
 export type SystemCapabilities = {
@@ -197,6 +198,37 @@ export type ApplicationRole =
   | 'expert'
   | 'investor'
   | 'sme_user'
+
+export type ApplicationStatus =
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'changes_requested'
+  | 'approved'
+  | 'published'
+  | 'withdrawn'
+  | 'archived'
+
+export type SMEApplication = {
+  application_id: string
+  sme_id: string
+  status: ApplicationStatus
+  revision: number
+  created_by: string
+  updated_by: string
+  created_at: string
+  updated_at: string
+}
+
+export type SMEUpdateResponse = {
+  sme: SME
+  application: SMEApplication
+}
+
+export type DocumentDeletionResponse = {
+  document_id: string
+  application: SMEApplication
+}
 
 export type ManagedUser = {
   user_id: string

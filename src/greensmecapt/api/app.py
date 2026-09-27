@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from hashlib import sha256
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Self
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -20,7 +20,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlmodel import Session
 
 from greensmecapt.api.assessment import build_assessment_router
@@ -53,6 +53,7 @@ from greensmecapt.persistence import (
     ApplicationTransition,
     AssessmentProfileRepository,
     Database,
+    DestructiveMutationRepository,
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
@@ -127,6 +128,64 @@ class ApplicationTransitionRequest(BaseModel):
     reason: str | None = Field(default=None, min_length=1)
 
 
+class SMEUpdateRequest(BaseModel):
+    """Patch mutable SME metadata against an application revision."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    expected_application_revision: int = Field(ge=1)
+    legal_name: str | None = Field(default=None, min_length=1)
+    sector: str | None = Field(default=None, min_length=1)
+    jurisdiction: str | None = Field(default=None, min_length=1)
+    reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def require_change(self) -> Self:
+        if all(
+            value is None
+            for value in (
+                self.legal_name,
+                self.sector,
+                self.jurisdiction,
+            )
+        ):
+            raise ValueError("At least one SME field must be supplied.")
+        return self
+
+
+class DestructiveMutationRequest(BaseModel):
+    """Require an optimistic revision and human-readable deletion reason."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    expected_application_revision: int = Field(ge=1)
+    reason: str = Field(min_length=1)
+
+
+class SMEUpdateResponse(BaseModel):
+    """Return updated metadata and the resulting lifecycle revision."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sme: SME
+    application: SMEApplication
+
+
+class DocumentDeletionResponse(BaseModel):
+    """Confirm removal and return the resulting lifecycle revision."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    document_id: str = Field(min_length=1)
+    application: SMEApplication
+
+
 class DocumentUploadResponse(BaseModel):
     """Return registered metadata for an uploaded document."""
 
@@ -138,6 +197,7 @@ class DocumentUploadResponse(BaseModel):
     document: SourceDocument
     storage_key: str = Field(min_length=1)
     processing_status: str = "stored"
+    application: SMEApplication
 
 
 class SystemCapabilities(BaseModel):
@@ -213,7 +273,7 @@ def create_app(
 
     app = FastAPI(
         title="GREENSMECAPT API",
-        version="0.4.0",
+        version="0.5.0",
         description=(
             "Evidence-aware assessment and decision-support "
             "platform for green SMEs."
@@ -475,13 +535,11 @@ def create_app(
         smes = GreenSMERepository(session).list_smes()
 
         if principal.role is ApplicationRole.INVESTOR:
-            published_ids = set(
-                AssessmentProfileRepository(
-                    session
-                ).list_published_sme_ids()
-            )
             return tuple(
-                sme for sme in smes if sme.sme_id in published_ids
+                profile.record_snapshot.sme
+                for profile in AssessmentProfileRepository(
+                    session
+                ).list_published_profiles()
             )
 
         return tuple(
@@ -509,6 +567,7 @@ def create_app(
         try:
             return ApplicationRepository(session).get(sme_id)
         except PersistenceNotFoundError as error:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
@@ -542,7 +601,23 @@ def create_app(
         )
 
         try:
-            return ApplicationRepository(session).transition(
+            applications = ApplicationRepository(session)
+            current = applications.get(sme_id)
+            if (
+                current.status is ApplicationStatus.PUBLISHED
+                and request.target_status
+                is not ApplicationStatus.PUBLISHED
+            ):
+                AssessmentProfileRepository(session).withdraw(
+                    sme_id=sme_id,
+                    actor_id=principal.user_id,
+                    reason=(
+                        request.reason
+                        or "Application publication status changed"
+                    ),
+                    commit=False,
+                )
+            updated = applications.transition(
                 sme_id=sme_id,
                 transition=ApplicationTransition(
                     target_status=request.target_status,
@@ -550,22 +625,31 @@ def create_app(
                 ),
                 actor_id=principal.user_id,
                 expected_revision=request.expected_revision,
+                commit=False,
             )
+            session.commit()
+            return updated
         except PersistenceNotFoundError as error:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
             ) from error
         except PersistenceConflictError as error:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
         except ValueError as error:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(error),
             ) from error
+        except Exception:
+            session.rollback()
+            raise
 
     @app.get(
         "/smes/{sme_id}",
@@ -591,6 +675,110 @@ def create_app(
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+    @app.patch(
+        "/smes/{sme_id}",
+        response_model=SMEUpdateResponse,
+    )
+    def update_sme(
+        sme_id: str,
+        request: SMEUpdateRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_sme_permission(ApplicationPermission.EDIT_SME)
+            ),
+        ],
+    ) -> SMEUpdateResponse:
+        """Update editable application metadata in one transaction."""
+
+        repository = GreenSMERepository(session)
+        applications = ApplicationRepository(session)
+
+        try:
+            current = repository.get_sme(sme_id)
+            application = applications.get(sme_id)
+            _require_application_data_mutable(
+                principal=principal,
+                application=application,
+                allow_reviewer=False,
+            )
+            reason = request.reason or "SME metadata updated"
+            updated = repository.update_sme(
+                sme_id=sme_id,
+                legal_name=request.legal_name or current.legal_name,
+                sector=request.sector or current.sector,
+                jurisdiction=(
+                    request.jurisdiction or current.jurisdiction
+                ),
+                actor_id=principal.user_id,
+                reason=reason,
+                commit=False,
+            )
+            application = applications.record_change(
+                sme_id=sme_id,
+                actor_id=principal.user_id,
+                expected_revision=request.expected_application_revision,
+                reason=reason,
+                commit=False,
+            )
+            session.commit()
+            return SMEUpdateResponse(
+                sme=updated,
+                application=application,
+            )
+        except PersistenceNotFoundError as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except Exception:
+            session.rollback()
+            raise
+
+    @app.delete(
+        "/smes/{sme_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    def delete_sme(
+        sme_id: str,
+        request: DestructiveMutationRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_permission(ApplicationPermission.DELETE_SME)
+            ),
+        ],
+    ) -> Response:
+        """Delete only an empty, unpublished draft or withdrawn workspace."""
+
+        try:
+            DestructiveMutationRepository(session).delete_empty_sme(
+                sme_id=sme_id,
+                actor_id=principal.user_id,
+                expected_revision=request.expected_application_revision,
+                reason=request.reason,
+            )
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
 
@@ -645,13 +833,21 @@ def create_app(
             DocumentType,
             Form(),
         ] = DocumentType.UNKNOWN,
+        expected_application_revision: Annotated[int, Form()] = 1,
     ) -> DocumentUploadResponse:
         _require_sme_access(principal, sme_id)
 
         repository = GreenSMERepository(session)
+        applications = ApplicationRepository(session)
 
         try:
             repository.get_sme(sme_id)
+            application = applications.get(sme_id)
+            _require_application_data_mutable(
+                principal=principal,
+                application=application,
+                allow_reviewer=True,
+            )
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -716,11 +912,21 @@ def create_app(
                 document=document,
                 storage_key=storage_key,
                 actor_id=principal.user_id,
+                commit=False,
             )
+            application = applications.record_change(
+                sme_id=sme_id,
+                actor_id=principal.user_id,
+                expected_revision=expected_application_revision,
+                reason=f"Document uploaded: {safe_name}",
+                commit=False,
+            )
+            session.commit()
         except (
             DocumentStorageError,
             PersistenceConflictError,
         ) as error:
+            session.rollback()
             if "storage_key" in locals():
                 storage_backend.delete(storage_key)
 
@@ -728,11 +934,112 @@ def create_app(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
+        except Exception:
+            session.rollback()
+            if "storage_key" in locals():
+                storage_backend.delete(storage_key)
+            raise
 
         return DocumentUploadResponse(
             document=document,
             storage_key=storage_key,
+            application=application,
         )
+
+    @app.delete(
+        "/smes/{sme_id}/documents/{document_id}",
+        response_model=DocumentDeletionResponse,
+    )
+    def delete_document(
+        sme_id: str,
+        document_id: str,
+        request: DestructiveMutationRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(
+                require_sme_permission(
+                    ApplicationPermission.MANAGE_DOCUMENTS
+                )
+            ),
+        ],
+    ) -> DocumentDeletionResponse:
+        """Delete a source, its derived data and its private stored object."""
+
+        applications = ApplicationRepository(session)
+        storage_deleted = False
+        registration: StoredDocumentRegistration | None = None
+        original_content: bytes | None = None
+
+        try:
+            application = applications.get(sme_id)
+            _require_application_data_mutable(
+                principal=principal,
+                application=application,
+                allow_reviewer=True,
+            )
+            registration = _require_document_for_sme(
+                repository=GreenSMERepository(session),
+                document_id=document_id,
+                sme_id=sme_id,
+            )
+            original_content = storage_backend.read(
+                registration.storage_key
+            )
+            DestructiveMutationRepository(session).delete_document(
+                sme_id=sme_id,
+                document_id=document_id,
+                actor_id=principal.user_id,
+                reason=request.reason,
+                commit=False,
+            )
+            application = applications.record_change(
+                sme_id=sme_id,
+                actor_id=principal.user_id,
+                expected_revision=request.expected_application_revision,
+                reason=request.reason,
+                commit=False,
+            )
+            storage_deleted = True
+            storage_backend.delete(registration.storage_key)
+            session.commit()
+            return DocumentDeletionResponse(
+                document_id=document_id,
+                application=application,
+            )
+        except PersistenceNotFoundError as error:
+            session.rollback()
+            _restore_deleted_document(
+                storage_backend=storage_backend,
+                registration=registration,
+                content=original_content,
+                storage_deleted=storage_deleted,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except (PersistenceConflictError, DocumentStorageError) as error:
+            session.rollback()
+            _restore_deleted_document(
+                storage_backend=storage_backend,
+                registration=registration,
+                content=original_content,
+                storage_deleted=storage_deleted,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+        except Exception:
+            session.rollback()
+            _restore_deleted_document(
+                storage_backend=storage_backend,
+                registration=registration,
+                content=original_content,
+                storage_deleted=storage_deleted,
+            )
+            raise
 
     @app.get(
         "/smes/{sme_id}/documents/{document_id}/content",
@@ -1145,7 +1452,8 @@ def _require_application_transition_role(
     """Prevent actors from selecting lifecycle states they do not own."""
 
     allowed_targets = {
-        ApplicationRole.ADMIN: set(ApplicationStatus),
+        ApplicationRole.ADMIN: set(ApplicationStatus)
+        - {ApplicationStatus.PUBLISHED},
         ApplicationRole.REVIEWER: {
             ApplicationStatus.UNDER_REVIEW,
             ApplicationStatus.CHANGES_REQUESTED,
@@ -1164,6 +1472,68 @@ def _require_application_transition_role(
                 "The authenticated role cannot select this "
                 "application status."
             ),
+        )
+
+
+def _require_application_data_mutable(
+    *,
+    principal: AuthPrincipal,
+    application: SMEApplication,
+    allow_reviewer: bool,
+) -> None:
+    """Prevent silent changes to approved or published application data."""
+
+    allowed = {
+        ApplicationRole.ADMIN: {
+            ApplicationStatus.DRAFT,
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.UNDER_REVIEW,
+            ApplicationStatus.CHANGES_REQUESTED,
+            ApplicationStatus.WITHDRAWN,
+        },
+        ApplicationRole.SME_USER: {
+            ApplicationStatus.DRAFT,
+            ApplicationStatus.CHANGES_REQUESTED,
+        },
+        ApplicationRole.REVIEWER: (
+            {
+                ApplicationStatus.SUBMITTED,
+                ApplicationStatus.UNDER_REVIEW,
+                ApplicationStatus.CHANGES_REQUESTED,
+            }
+            if allow_reviewer
+            else set()
+        ),
+    }
+
+    if application.status not in allowed.get(principal.role, set()):
+        raise PersistenceConflictError(
+            "Approved or published application data cannot be changed "
+            "silently. Move the application to changes requested first."
+        )
+
+
+def _restore_deleted_document(
+    *,
+    storage_backend: DocumentStorage,
+    registration: StoredDocumentRegistration | None,
+    content: bytes | None,
+    storage_deleted: bool,
+) -> None:
+    """Compensate storage deletion if the database transaction fails."""
+
+    if not storage_deleted or registration is None or content is None:
+        return
+
+    restored_key = storage_backend.save(
+        sme_id=registration.document.sme_id,
+        document_id=registration.document.document_id,
+        sha256=registration.document.sha256,
+        content=content,
+    )
+    if restored_key != registration.storage_key:
+        raise DocumentStorageError(
+            "Deleted document storage could not be restored consistently."
         )
 
 

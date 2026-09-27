@@ -12,7 +12,11 @@ from greensmecapt.security import (
     AuthPrincipal,
     ManagedUser,
 )
-from greensmecapt.storage import LocalDocumentStorage
+from greensmecapt.storage import (
+    DocumentStorage,
+    DocumentStorageError,
+    LocalDocumentStorage,
+)
 
 ADMIN_HEADERS = {
     "Authorization": "Bearer admin-token",
@@ -143,7 +147,10 @@ class FakeIdentityAdmin:
         return updated
 
 
-def _client(tmp_path: Path) -> TestClient:
+def _client(
+    tmp_path: Path,
+    document_storage: DocumentStorage | None = None,
+) -> TestClient:
     """Create an isolated API client with test dependencies."""
 
     application = create_app(
@@ -151,13 +158,22 @@ def _client(tmp_path: Path) -> TestClient:
             f"sqlite:///{tmp_path / 'greensmecapt-test.db'}"
         ),
         token_verifier=FakeTokenVerifier(),
-        document_storage=LocalDocumentStorage(
-            tmp_path / "documents"
+        document_storage=(
+            document_storage
+            or LocalDocumentStorage(tmp_path / "documents")
         ),
         identity_administrator=FakeIdentityAdmin(),
     )
 
     return TestClient(application)
+
+
+class DeleteThenFailStorage(LocalDocumentStorage):
+    """Simulate a provider error after deleting the remote object."""
+
+    def delete(self, storage_key: str) -> None:
+        super().delete(storage_key)
+        raise DocumentStorageError("Simulated post-delete failure.")
 
 
 def _create_sme(client: TestClient) -> None:
@@ -343,6 +359,79 @@ def test_create_and_retrieve_sme(tmp_path: Path) -> None:
     assert retrieve_response.json() == SME_PAYLOAD
 
 
+def test_sme_user_updates_draft_with_revision_check(
+    tmp_path: Path,
+) -> None:
+    """Assigned SME users may edit drafts and receive a new revision."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        updated = client.patch(
+            "/smes/sme_001",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_application_revision": 1,
+                "legal_name": "EcoPack Circular Manufacturing LLC",
+                "reason": "Registered legal name corrected",
+            },
+        )
+        stale = client.patch(
+            "/smes/sme_001",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_application_revision": 1,
+                "sector": "Circular manufacturing",
+            },
+        )
+        record = client.get(
+            "/smes/sme_001/record",
+            headers=SME_ONE_HEADERS,
+        )
+
+    assert updated.status_code == 200
+    assert updated.json()["application"]["revision"] == 2
+    assert (
+        updated.json()["sme"]["legal_name"]
+        == "EcoPack Circular Manufacturing LLC"
+    )
+    assert stale.status_code == 409
+    assert (
+        record.json()["sme"]["legal_name"]
+        == "EcoPack Circular Manufacturing LLC"
+    )
+
+
+def test_approved_sme_cannot_be_silently_edited(
+    tmp_path: Path,
+) -> None:
+    """Approved metadata requires a governed changes-requested transition."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        revision = 1
+        for target in ("submitted", "under_review", "approved"):
+            response = client.patch(
+                "/smes/sme_001/application",
+                headers=ADMIN_HEADERS,
+                json={
+                    "expected_revision": revision,
+                    "target_status": target,
+                },
+            )
+            revision = response.json()["revision"]
+
+        update = client.patch(
+            "/smes/sme_001",
+            headers=ADMIN_HEADERS,
+            json={
+                "expected_application_revision": revision,
+                "sector": "Changed after approval",
+            },
+        )
+
+    assert update.status_code == 409
+
+
 def test_new_sme_has_revision_checked_application_lifecycle(
     tmp_path: Path,
 ) -> None:
@@ -394,6 +483,25 @@ def test_new_sme_has_revision_checked_application_lifecycle(
     assert under_review.json()["revision"] == 3
     assert stale.status_code == 409
     assert forbidden.status_code == 403
+
+
+def test_application_cannot_bypass_profile_publication(
+    tmp_path: Path,
+) -> None:
+    """Published status must only come from explicit profile publication."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        response = client.patch(
+            "/smes/sme_001/application",
+            headers=ADMIN_HEADERS,
+            json={
+                "expected_revision": 1,
+                "target_status": "published",
+            },
+        )
+
+    assert response.status_code == 403
 
 
 def test_investor_and_expert_cannot_read_raw_sme_data(
@@ -517,6 +625,7 @@ def test_upload_document_and_retrieve_record(
     )
 
     assert upload_result["processing_status"] == "stored"
+    assert upload_result["application"]["revision"] == 2
     assert upload_result["storage_key"] == (
         f"sme_001/{uploaded_document['document_id']}/"
         f"{expected_sha256}"
@@ -533,6 +642,128 @@ def test_upload_document_and_retrieve_record(
         == uploaded_document
     )
     assert record["evidence_items"] == []
+
+
+def test_delete_document_removes_derived_data_and_storage(
+    tmp_path: Path,
+) -> None:
+    """Document deletion should cascade and remove the private object."""
+
+    content = b"Renewable energy share: 72 percent."
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        upload = client.post(
+            "/smes/sme_001/documents",
+            headers=SME_ONE_HEADERS,
+            data={
+                "document_type": "sustainability_report",
+                "expected_application_revision": "1",
+            },
+            files={
+                "file": ("report.txt", content, "text/plain"),
+            },
+        )
+        document_id = upload.json()["document"]["document_id"]
+        storage_key = upload.json()["storage_key"]
+        processed = client.post(
+            f"/smes/sme_001/documents/{document_id}/process",
+            headers=SME_ONE_HEADERS,
+        )
+        deleted = client.request(
+            "DELETE",
+            f"/smes/sme_001/documents/{document_id}",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_application_revision": 2,
+                "reason": "Incorrect source uploaded",
+            },
+        )
+        record = client.get(
+            "/smes/sme_001/record",
+            headers=SME_ONE_HEADERS,
+        )
+
+    assert processed.status_code == 200
+    assert processed.json()["evidence_items"]
+    assert deleted.status_code == 200
+    assert deleted.json()["application"]["revision"] == 3
+    assert record.json()["documents"] == []
+    assert record.json()["evidence_items"] == []
+    assert not (tmp_path / "documents" / storage_key).exists()
+
+
+def test_failed_document_delete_restores_storage_and_database(
+    tmp_path: Path,
+) -> None:
+    """Cross-system deletion should compensate if storage reports failure."""
+
+    storage = DeleteThenFailStorage(tmp_path / "documents")
+
+    with _client(tmp_path, document_storage=storage) as client:
+        _create_sme(client)
+        upload = client.post(
+            "/smes/sme_001/documents",
+            headers=SME_ONE_HEADERS,
+            data={
+                "document_type": "sustainability_report",
+                "expected_application_revision": "1",
+            },
+            files={
+                "file": ("report.txt", b"Green evidence.", "text/plain"),
+            },
+        )
+        document_id = upload.json()["document"]["document_id"]
+        storage_key = upload.json()["storage_key"]
+        deleted = client.request(
+            "DELETE",
+            f"/smes/sme_001/documents/{document_id}",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_application_revision": 2,
+                "reason": "Testing compensation",
+            },
+        )
+        record = client.get(
+            "/smes/sme_001/record",
+            headers=SME_ONE_HEADERS,
+        )
+        application = client.get(
+            "/smes/sme_001/application",
+            headers=SME_ONE_HEADERS,
+        )
+
+    assert deleted.status_code == 409
+    assert [item["document_id"] for item in record.json()["documents"]] == [
+        document_id
+    ]
+    assert application.json()["revision"] == 2
+    assert (tmp_path / "documents" / storage_key).exists()
+
+
+def test_admin_deletes_only_empty_draft_workspace(
+    tmp_path: Path,
+) -> None:
+    """Hard deletion is available for an empty draft and nothing broader."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        deleted = client.request(
+            "DELETE",
+            "/smes/sme_001",
+            headers=ADMIN_HEADERS,
+            json={
+                "expected_application_revision": 1,
+                "reason": "Duplicate workspace",
+            },
+        )
+        missing = client.get(
+            "/smes/sme_001",
+            headers=ADMIN_HEADERS,
+        )
+
+    assert deleted.status_code == 204
+    assert missing.status_code == 404
 
 
 def test_investor_cannot_upload_sme_document(

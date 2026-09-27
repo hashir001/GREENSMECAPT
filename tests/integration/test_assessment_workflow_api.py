@@ -297,6 +297,32 @@ def test_automatic_comparison_requires_approved_profiles(
     assert "no published assessment profile" in response.json()["detail"]
 
 
+def test_changes_requested_withdraws_investor_publication(
+    tmp_path: Path,
+) -> None:
+    """Reopened application data must disappear from investor discovery."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client, "sme_001")
+        _approve_and_publish(client, "sme_001", "high")
+        visible = client.get("/smes", headers=INVESTOR_HEADERS)
+        reopened = client.patch(
+            "/smes/sme_001/application",
+            headers=ADMIN_HEADERS,
+            json={
+                "expected_revision": 5,
+                "target_status": "changes_requested",
+                "reason": "New evidence is required",
+            },
+        )
+        hidden = client.get("/smes", headers=INVESTOR_HEADERS)
+
+    assert [item["sme_id"] for item in visible.json()] == ["sme_001"]
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "changes_requested"
+    assert hidden.json() == []
+
+
 def test_investor_cannot_supply_assessment_inputs(
     tmp_path: Path,
 ) -> None:

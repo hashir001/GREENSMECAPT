@@ -5,11 +5,15 @@ import type {
   AutomaticCohortAssessmentRequest,
   CohortAssessmentRequest,
   DocumentProcessingResult,
+  DocumentDeletionResponse,
   DocumentUploadResponse,
   EvidenceItem,
   ApplicationRole,
   ManagedUser,
   SME,
+  SMEApplication,
+  ApplicationStatus,
+  SMEUpdateResponse,
   SemanticProviderConnection,
   StructuredInvestmentRecord,
   SystemCapabilities,
@@ -22,6 +26,9 @@ import type {
 } from '../types/jobs'
 import {
   createPreviewSME,
+  deletePreviewDocument,
+  deletePreviewSME,
+  getPreviewApplication,
   createPreviewAssessment,
   getPreviewAssessmentRun,
   getPreviewDocumentProcessing,
@@ -30,7 +37,9 @@ import {
   previewRuns,
   previewSMEs,
   processPreviewDocument,
+  transitionPreviewApplication,
   uploadPreviewDocument,
+  updatePreviewSME,
   validatePreviewEvidence,
 } from './previewData'
 import { isPreviewMode, supabase } from './supabase'
@@ -464,10 +473,80 @@ export const api = {
         )
   ),
 
+  getSMEApplication: (smeId: string) => (
+    isPreviewMode
+      ? getPreviewApplication(smeId)
+      : apiRequest<SMEApplication>(
+          `/smes/${encodeURIComponent(smeId)}/application`,
+        )
+  ),
+
+  transitionSMEApplication: (
+    smeId: string,
+    expectedRevision: number,
+    targetStatus: ApplicationStatus,
+    reason?: string,
+  ) => (
+    isPreviewMode
+      ? transitionPreviewApplication(smeId, targetStatus)
+      : apiRequest<SMEApplication>(
+          `/smes/${encodeURIComponent(smeId)}/application`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              expected_revision: expectedRevision,
+              target_status: targetStatus,
+              reason: reason || null,
+            }),
+          },
+        )
+  ),
+
+  updateSME: (
+    smeId: string,
+    expectedApplicationRevision: number,
+    update: Partial<Pick<SME, 'legal_name' | 'sector' | 'jurisdiction'>>,
+    reason?: string,
+  ) => (
+    isPreviewMode
+      ? updatePreviewSME(smeId, update)
+      : apiRequest<SMEUpdateResponse>(
+          `/smes/${encodeURIComponent(smeId)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              expected_application_revision: expectedApplicationRevision,
+              ...update,
+              reason: reason || null,
+            }),
+          },
+        )
+  ),
+
+  deleteSME: (
+    smeId: string,
+    expectedApplicationRevision: number,
+    reason: string,
+  ) => (
+    isPreviewMode
+      ? deletePreviewSME(smeId)
+      : authenticatedRequest(
+          `/smes/${encodeURIComponent(smeId)}`,
+          {
+            method: 'DELETE',
+            body: JSON.stringify({
+              expected_application_revision: expectedApplicationRevision,
+              reason,
+            }),
+          },
+        ).then(() => undefined)
+  ),
+
   uploadDocument: (
     smeId: string,
     file: File,
     documentType: string,
+    expectedApplicationRevision: number,
   ) => {
     if (isPreviewMode) {
       return uploadPreviewDocument(
@@ -483,6 +562,10 @@ export const api = {
     form.set(
       'document_type',
       documentType,
+    )
+    form.set(
+      'expected_application_revision',
+      String(expectedApplicationRevision),
     )
 
     return apiRequest<DocumentUploadResponse>(
@@ -511,6 +594,31 @@ export const api = {
           }/documents/${
             encodeURIComponent(documentId)
           }/processing`,
+        )
+  ),
+
+  deleteDocument: (
+    smeId: string,
+    documentId: string,
+    expectedApplicationRevision: number,
+    reason: string,
+  ) => (
+    isPreviewMode
+      ? deletePreviewDocument(smeId, documentId).then(
+          (application): DocumentDeletionResponse => ({
+            document_id: documentId,
+            application,
+          }),
+        )
+      : apiRequest<DocumentDeletionResponse>(
+          `/smes/${encodeURIComponent(smeId)}/documents/${encodeURIComponent(documentId)}`,
+          {
+            method: 'DELETE',
+            body: JSON.stringify({
+              expected_application_revision: expectedApplicationRevision,
+              reason,
+            }),
+          },
         )
   ),
 

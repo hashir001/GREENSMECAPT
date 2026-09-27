@@ -36,11 +36,12 @@ const documentTypes = [
 
 type DocumentUploadPanelProps = {
   smeId: string
+  applicationRevision: number
   disabled?: boolean
   onCompleted: (result?: DocumentProcessingResult) => void | Promise<void>
 }
 
-export function DocumentUploadPanel({ smeId, disabled = false, onCompleted }: DocumentUploadPanelProps) {
+export function DocumentUploadPanel({ smeId, applicationRevision, disabled = false, onCompleted }: DocumentUploadPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [documentType, setDocumentType] = useState('sustainability_report')
@@ -88,7 +89,12 @@ export function DocumentUploadPanel({ smeId, disabled = false, onCompleted }: Do
     setProgress(null)
     let uploadedDocumentId = ''
     try {
-      const uploaded = await api.uploadDocument(smeId, file, documentType)
+      const uploaded = await api.uploadDocument(
+        smeId,
+        file,
+        documentType,
+        applicationRevision,
+      )
       uploadedDocumentId = uploaded.document.document_id
       await onCompleted()
       setPhase('processing')

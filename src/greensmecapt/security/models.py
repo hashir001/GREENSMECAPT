@@ -20,6 +20,8 @@ class ApplicationPermission(StrEnum):
 
     MANAGE_USERS = "manage_users"
     CREATE_SME = "create_sme"
+    EDIT_SME = "edit_sme"
+    DELETE_SME = "delete_sme"
     VIEW_RAW_SME = "view_raw_sme"
     MANAGE_DOCUMENTS = "manage_documents"
     VALIDATE_EVIDENCE = "validate_evidence"
@@ -56,6 +58,7 @@ _GLOBAL_PERMISSIONS: dict[ApplicationRole, frozenset[ApplicationPermission]] = {
 _SME_SCOPED_PERMISSIONS = frozenset(
     {
         ApplicationPermission.VIEW_RAW_SME,
+        ApplicationPermission.EDIT_SME,
         ApplicationPermission.MANAGE_DOCUMENTS,
     }
 )
@@ -100,4 +103,3 @@ class AuthPrincipal(BaseModel):
             ApplicationPermission.VIEW_RAW_SME,
             sme_id=sme_id,
         )
-

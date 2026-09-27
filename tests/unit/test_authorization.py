@@ -52,3 +52,15 @@ def test_sme_user_can_access_assigned_sme() -> None:
 
     assert principal.can_access_sme("sme_001")
     assert not principal.can_access_sme("sme_002")
+    assert principal.has_permission(
+        ApplicationPermission.EDIT_SME,
+        sme_id="sme_001",
+    )
+    assert not principal.has_permission(
+        ApplicationPermission.EDIT_SME,
+        sme_id="sme_002",
+    )
+    assert not principal.has_permission(
+        ApplicationPermission.DELETE_SME,
+        sme_id="sme_001",
+    )

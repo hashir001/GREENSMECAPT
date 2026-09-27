@@ -21,6 +21,7 @@ from greensmecapt.persistence.assessment_runs import (
     AssessmentRunSummary,
 )
 from greensmecapt.persistence.database import Database
+from greensmecapt.persistence.mutations import DestructiveMutationRepository
 from greensmecapt.persistence.repository import (
     GreenSMERepository,
     PersistenceConflictError,
@@ -49,6 +50,7 @@ __all__ = [
     "AssessmentRunSummary",
     "AuditEventRow",
     "Database",
+    "DestructiveMutationRepository",
     "DocumentBatchCheckpointRow",
     "DocumentRow",
     "DocumentProcessingJobRow",
@@ -65,4 +67,3 @@ __all__ = [
     "StoredAssessmentProfileRevision",
     "StoredDocumentRegistration",
 ]
-

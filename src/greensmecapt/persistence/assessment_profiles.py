@@ -263,6 +263,56 @@ class AssessmentProfileRepository:
 
         return _revision_from_row(row)
 
+    def withdraw(
+        self,
+        *,
+        sme_id: str,
+        actor_id: str,
+        reason: str,
+        commit: bool = True,
+    ) -> None:
+        """Withdraw every active publication while retaining its history."""
+
+        active_rows = self._session.exec(
+            select(SMEAssessmentProfilePublicationRow).where(
+                SMEAssessmentProfilePublicationRow.sme_id == sme_id,
+                SMEAssessmentProfilePublicationRow.active.is_(True),
+            )
+        ).all()
+        now = _utc_now()
+
+        for row in active_rows:
+            row.active = False
+            row.withdrawn_by = actor_id
+            row.withdrawn_at = now
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=sme_id,
+                    entity_type="assessment_profile_publication",
+                    entity_id=row.publication_id,
+                    action="assessment_profile_withdrawn",
+                    actor_id=actor_id,
+                    reason=reason,
+                    previous_value_json=json.dumps(
+                        {
+                            "active": True,
+                            "revision_id": row.revision_id,
+                        },
+                        sort_keys=True,
+                    ),
+                    new_value_json=json.dumps(
+                        {
+                            "active": False,
+                            "revision_id": row.revision_id,
+                        },
+                        sort_keys=True,
+                    ),
+                )
+            )
+
+        self._finish(commit)
+
     def get_published(
         self,
         sme_id: str,
@@ -288,6 +338,16 @@ class AssessmentProfileRepository:
             )
         ).all()
         return tuple(sorted({row.sme_id for row in rows}))
+
+    def list_published_profiles(
+        self,
+    ) -> tuple[StoredAssessmentProfileRevision, ...]:
+        """Return active frozen snapshots for investor-facing discovery."""
+
+        return tuple(
+            self.get_published(sme_id)
+            for sme_id in self.list_published_sme_ids()
+        )
 
     def _latest_row(
         self,

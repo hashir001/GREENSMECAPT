@@ -54,6 +54,13 @@ access explicitly published profile snapshots. SME users
 must have at least one assigned SME identifier. Sign out and in again after a
 claim change so Supabase issues a fresh token.
 
+SME identifiers are immutable. Metadata edits, uploads, document deletions and
+lifecycle transitions use the current application revision to prevent stale
+writes. Approved or published data cannot be silently changed. Reopening a
+published application withdraws it from investor discovery while retaining the
+publication history. Hard deletion is limited to empty draft or withdrawn
+workspaces; governed records should be archived instead.
+
 After the first administrator is assigned, that administrator can invite
 additional users and change their roles or SME assignments from **Profile and
 access** in the application. These operations pass through the admin-only
