@@ -28,7 +28,7 @@ def test_build_complete_non_scoring_readiness_profile() -> None:
     observation = ReadinessObservation(
         observation_id="obs-1",
         sme_id="sme-1",
-        factor_id="legal_and_environmental_compliance",
+        factor_id="regulation_compliance_standards_and_certifications",
         state=ReadinessState.CONSTRAINING_EVIDENCE,
         source_ids=("document-1",),
         narrative="A required environmental permit is still pending.",
@@ -60,7 +60,7 @@ def test_evidence_state_requires_source() -> None:
         ReadinessObservation(
             observation_id="obs-1",
             sme_id="sme-1",
-            factor_id="leadership_commitment",
+            factor_id="leadership_and_organisational_commitment",
             state=ReadinessState.ENABLING_EVIDENCE,
         )
 

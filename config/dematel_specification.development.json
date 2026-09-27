@@ -1,260 +1,12 @@
 {
-  "specification_id": "greensmecapt_readiness_dematel",
-  "version": "1.0.0",
+  "specification_id": "greensmecapt_readiness_subdriver_dematel",
+  "version": "1.1.0",
+  "elicitation_level": "subdrivers",
+  "parent_specification_id": "greensmecapt_readiness_driver_dematel",
   "status": "development",
-  "research_basis": "Hajer's published UAE green-SME driver research, the Green SME Drivers survey, the finance-driven Fuzzy DEMATEL and TOPSIS paper, and the revised GreenSMECapt framework dated 2026-09-19.",
+  "research_basis": "Condensed operational structure synthesised from Hajer's UAE green-SME driver research, the Green SME Drivers survey, the finance-driven Fuzzy DEMATEL and TOPSIS paper, and the revised GreenSMECapt framework.",
   "calibration_status": "requires_expert_calibration",
   "linguistic_scale_status": "development_placeholder",
-  "domains": [
-    {
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Financing environment and investor conditions",
-      "description": "External funding availability, terms, mandates and investor perceptions around the SME."
-    },
-    {
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Institutional, regulatory and ecosystem conditions",
-      "description": "Rules, compliance, public programmes and ecosystem support that enable or constrain transition."
-    },
-    {
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Organisational and capability readiness",
-      "description": "Internal leadership, people, systems, skills, technology and operational capabilities."
-    },
-    {
-      "domain_id": "market_procurement_and_supply_chain_conditions",
-      "title": "Market, procurement and supply-chain conditions",
-      "description": "Demand, buyer requirements, procurement routes, branding and supply-chain pressure."
-    }
-  ],
-  "factors": [
-    {
-      "factor_id": "green_finance_availability",
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Green-finance availability",
-      "definition": "Availability of suitable green-finance products to the SME.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "grants_and_guarantees",
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Grants and guarantees",
-      "definition": "Availability of grants, guarantees and related risk-sharing support.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "impact_and_esg_linked_finance",
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Impact and ESG-linked finance",
-      "definition": "Availability of impact-oriented or ESG-linked financing structures.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "financing_costs",
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Financing costs",
-      "definition": "Cost and affordability of external finance for green transition.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "investor_risk_perception",
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Investor risk perception",
-      "definition": "How investors perceive the risk of the SME and proposed transition.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "funder_mandates",
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Funder mandates",
-      "definition": "Eligibility and policy mandates applied by funders.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "public_private_financing_coordination",
-      "domain_id": "financing_environment_and_investor_conditions",
-      "title": "Public-private financing coordination",
-      "definition": "Coordination between public and private actors in financing provision.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "regulation",
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Regulation",
-      "definition": "Regulatory conditions affecting green-SME activity and transition.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "legal_and_environmental_compliance",
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Legal and environmental compliance",
-      "definition": "Ability to satisfy relevant legal and environmental requirements.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "certification",
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Certification",
-      "definition": "Availability and attainability of relevant environmental or market certification.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "government_programmes_and_incentives",
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Government programmes and incentives",
-      "definition": "Public programmes and incentives supporting transition.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "technology_support",
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Technology support",
-      "definition": "External support for identifying, acquiring or implementing technology.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "universities_and_incubators",
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Universities and incubators",
-      "definition": "Research, incubation and capability support from knowledge institutions.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "stakeholder_and_public_private_coordination",
-      "domain_id": "institutional_regulatory_and_ecosystem_conditions",
-      "title": "Stakeholder and public-private coordination",
-      "definition": "Coordination among ecosystem stakeholders and public-private actors.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "leadership_commitment",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Leadership commitment",
-      "definition": "Leadership commitment to environmental transition and implementation.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "employee_engagement",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Employee engagement",
-      "definition": "Employee participation in environmental change and delivery.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "management_systems_and_kpis",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Management systems and KPIs",
-      "definition": "Internal management systems, ownership and performance indicators.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "technical_competence",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Technical competence",
-      "definition": "Technical knowledge and skills required to execute the transition.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "organisational_learning",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Organisational learning",
-      "definition": "Capacity to learn, adapt and retain transition capabilities.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "technology_adoption",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Technology adoption",
-      "definition": "Ability and willingness to adopt suitable technologies.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "operational_efficiency",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Operational efficiency",
-      "definition": "Capability to improve processes and use resources effectively.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "digital_monitoring_and_data_capability",
-      "domain_id": "organisational_and_capability_readiness",
-      "title": "Digital monitoring and data capability",
-      "definition": "Capability to collect, monitor and use reliable operational data.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "consumer_demand",
-      "domain_id": "market_procurement_and_supply_chain_conditions",
-      "title": "Consumer demand",
-      "definition": "Customer demand for greener products, services or operations.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "buyer_requirements",
-      "domain_id": "market_procurement_and_supply_chain_conditions",
-      "title": "Buyer requirements",
-      "definition": "Environmental requirements imposed by commercial buyers.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "sustainable_procurement_opportunities",
-      "domain_id": "market_procurement_and_supply_chain_conditions",
-      "title": "Sustainable procurement opportunities",
-      "definition": "Access to procurement opportunities rewarding environmental performance.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "tender_exposure",
-      "domain_id": "market_procurement_and_supply_chain_conditions",
-      "title": "Tender exposure",
-      "definition": "Exposure to tender requirements and qualification processes.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "green_branding",
-      "domain_id": "market_procurement_and_supply_chain_conditions",
-      "title": "Green branding",
-      "definition": "Market value and credibility associated with green positioning.",
-      "source_status": "research_grounded"
-    },
-    {
-      "factor_id": "supply_chain_pressure",
-      "domain_id": "market_procurement_and_supply_chain_conditions",
-      "title": "Supply-chain pressure",
-      "definition": "Environmental expectations transmitted through supply-chain relationships.",
-      "source_status": "research_grounded"
-    }
-  ],
-  "factor_ids": [
-    "green_finance_availability",
-    "grants_and_guarantees",
-    "impact_and_esg_linked_finance",
-    "financing_costs",
-    "investor_risk_perception",
-    "funder_mandates",
-    "public_private_financing_coordination",
-    "regulation",
-    "legal_and_environmental_compliance",
-    "certification",
-    "government_programmes_and_incentives",
-    "technology_support",
-    "universities_and_incubators",
-    "stakeholder_and_public_private_coordination",
-    "leadership_commitment",
-    "employee_engagement",
-    "management_systems_and_kpis",
-    "technical_competence",
-    "organisational_learning",
-    "technology_adoption",
-    "operational_efficiency",
-    "digital_monitoring_and_data_capability",
-    "consumer_demand",
-    "buyer_requirements",
-    "sustainable_procurement_opportunities",
-    "tender_exposure",
-    "green_branding",
-    "supply_chain_pressure"
-  ],
   "stakeholder_groups": [
     "academics",
     "government",
@@ -295,5 +47,87 @@
       "modal": 0.9,
       "upper": 1
     }
-  }
+  },
+  "domains": [
+    {
+      "domain_id": "internal_factors",
+      "title": "Internal Factors",
+      "description": "Internal leadership, workforce, technical and digital readiness for green transition."
+    },
+    {
+      "domain_id": "government_and_institutional_support",
+      "title": "Government & Institutional Support",
+      "description": "Regulatory requirements, standards and institutional implementation support."
+    },
+    {
+      "domain_id": "market_conditions",
+      "title": "Market Conditions",
+      "description": "Customer, buyer, competitive and reputational conditions affecting green transition."
+    },
+    {
+      "domain_id": "access_to_finance",
+      "title": "Access to Finance",
+      "description": "Availability of green finance, grants and incentives supporting transition."
+    }
+  ],
+  "factors": [
+    {
+      "factor_id": "leadership_and_organisational_commitment",
+      "domain_id": "internal_factors",
+      "title": "Leadership & organizational commitment",
+      "definition": "Leadership ownership, strategic commitment, management systems and organisational follow-through for green transition.",
+      "source_status": "research_synthesized"
+    },
+    {
+      "factor_id": "workforce_technical_capability_and_training",
+      "domain_id": "internal_factors",
+      "title": "Workforce / technical capability & training",
+      "definition": "Employee engagement, technical competence, organisational learning and access to relevant training.",
+      "source_status": "research_synthesized"
+    },
+    {
+      "factor_id": "digital_data_and_ai_readiness",
+      "domain_id": "internal_factors",
+      "title": "Digital, data & AI readiness",
+      "definition": "Ability to adopt suitable technology and use digital monitoring, reliable data and AI-supported capabilities.",
+      "source_status": "research_synthesized"
+    },
+    {
+      "factor_id": "regulation_compliance_standards_and_certifications",
+      "domain_id": "government_and_institutional_support",
+      "title": "Regulation, compliance & standards/certifications",
+      "definition": "Regulatory conditions and the SME's ability to satisfy legal, environmental, standards and certification requirements.",
+      "source_status": "research_synthesized"
+    },
+    {
+      "factor_id": "institutional_support_and_implementation_guidance",
+      "domain_id": "government_and_institutional_support",
+      "title": "Institutional support & implementation guidance",
+      "definition": "Government programmes, incentives, technology support, knowledge institutions and practical implementation guidance.",
+      "source_status": "research_synthesized"
+    },
+    {
+      "factor_id": "customer_buyer_demand_competitiveness_and_reputation",
+      "domain_id": "market_conditions",
+      "title": "Customer/buyer demand, competitiveness & reputation",
+      "definition": "Consumer demand, buyer and procurement requirements, competitive pressure, tender access and green reputation.",
+      "source_status": "research_synthesized"
+    },
+    {
+      "factor_id": "green_finance_availability_grants_and_incentives",
+      "domain_id": "access_to_finance",
+      "title": "Green finance availability, grants & incentives",
+      "definition": "Access to suitable green finance, grants, guarantees, incentives and impact or ESG-linked funding.",
+      "source_status": "research_synthesized"
+    }
+  ],
+  "factor_ids": [
+    "leadership_and_organisational_commitment",
+    "workforce_technical_capability_and_training",
+    "digital_data_and_ai_readiness",
+    "regulation_compliance_standards_and_certifications",
+    "institutional_support_and_implementation_guidance",
+    "customer_buyer_demand_competitiveness_and_reputation",
+    "green_finance_availability_grants_and_incentives"
+  ]
 }

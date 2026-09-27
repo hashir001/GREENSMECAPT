@@ -116,6 +116,11 @@ class DematelSpecification(DematelModel):
     specification_id: str = Field(min_length=1)
     version: str = Field(min_length=1)
     status: Literal["development", "approved"] = "development"
+    elicitation_level: Literal["drivers", "subdrivers"] = "subdrivers"
+    parent_specification_id: str | None = Field(
+        default=None,
+        min_length=1,
+    )
     research_basis: str | None = Field(default=None, min_length=1)
     calibration_status: Literal[
         "requires_expert_calibration",
@@ -214,6 +219,13 @@ class DematelSpecification(DematelModel):
             )
 
         return self
+
+    @property
+    def required_directional_judgments(self) -> int:
+        """Return the complete off-diagonal matrix size per expert."""
+
+        factor_count = len(self.factor_ids)
+        return factor_count * (factor_count - 1)
 
 
 class FuzzyRelationMatrix(DematelModel):

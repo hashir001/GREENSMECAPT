@@ -4,18 +4,13 @@ GREENSMECAPT separates evidence capture, applicant interpretation and comparison
 
 ```mermaid
 flowchart TD
-    A["Research, survey and expert judgments"] --> B["Fuzzy DEMATEL"]
-    B --> C["Calibrated readiness influence model"]
-    D["SME documents and declarations"] --> E["Evidence extraction and validation"]
-    E --> F["Environmental performance"]
-    E --> G["Financial and investment assessment"]
-    E --> H["SME readiness observations"]
-    C --> H
-    F --> I["TOPSIS / Fuzzy TOPSIS / ELECTRE III"]
-    G --> I
-    H --> J["Investor readiness explanation"]
-    I --> K["Investor comparison"]
-    J --> K
+    A["4-driver expert judgments"] --> C["Driver DEMATEL"]
+    B["7-subdriver expert judgments"] --> D["Subdriver DEMATEL"]
+    C --> E["Readiness influence models"]
+    D --> E
+    F["SME evidence"] --> G["Readiness and performance observations"]
+    E --> G
+    G --> H["Investor explanation and comparison"]
 ```
 
 ## Core layers
@@ -30,12 +25,23 @@ flowchart TD
 
 ## Readiness and DEMATEL
 
-The DEMATEL specification uses four research-grounded domains: financing and investor conditions; institutional, regulatory and ecosystem conditions; organisational and capability readiness; and market, procurement and supply-chain conditions. DEMATEL operates on their subdrivers.
+The official drivers are:
 
-No expert pairwise matrix is currently bundled. Unknown influence is therefore unresolved, not zero. The fuzzy linguistic scale is a development placeholder. DEMATEL results may explain an applicant's observed readiness bottlenecks after calibration; they must not produce environmental or financial criterion weights automatically.
+1. Internal Factors
+2. Government & Institutional Support
+3. Market Conditions
+4. Access to Finance
+
+Seven operational subdrivers sit beneath them: three internal, two government/institutional, one market and one finance subdriver.
+
+The driver-level matrix requires 12 directional judgments per expert. The seven-subdriver matrix requires 42. Collecting both requires at most 54. Each is a complete off-diagonal DEMATEL matrix and uses the same aggregation, normalization, total-relation, D, R, prominence and cause/effect calculations.
+
+The two result sets are reported as complementary levels; they are not automatically multiplied together or converted into environmental or financial criterion weights.
+
+No expert pairwise matrix is bundled. Unknown influence is unresolved, not zero. The fuzzy linguistic scale remains a development placeholder.
 
 ## Performance comparison
 
-Environmental and financial criteria remain separate from readiness. Absolute electricity, water, emissions and waste values are evidence until reporting period, operational scope and appropriate denominator, trend or benchmark are established. Versioned normalization and ELECTRE configurations remain provisional and require expert and empirical calibration.
+Environmental and financial criteria remain separate from readiness. Absolute electricity, water, emissions and waste values are evidence until reporting period, operational scope and an appropriate denominator, trend or benchmark are established. Normalization and ELECTRE configurations remain provisional and require calibration.
 
-Evidence strength is provenance metadata and a confidence signal. It must not be silently substituted for measured performance.
+Evidence strength is provenance metadata and a confidence signal. It must not be substituted for measured performance.

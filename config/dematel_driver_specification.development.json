@@ -1,0 +1,57 @@
+{
+  "specification_id": "greensmecapt_readiness_driver_dematel",
+  "version": "1.0.0",
+  "elicitation_level": "drivers",
+  "parent_specification_id": null,
+  "status": "development",
+  "research_basis": "Condensed operational structure synthesised from Hajer's UAE green-SME driver research, the Green SME Drivers survey, the finance-driven Fuzzy DEMATEL and TOPSIS paper, and the revised GreenSMECapt framework.",
+  "calibration_status": "requires_expert_calibration",
+  "linguistic_scale_status": "development_placeholder",
+  "stakeholder_groups": [
+    "academics",
+    "government",
+    "sme_managers",
+    "lenders"
+  ],
+  "aggregation": "group_balanced",
+  "convergence_margin": 0.999,
+  "cause_effect_tolerance": 1e-9,
+  "linguistic_scale": {
+    "no_influence": {
+      "lower": 0,
+      "modal": 0,
+      "upper": 0
+    },
+    "very_low": {
+      "lower": 0,
+      "modal": 0.1,
+      "upper": 0.25
+    },
+    "low": {
+      "lower": 0.1,
+      "modal": 0.25,
+      "upper": 0.4
+    },
+    "medium": {
+      "lower": 0.3,
+      "modal": 0.5,
+      "upper": 0.7
+    },
+    "high": {
+      "lower": 0.6,
+      "modal": 0.75,
+      "upper": 0.9
+    },
+    "very_high": {
+      "lower": 0.75,
+      "modal": 0.9,
+      "upper": 1
+    }
+  },
+  "factor_ids": [
+    "internal_factors",
+    "government_and_institutional_support",
+    "market_conditions",
+    "access_to_finance"
+  ]
+}

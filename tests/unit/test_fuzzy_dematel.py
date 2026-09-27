@@ -22,6 +22,11 @@ SPECIFICATION_PATH = (
     / "config"
     / "dematel_specification.development.json"
 )
+DRIVER_SPECIFICATION_PATH = (
+    PROJECT_ROOT
+    / "config"
+    / "dematel_driver_specification.development.json"
+)
 
 
 def _specification() -> DematelSpecification:
@@ -273,8 +278,10 @@ def test_load_project_driver_specification() -> None:
         SPECIFICATION_PATH
     )
 
+    assert specification.elicitation_level == "subdrivers"
     assert len(specification.domains) == 4
-    assert len(specification.factors) == 28
+    assert len(specification.factors) == 7
+    assert specification.required_directional_judgments == 42
     assert set(specification.factor_ids) == {
         factor.factor_id for factor in specification.factors
     }
@@ -291,4 +298,23 @@ def test_load_project_driver_specification() -> None:
         "government",
         "sme_managers",
         "lenders",
+    )
+
+
+def test_load_project_driver_level_specification() -> None:
+    specification = load_dematel_specification(
+        DRIVER_SPECIFICATION_PATH
+    )
+
+    assert specification.elicitation_level == "drivers"
+    assert specification.factor_ids == (
+        "internal_factors",
+        "government_and_institutional_support",
+        "market_conditions",
+        "access_to_finance",
+    )
+    assert specification.required_directional_judgments == 12
+    assert (
+        specification.calibration_status
+        == "requires_expert_calibration"
     )

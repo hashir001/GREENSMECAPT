@@ -13,6 +13,9 @@ decision_support:
     method: fuzzy_dematel
     role: causal_interpretation
     calibration_status: requires_expert_calibration
+    driver_specification: config/dematel_driver_specification.development.json
+    subdriver_specification: config/dematel_specification.development.json
+    maximum_directional_judgments_per_expert: 54
   performance:
     weighting_method: provisional_policy
     ranking_methods:
