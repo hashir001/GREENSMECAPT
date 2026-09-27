@@ -314,6 +314,89 @@ export type AssessmentConfiguration = {
       allow_linguistic: boolean
     }>
   }
+  financial_policy: {
+    policy_id: string
+    version: string
+    status: string
+    calibration_status: string
+    metrics: FinancialMetricDefinition[]
+  }
+  readiness_specification: {
+    specification_id: string
+    version: string
+    calibration_status: string
+    domains: Array<{ domain_id: string; title: string; description: string }>
+    factors: ReadinessFactorDefinition[]
+  }
+  metric_catalog: {
+    catalog_id: string
+    version: string
+    metrics: MetricDefinition[]
+  }
+}
+
+export type FinancialMetricDefinition = {
+  metric_id: string
+  title: string
+  group: 'business_health' | 'investment_case'
+  importance: 'core' | 'supporting'
+  allowed_units: string[]
+  requires_reporting_period: boolean
+  description: string
+}
+
+export type FinancialObservation = {
+  observation_id: string
+  sme_id: string
+  metric_id: string
+  state: 'reported' | 'unknown' | 'not_measured' | 'not_applicable' | 'needs_review'
+  value?: number
+  unit?: string
+  reporting_period?: string
+  comparison_basis?: string
+  source_ids: string[]
+  narrative?: string
+}
+
+export type ReadinessFactorDefinition = {
+  factor_id: string
+  domain_id: string
+  title: string
+  definition: string
+  source_status: string
+}
+
+export type ReadinessObservation = {
+  observation_id: string
+  sme_id: string
+  factor_id: string
+  state: 'enabling_evidence' | 'constraining_evidence' | 'mixed_evidence' | 'unknown' | 'not_applicable' | 'needs_review'
+  source_ids: string[]
+  narrative?: string
+}
+
+export type MetricDefinition = {
+  indicator_id: string
+  criterion_id: string
+  name: string
+  assessment_use: 'direct_ratio' | 'requires_comparison_context' | 'evidence_only'
+  comparison_requirements: string[]
+}
+
+export type MetricComparisonContext = {
+  context_id: string
+  sme_id: string
+  indicator_id: string
+  reporting_period?: string
+  operational_scope?: string
+  denominator_value?: number
+  denominator_unit?: string
+  baseline_value?: number
+  benchmark_value?: number
+  target_value?: number
+  reference_unit?: string
+  source_ids: string[]
+  narrative?: string
 }
 
 export type AssessmentSubmission = {
@@ -334,6 +417,9 @@ export type AssessmentSubmission = {
     narrative?: string
     submitted_by: string
   }>
+  financial_observations: FinancialObservation[]
+  readiness_observations: ReadinessObservation[]
+  metric_contexts: MetricComparisonContext[]
 }
 
 export type CohortAssessmentRequest = {
@@ -397,6 +483,54 @@ export type AssessmentRunRecord = AssessmentRunSummary & {
         readiness: string
         coverage_ratio: number
         issues: Array<{ criterion_id: string; code: string; message: string }>
+      }
+      financial_assessment: {
+        status: string
+        core_coverage_ratio: number
+        calibration_status: string
+        aggregate_score: null
+        metrics: Array<{
+          metric_id: string
+          title: string
+          group: string
+          importance: string
+          state: string
+          value: number | null
+          unit: string | null
+          reporting_period: string | null
+          issues: string[]
+        }>
+        derived_indicators: Array<{
+          indicator_id: string
+          value: number
+          unit: string
+          interpretation: string
+        }>
+      }
+      readiness_profile: {
+        calibration_status: string
+        causal_results_available: boolean
+        factors: Array<{
+          factor_id: string
+          domain_id: string
+          state: string
+          narrative: string | null
+        }>
+      }
+      performance_context: {
+        metric_catalog_id: string
+        metric_catalog_version: string
+        metrics: Array<{
+          indicator_id: string
+          metric_name: string
+          state: string
+          measurement_value: number | null
+          measurement_unit: string | null
+          intensity_value: number | null
+          intensity_unit: string | null
+          missing_requirements: string[]
+          issues: string[]
+        }>
       }
     }>
     comparable_topsis: {

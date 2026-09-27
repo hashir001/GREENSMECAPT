@@ -97,6 +97,9 @@ def test_revisions_are_immutable_and_publication_is_explicit(
             record_snapshot=record,
             assessment_policy=workflow.assessment_policy,
             normalization_policy=workflow.normalization_policy,
+            financial_policy=workflow.financial_policy,
+            readiness_specification=workflow.readiness_specification,
+            metric_catalog=workflow.metric_catalog,
             actor_id="reviewer_001",
         )
         duplicate = repository.approve(
@@ -105,6 +108,9 @@ def test_revisions_are_immutable_and_publication_is_explicit(
             record_snapshot=record,
             assessment_policy=workflow.assessment_policy,
             normalization_policy=workflow.normalization_policy,
+            financial_policy=workflow.financial_policy,
+            readiness_specification=workflow.readiness_specification,
+            metric_catalog=workflow.metric_catalog,
             actor_id="reviewer_001",
         )
         second = repository.approve(
@@ -113,6 +119,9 @@ def test_revisions_are_immutable_and_publication_is_explicit(
             record_snapshot=record,
             assessment_policy=workflow.assessment_policy,
             normalization_policy=workflow.normalization_policy,
+            financial_policy=workflow.financial_policy,
+            readiness_specification=workflow.readiness_specification,
+            metric_catalog=workflow.metric_catalog,
             actor_id="reviewer_001",
         )
         repository.publish(
@@ -133,6 +142,12 @@ def test_revisions_are_immutable_and_publication_is_explicit(
     assert second.profile_version == 2
     assert initially_published.revision_id == first.revision_id
     assert currently_published.revision_id == second.revision_id
+    assert currently_published.financial_policy == workflow.financial_policy
+    assert (
+        currently_published.readiness_specification
+        == workflow.readiness_specification
+    )
+    assert currently_published.metric_catalog == workflow.metric_catalog
     assert (
         initially_published.context.activity_description
         == "First approved description."

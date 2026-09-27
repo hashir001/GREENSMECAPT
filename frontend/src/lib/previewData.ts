@@ -120,7 +120,7 @@ const scoredCriteria = [
 
 export const previewAssessmentConfiguration: AssessmentConfiguration = {
   assessment_policy: {
-    policy_id: 'greensmecapt_activity_profiles', version: '0.1.0', status: 'development',
+    policy_id: 'greensmecapt_activity_profiles', version: '0.3.0', status: 'development',
     description: 'Activity-led routing for proportionate green SME assessment.', fact_questions: factQuestions,
     criteria: scoredCriteria.map(([criterion_id, title, question, requirement]) => ({
       criterion_id, title, question, requirement, output: 'green', module_ids: [], indicator_ids: [],
@@ -129,7 +129,7 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
     })),
   },
   normalization_policy: {
-    policy_id: 'greensmecapt_normalization', version: '0.2.0', status: 'development',
+    policy_id: 'greensmecapt_normalization', version: '0.3.0', status: 'development',
     weight_source: 'model_informed_development_weights_pending_expert_calibration', minimum_coverage_ratio: 0.6,
     default_linguistic_scale: {
       very_low: { lower: 0, modal: 0, upper: 0.25 }, low: { lower: 0, modal: 0.25, upper: 0.5 },
@@ -138,6 +138,59 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
     },
     rules: scoredCriteria.map(([criterion_id], index) => ({
       criterion_id, base_weight: [0.24, 0.13, 0.12, 0.16, 0.22, 0.13][index], allow_linguistic: true,
+    })),
+  },
+  financial_policy: {
+    policy_id: 'greensmecapt_financial_assessment', version: '1.0.0', status: 'development',
+    calibration_status: 'requires_financial_calibration',
+    metrics: [
+      ['roa_percentage', 'Return on assets', 'business_health', 'core', ['percent'], true],
+      ['revenue_growth_percentage', 'Revenue growth', 'business_health', 'core', ['percent'], true],
+      ['current_ratio', 'Current ratio', 'business_health', 'core', ['ratio'], true],
+      ['operating_cash_flow', 'Operating cash flow', 'business_health', 'supporting', ['aed'], true],
+      ['debt_to_assets_percentage', 'Debt to assets', 'business_health', 'supporting', ['percent'], true],
+      ['requested_amount', 'Requested amount', 'investment_case', 'supporting', ['aed'], false],
+      ['project_cost', 'Project cost', 'investment_case', 'supporting', ['aed'], false],
+      ['expected_annual_savings', 'Expected annual savings', 'investment_case', 'supporting', ['aed_per_year'], false],
+    ].map(([metric_id, title, group, importance, allowed_units, requires_reporting_period]) => ({
+      metric_id: String(metric_id), title: String(title),
+      group: group as 'business_health' | 'investment_case',
+      importance: importance as 'core' | 'supporting',
+      allowed_units: allowed_units as string[],
+      requires_reporting_period: Boolean(requires_reporting_period),
+      description: 'Evidence-grounded financial input; no provisional threshold is applied.',
+    })),
+  },
+  readiness_specification: {
+    specification_id: 'greensmecapt_readiness_subdrivers', version: '1.0.0',
+    calibration_status: 'requires_expert_calibration',
+    domains: [
+      ['internal_factors', 'Internal Factors'], ['government_and_institutional_support', 'Government & Institutional Support'],
+      ['market_conditions', 'Market Conditions'], ['access_to_finance', 'Access to Finance'],
+    ].map(([domain_id, title]) => ({ domain_id, title, description: title })),
+    factors: [
+      ['leadership_and_organisational_commitment', 'internal_factors', 'Leadership & organizational commitment'],
+      ['workforce_technical_capability_and_training', 'internal_factors', 'Workforce / technical capability & training'],
+      ['digital_data_and_ai_readiness', 'internal_factors', 'Digital, data & AI readiness'],
+      ['regulation_compliance_standards_and_certifications', 'government_and_institutional_support', 'Regulation, compliance & standards/certifications'],
+      ['institutional_support_and_implementation_guidance', 'government_and_institutional_support', 'Institutional support & implementation guidance'],
+      ['customer_buyer_demand_competitiveness_and_reputation', 'market_conditions', 'Customer/buyer demand, competitiveness & reputation'],
+      ['green_finance_availability_grants_and_incentives', 'access_to_finance', 'Green finance availability, grants & incentives'],
+    ].map(([factor_id, domain_id, title]) => ({ factor_id, domain_id, title, definition: title, source_status: 'research_synthesized' })),
+  },
+  metric_catalog: {
+    catalog_id: 'greensmecapt_environmental_metrics', version: '1.2.0',
+    metrics: [
+      ['renewable_energy_percentage', 'renewable_energy', 'Renewable energy share', 'direct_ratio'],
+      ['electricity_consumption_kwh', 'energy_efficiency', 'Electricity consumption', 'requires_comparison_context'],
+      ['water_consumption_m3', 'water_management', 'Water consumption', 'requires_comparison_context'],
+      ['total_ghg_emissions_tco2e', 'emissions_management', 'Total greenhouse-gas emissions', 'requires_comparison_context'],
+      ['waste_diversion_percentage', 'waste_management', 'Waste diverted from disposal', 'requires_comparison_context'],
+      ['total_waste_generated_kg', 'waste_management', 'Total waste generated', 'requires_comparison_context'],
+    ].map(([indicator_id, criterion_id, name, assessment_use]) => ({
+      indicator_id, criterion_id, name,
+      assessment_use: assessment_use as 'direct_ratio' | 'requires_comparison_context',
+      comparison_requirements: ['reporting_period', 'operational_scope'],
     })),
   },
 }
@@ -570,6 +623,43 @@ function buildPreviewAssessment(request: CohortAssessmentRequest): AssessmentRun
     comparison_status: 'ready',
     created_at: now(),
     result: {
+      preparations: request.submissions.map((submission) => {
+        const financial = submission.financial_observations ?? []
+        const coreIds = new Set(['roa_percentage', 'revenue_growth_percentage', 'current_ratio'])
+        const coreReady = financial.filter((item) => coreIds.has(item.metric_id) && item.state === 'reported').length
+        return {
+          profile: { sme_id: submission.context.sme_id, active_modules: [], uncertain_modules: [] },
+          observations: { coverage: { applicable_count: submission.responses.length, resolved_count: submission.responses.length, document_supported_count: 0, coverage_ratio: 1 } },
+          normalized_inputs: { readiness: 'ready', coverage_ratio: 1, issues: [] },
+          financial_assessment: {
+            status: coreReady === 3 ? 'complete' : coreReady ? 'partial' : 'insufficient',
+            core_coverage_ratio: coreReady / 3,
+            calibration_status: 'requires_financial_calibration', aggregate_score: null,
+            metrics: financial.map((item) => ({
+              metric_id: item.metric_id,
+              title: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.title ?? item.metric_id,
+              group: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.group ?? 'business_health',
+              importance: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.importance ?? 'supporting',
+              state: item.state, value: item.value ?? null, unit: item.unit ?? null,
+              reporting_period: item.reporting_period ?? null, issues: [],
+            })),
+            derived_indicators: [],
+          },
+          readiness_profile: {
+            calibration_status: 'requires_expert_calibration', causal_results_available: false,
+            factors: (submission.readiness_observations ?? []).map((item) => ({
+              factor_id: item.factor_id,
+              domain_id: previewAssessmentConfiguration.readiness_specification.factors.find((factor) => factor.factor_id === item.factor_id)?.domain_id ?? '',
+              state: item.state, narrative: item.narrative ?? null,
+            })),
+          },
+          performance_context: {
+            metric_catalog_id: previewAssessmentConfiguration.metric_catalog.catalog_id,
+            metric_catalog_version: previewAssessmentConfiguration.metric_catalog.version,
+            metrics: [],
+          },
+        }
+      }),
       comparable_topsis: {
         comparison_status: 'ready',
         shared_criterion_ids: criterionIds,

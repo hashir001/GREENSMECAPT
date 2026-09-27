@@ -14,8 +14,10 @@ which applies role and SME-level authorization.
 3. Start the API once. SQLModel creates the application tables in the selected
    PostgreSQL database.
 4. In the Supabase SQL editor, run
-   `supabase/migrations/202609200001_platform_security.sql`, then
-   `supabase/migrations/202609270001_access_lifecycle.sql`.
+   `supabase/migrations/202609200001_platform_security.sql`,
+   `supabase/migrations/202609230001_assessment_profiles.sql`,
+   `supabase/migrations/202609270001_access_lifecycle.sql`, then
+   `supabase/migrations/202609280001_assessment_dimensions.sql`.
 
 The migration creates the private `source-documents` bucket, prevents direct
 browser access to the application tables, and installs the controlled role
@@ -60,6 +62,12 @@ writes. Approved or published data cannot be silently changed. Reopening a
 published application withdraws it from investor discovery while retaining the
 publication history. Hard deletion is limited to empty draft or withdrawn
 workspaces; governed records should be archived instead.
+
+Approved profile revisions also freeze financial observations, the seven
+readiness observations, environmental comparison context and the exact policy
+snapshots that governed them. Apply the assessment-dimensions migration before
+approving new profiles; existing publications remain readable but require
+reapproval before an automatic investor comparison under the newer policies.
 
 After the first administrator is assigned, that administrator can invite
 additional users and change their roles or SME assignments from **Profile and

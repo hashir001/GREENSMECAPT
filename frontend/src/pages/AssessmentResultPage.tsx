@@ -94,6 +94,39 @@ export function AssessmentResultPage() {
         </div></article>
       </section>
 
+      {(run.result.preparations?.length ?? 0) > 0 && <section className="panel dimension-results">
+        <div className="panel__header"><div><span className="eyebrow">Separate decision dimensions</span><h2>Financial, readiness and measurement context</h2></div><span className="result-count">Not collapsed into the Green Score</span></div>
+        <div className="dimension-result-grid">
+          {run.result.preparations?.map((preparation) => {
+            const financial = preparation.financial_assessment
+            const readiness = preparation.readiness_profile
+            const constraints = readiness.factors.filter((factor) => factor.state === 'constraining_evidence' || factor.state === 'mixed_evidence')
+            const contextual = preparation.performance_context.metrics
+            const readyMetrics = contextual.filter((metric) => metric.state === 'ready').length
+            return <article key={preparation.profile.sme_id}>
+              <header><strong>{names.get(preparation.profile.sme_id) ?? preparation.profile.sme_id}</strong><StatusPill label={`finance ${financial.status}`} tone={financial.status === 'complete' ? 'positive' : 'warning'} /></header>
+              <div className="dimension-result-stats"><span><b>{scorePercent(financial.core_coverage_ratio)}</b> core financial coverage</span><span><b>{constraints.length}</b> readiness constraint{constraints.length === 1 ? '' : 's'}</span><span><b>{readyMetrics}/{contextual.length}</b> metrics context-ready</span></div>
+              <div className="dimension-result-detail">
+                <strong>Financial evidence</strong>
+                {financial.metrics.filter((metric) => metric.state === 'reported').map((metric) => <span key={metric.metric_id}>{humanize(metric.title)}: {metric.value?.toLocaleString()} {metric.unit?.replaceAll('_', ' ')}</span>)}
+                {!financial.metrics.some((metric) => metric.state === 'reported') && <span>No reviewed financial values reported.</span>}
+              </div>
+              <div className="dimension-result-detail">
+                <strong>Readiness interpretation</strong>
+                {constraints.map((factor) => <span key={factor.factor_id}>{humanize(factor.factor_id)} · {humanize(factor.state)}</span>)}
+                {!constraints.length && <span>No evidenced constraint recorded; unknowns remain unknown.</span>}
+                {!readiness.causal_results_available && <small>DEMATEL causal interpretation awaits expert calibration.</small>}
+              </div>
+              <div className="dimension-result-detail">
+                <strong>Environmental measures</strong>
+                {contextual.filter((metric) => metric.measurement_value !== null).map((metric) => <span key={metric.indicator_id}>{metric.metric_name}: {metric.measurement_value?.toLocaleString()} {metric.measurement_unit} · {humanize(metric.state)}</span>)}
+                {!contextual.some((metric) => metric.measurement_value !== null) && <span>No accepted quantitative measurements.</span>}
+              </div>
+            </article>
+          })}
+        </div>
+      </section>}
+
       {stability.length > 0 && <section className="panel stability-panel"><div className="panel__header"><div><span className="eyebrow">Sensitivity analysis</span><h2>First-place stability</h2></div><span className="result-count">Across {robustness?.completed_scenarios} scenarios</span></div><div className="stability-grid">
         {stability.map((item) => {
           const average = Object.values(item.first_place_rates).reduce((total, value) => total + value, 0) / Math.max(1, Object.keys(item.first_place_rates).length)

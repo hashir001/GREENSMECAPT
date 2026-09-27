@@ -5,12 +5,19 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { api } from '../lib/api'
 import { isPreviewMode } from '../lib/supabase'
-import type { AssessmentConfiguration, CohortAssessmentRequest, SME } from '../types/api'
+import type { AssessmentConfiguration, CohortAssessmentRequest, SME, StructuredInvestmentRecord } from '../types/api'
+
+type FinancialDraft = { state: string; value: string; unit: string; period: string; basis: string; sourceId: string }
+type ReadinessDraft = { state: string; sourceId: string; narrative: string }
+type MetricContextDraft = { period: string; scope: string; denominator: string; denominatorUnit: string; baseline: string; benchmark: string; target: string; referenceUnit: string; sourceId: string; narrative: string }
 
 type Draft = {
   activityDescription: string
   facts: Record<string, boolean | null>
   ratings: Record<string, string>
+  financial: Record<string, FinancialDraft>
+  readiness: Record<string, ReadinessDraft>
+  metricContexts: Record<string, MetricContextDraft>
 }
 
 const ratingLabels: Record<string, string> = {
@@ -118,6 +125,7 @@ export function AssessmentBuilderPage() {
   const [companies, setCompanies] = useState<SME[]>([])
   const [configuration, setConfiguration] = useState<AssessmentConfiguration | null>(null)
   const [selected, setSelected] = useState<string[]>([])
+  const [records, setRecords] = useState<Record<string, StructuredInvestmentRecord>>({})
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [cohortName, setCohortName] = useState('Green SME comparison')
   const [minimumSharedCriteria, setMinimumSharedCriteria] = useState(2)
@@ -154,6 +162,9 @@ export function AssessmentBuilderPage() {
         ),
       ),
       ratings: {},
+      financial: {},
+      readiness: {},
+      metricContexts: {},
     }
   }
 
@@ -161,9 +172,35 @@ export function AssessmentBuilderPage() {
     setDrafts((current) => ({ ...current, [smeId]: update(current[smeId] ?? draftFor(smeId)) }))
   }
 
+  function updateFinancial(smeId: string, metricId: string, patch: Partial<FinancialDraft>) {
+    updateDraft(smeId, (current) => {
+      const existing = current.financial[metricId] ?? { state: 'unknown', value: '', unit: '', period: '', basis: '', sourceId: '' }
+      return { ...current, financial: { ...current.financial, [metricId]: { ...existing, ...patch } } }
+    })
+  }
+
+  function updateReadiness(smeId: string, factorId: string, patch: Partial<ReadinessDraft>) {
+    updateDraft(smeId, (current) => {
+      const existing = current.readiness[factorId] ?? { state: 'unknown', sourceId: '', narrative: '' }
+      return { ...current, readiness: { ...current.readiness, [factorId]: { ...existing, ...patch } } }
+    })
+  }
+
+  function updateMetricContext(smeId: string, indicatorId: string, patch: Partial<MetricContextDraft>) {
+    updateDraft(smeId, (current) => {
+      const existing = current.metricContexts[indicatorId] ?? {
+        period: '', scope: '', denominator: '', denominatorUnit: '', baseline: '', benchmark: '', target: '', referenceUnit: '', sourceId: '', narrative: '',
+      }
+      return { ...current, metricContexts: { ...current.metricContexts, [indicatorId]: { ...existing, ...patch } } }
+    })
+  }
+
   function toggleCompany(smeId: string) {
     setSelected((current) => current.includes(smeId) ? current.filter((id) => id !== smeId) : [...current, smeId])
     if (!drafts[smeId]) updateDraft(smeId, (current) => current)
+    if (!records[smeId]) {
+      void api.getSMERecord(smeId).then((record) => setRecords((current) => ({ ...current, [smeId]: record }))).catch(() => undefined)
+    }
   }
 
   function loadPresentationExample() {
@@ -183,7 +220,14 @@ export function AssessmentBuilderPage() {
         criterion.criterion_id,
         scale[Math.max(0, Math.min(scale.length - 1, ratingIndex - (criterionIndex % 2)))] ?? 'medium',
       ]))
-      return [smeId, { activityDescription: `${company.legal_name} provides ${company.sector.toLowerCase()} solutions with documented environmental outcomes.`, facts, ratings }]
+      const sourceId = records[smeId]?.documents[0]?.document_id ?? ''
+      const financial = Object.fromEntries((configuration?.financial_policy.metrics ?? []).map((metric) => [metric.metric_id, {
+        state: 'unknown', value: '', unit: metric.allowed_units[0] ?? '', period: '', basis: '', sourceId: '',
+      }]))
+      const readiness = Object.fromEntries((configuration?.readiness_specification.factors ?? []).map((factor) => [factor.factor_id, {
+        state: sourceId ? 'enabling_evidence' : 'unknown', sourceId, narrative: sourceId ? 'Reviewed source indicates an enabling condition.' : '',
+      }]))
+      return [smeId, { activityDescription: `${company.legal_name} provides ${company.sector.toLowerCase()} solutions with documented environmental outcomes.`, facts, ratings, financial, readiness, metricContexts: {} }]
     })))
   }
 
@@ -192,6 +236,19 @@ export function AssessmentBuilderPage() {
     if (step === 1 && !cohortName.trim()) return 'Give this comparison a clear name.'
     if (step === 2 && selected.some((smeId) => !draftFor(smeId).activityDescription.trim())) return 'Every company needs an activity description.'
     if (step === 3 && selected.some((smeId) => scoredCriteria.some((criterion) => !draftFor(smeId).ratings[criterion.criterion_id]))) return 'Complete every reviewer rating. The backend will ignore ratings for criteria it determines are not applicable.'
+    if (step === 4) {
+      for (const smeId of selected) {
+        const draft = draftFor(smeId)
+        for (const metric of configuration?.financial_policy.metrics ?? []) {
+          const item = draft.financial[metric.metric_id]
+          if (item?.state === 'reported' && (!Number.isFinite(Number(item.value)) || !item.sourceId || (metric.requires_reporting_period && !item.period))) return `Complete the value, source and required period for ${metric.title}.`
+        }
+        for (const factor of configuration?.readiness_specification.factors ?? []) {
+          const item = draft.readiness[factor.factor_id]
+          if (['enabling_evidence', 'constraining_evidence', 'mixed_evidence'].includes(item?.state) && !item.sourceId) return `Choose a source for ${factor.title}.`
+        }
+      }
+    }
     return ''
   }
 
@@ -199,7 +256,7 @@ export function AssessmentBuilderPage() {
     const issue = stepError()
     if (issue) { setError(issue); return }
     setError('')
-    setStep((current) => Math.min(3, current + 1))
+    setStep((current) => Math.min(4, current + 1))
   }
 
   async function runAssessment() {
@@ -232,6 +289,33 @@ export function AssessmentBuilderPage() {
             linguistic_value: draft.ratings[criterion.criterion_id],
             submitted_by: user?.id ?? 'reviewer_preview',
           })),
+          financial_observations: configuration.financial_policy.metrics.map((metric) => {
+            const item = draft.financial[metric.metric_id] ?? { state: 'unknown', value: '', unit: metric.allowed_units[0] ?? '', period: '', basis: '', sourceId: '' }
+            return {
+              observation_id: `financial_${smeId}_${metric.metric_id}_${timestamp}`,
+              sme_id: smeId, metric_id: metric.metric_id,
+              state: item.state as 'reported' | 'unknown' | 'not_measured' | 'not_applicable' | 'needs_review',
+              ...(item.state === 'reported' ? { value: Number(item.value), unit: item.unit, reporting_period: item.period || undefined, comparison_basis: item.basis || undefined } : {}),
+              source_ids: item.sourceId ? [item.sourceId] : [],
+            }
+          }),
+          readiness_observations: configuration.readiness_specification.factors.map((factor) => {
+            const item = draft.readiness[factor.factor_id] ?? { state: 'unknown', sourceId: '', narrative: '' }
+            return {
+              observation_id: `readiness_${smeId}_${factor.factor_id}_${timestamp}`,
+              sme_id: smeId, factor_id: factor.factor_id,
+              state: item.state as 'enabling_evidence' | 'constraining_evidence' | 'mixed_evidence' | 'unknown' | 'not_applicable' | 'needs_review',
+              source_ids: item.sourceId ? [item.sourceId] : [], narrative: item.narrative || undefined,
+            }
+          }),
+          metric_contexts: Object.entries(draft.metricContexts).filter(([, item]) => Object.values(item).some(Boolean)).map(([indicatorId, item]) => ({
+            context_id: `context_${smeId}_${indicatorId}_${timestamp}`, sme_id: smeId, indicator_id: indicatorId,
+            reporting_period: item.period || undefined, operational_scope: item.scope || undefined,
+            denominator_value: item.denominator ? Number(item.denominator) : undefined, denominator_unit: item.denominatorUnit || undefined,
+            baseline_value: item.baseline ? Number(item.baseline) : undefined, benchmark_value: item.benchmark ? Number(item.benchmark) : undefined,
+            target_value: item.target ? Number(item.target) : undefined, reference_unit: item.referenceUnit || undefined,
+            source_ids: item.sourceId ? [item.sourceId] : [], narrative: item.narrative || undefined,
+          })),
         }
       }),
     }
@@ -256,7 +340,7 @@ export function AssessmentBuilderPage() {
       </section>
 
       <nav className="builder-steps" aria-label="Assessment progress">
-        {[[1, 'Cohort'], [2, 'Activity profile'], [3, 'Reviewer ratings']].map(([number, label]) => (
+        {[[1, 'Cohort'], [2, 'Applicability'], [3, 'Environmental review'], [4, 'Finance & readiness']].map(([number, label]) => (
           <button type="button" key={number} className={step === number ? 'active' : step > Number(number) ? 'complete' : ''} onClick={() => Number(number) < step && setStep(Number(number))}>
             <span>{step > Number(number) ? <Check size={14} /> : number}</span>{label}
           </button>
@@ -342,9 +426,98 @@ export function AssessmentBuilderPage() {
         </div>
       )}
 
+      {step === 4 && (
+        <div className="profile-stack">
+          <div className="methodology-note"><Info size={18} /><p>These are separate profiles. Financial health is not part of the Green Score; readiness is contextual and receives no scalar score; raw utility totals remain non-comparable until their context is complete.</p></div>
+          {selected.map((smeId) => {
+            const company = companies.find((item) => item.sme_id === smeId)!
+            const draft = draftFor(smeId)
+            const record = records[smeId]
+            const sources = [
+              ...(record?.documents.map((document) => ({ id: document.document_id, label: `Document · ${document.file_name}` })) ?? []),
+              ...(record?.evidence_items.filter((item) => item.validation_status === 'accepted').map((item) => ({ id: item.evidence_id, label: `Evidence · ${item.indicator_id}` })) ?? []),
+            ]
+            const observedIndicators = new Set(record?.evidence_items.filter((item) => item.validation_status === 'accepted').map((item) => item.indicator_id) ?? [])
+            const contextMetrics = configuration?.metric_catalog.metrics.filter((metric) => metric.criterion_id !== 'financial_health' && metric.criterion_id !== 'investment_case' && observedIndicators.has(metric.indicator_id)) ?? []
+            return (
+              <section className="panel dimension-card" key={smeId}>
+                <div className="profile-card__header"><div><span className="eyebrow">Distinct assessment dimensions</span><h2>{company.legal_name}</h2></div></div>
+
+                <div className="dimension-section">
+                  <div><h3>Financial & investment assessment</h3><p>Core ratios establish coverage. Supporting transaction values remain visible without fabricated pass/fail thresholds.</p></div>
+                  <div className="dimension-list">
+                    {configuration?.financial_policy.metrics.map((metric) => {
+                      const item = draft.financial[metric.metric_id] ?? { state: 'unknown', value: '', unit: metric.allowed_units[0] ?? '', period: '', basis: '', sourceId: '' }
+                      return <article key={metric.metric_id}>
+                        <div><strong>{metric.title}</strong><span>{metric.importance} · {metric.group.replaceAll('_', ' ')}</span><small>{metric.description}</small></div>
+                        <div className="dimension-inputs">
+                          <select value={item.state} onChange={(event) => updateFinancial(smeId, metric.metric_id, { state: event.target.value })}>
+                            <option value="unknown">Unknown</option><option value="reported">Reported</option><option value="not_measured">Not measured</option><option value="not_applicable">Not applicable</option><option value="needs_review">Needs review</option>
+                          </select>
+                          {item.state === 'reported' && <>
+                            <input type="number" step="any" value={item.value} placeholder="Value" onChange={(event) => updateFinancial(smeId, metric.metric_id, { value: event.target.value })} />
+                            <select value={item.unit || metric.allowed_units[0]} onChange={(event) => updateFinancial(smeId, metric.metric_id, { unit: event.target.value })}>{metric.allowed_units.map((unit) => <option key={unit} value={unit}>{unit.replaceAll('_', ' ')}</option>)}</select>
+                            {metric.requires_reporting_period && <input value={item.period} placeholder="Reporting period" onChange={(event) => updateFinancial(smeId, metric.metric_id, { period: event.target.value })} />}
+                            {metric.metric_id === 'revenue_growth_percentage' && <input value={item.basis} placeholder="Comparison basis, e.g. FY2025 vs FY2024" onChange={(event) => updateFinancial(smeId, metric.metric_id, { basis: event.target.value })} />}
+                            <select value={item.sourceId} onChange={(event) => updateFinancial(smeId, metric.metric_id, { sourceId: event.target.value })}><option value="">Select source</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select>
+                          </>}
+                        </div>
+                      </article>
+                    })}
+                  </div>
+                </div>
+
+                <div className="dimension-section">
+                  <div><h3>SME readiness observations</h3><p>Seven research-grounded subdrivers. These states later receive causal interpretation from calibrated DEMATEL, never automatic Green Score weights.</p></div>
+                  <div className="dimension-list">
+                    {configuration?.readiness_specification.factors.map((factor) => {
+                      const item = draft.readiness[factor.factor_id] ?? { state: 'unknown', sourceId: '', narrative: '' }
+                      const evidenceState = ['enabling_evidence', 'constraining_evidence', 'mixed_evidence'].includes(item.state)
+                      return <article key={factor.factor_id}>
+                        <div><strong>{factor.title}</strong><span>{factor.domain_id.replaceAll('_', ' ')}</span></div>
+                        <div className="dimension-inputs">
+                          <select value={item.state} onChange={(event) => updateReadiness(smeId, factor.factor_id, { state: event.target.value })}>
+                            <option value="unknown">Unknown</option><option value="enabling_evidence">Enabling evidence</option><option value="constraining_evidence">Constraining evidence</option><option value="mixed_evidence">Mixed evidence</option><option value="needs_review">Needs review</option><option value="not_applicable">Not applicable</option>
+                          </select>
+                          {evidenceState && <select value={item.sourceId} onChange={(event) => updateReadiness(smeId, factor.factor_id, { sourceId: event.target.value })}><option value="">Select source</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select>}
+                          <input value={item.narrative} placeholder="Reviewer interpretation (optional)" onChange={(event) => updateReadiness(smeId, factor.factor_id, { narrative: event.target.value })} />
+                        </div>
+                      </article>
+                    })}
+                  </div>
+                </div>
+
+                <div className="dimension-section">
+                  <div><h3>Environmental measurement context</h3><p>Only accepted extracted measurements appear. Add denominators, boundaries and references when the source supports them.</p></div>
+                  {!contextMetrics.length && <p className="muted-copy">No accepted environmental measurement currently requires added comparison context.</p>}
+                  <div className="dimension-list">
+                    {contextMetrics.map((metric) => {
+                      const item = draft.metricContexts[metric.indicator_id] ?? { period: '', scope: '', denominator: '', denominatorUnit: '', baseline: '', benchmark: '', target: '', referenceUnit: '', sourceId: '', narrative: '' }
+                      return <article key={metric.indicator_id}>
+                        <div><strong>{metric.name}</strong><span>{metric.comparison_requirements.map((value) => value.replaceAll('_', ' ')).join(' · ')}</span></div>
+                        <div className="dimension-inputs dimension-inputs--context">
+                          <input value={item.period} placeholder="Reporting period" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { period: event.target.value })} />
+                          <input value={item.scope} placeholder="Operational boundary / scope" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { scope: event.target.value })} />
+                          <input type="number" step="any" value={item.denominator} placeholder="Denominator value" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { denominator: event.target.value })} />
+                          <input value={item.denominatorUnit} placeholder="Denominator unit" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { denominatorUnit: event.target.value })} />
+                          <input type="number" step="any" value={item.baseline} placeholder="Baseline (optional)" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { baseline: event.target.value })} />
+                          <input type="number" step="any" value={item.benchmark} placeholder="Benchmark (optional)" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { benchmark: event.target.value })} />
+                          <input value={item.referenceUnit} placeholder="Reference unit" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { referenceUnit: event.target.value })} />
+                          <select value={item.sourceId} onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { sourceId: event.target.value })}><option value="">Select context source</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select>
+                        </div>
+                      </article>
+                    })}
+                  </div>
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      )}
+
       <div className="builder-footer">
         <button className="secondary-button" type="button" onClick={() => step === 1 ? navigate('/assessments') : setStep((current) => current - 1)}><ArrowLeft size={16} /> {step === 1 ? 'Cancel' : 'Back'}</button>
-        {step < 3 ? <button className="primary-button" type="button" onClick={continueStep}>Continue <ArrowRight size={16} /></button> : <button className="primary-button" type="button" disabled={submitting} onClick={() => void runAssessment()}><Play size={16} /> {submitting ? 'Running all methods…' : 'Run comparison'}</button>}
+        {step < 4 ? <button className="primary-button" type="button" onClick={continueStep}>Continue <ArrowRight size={16} /></button> : <button className="primary-button" type="button" disabled={submitting} onClick={() => void runAssessment()}><Play size={16} /> {submitting ? 'Running all methods…' : 'Run comparison'}</button>}
       </div>
     </>
   )

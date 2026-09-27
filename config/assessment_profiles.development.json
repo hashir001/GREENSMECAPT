@@ -1,6 +1,6 @@
 {
   "policy_id": "greensmecapt_activity_profiles",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "status": "development",
   "description": "Development routing policy separating environmental performance, SME financial health and readiness/context evidence. Activity modules route assessment topics; they are not DEMATEL driver domains and do not themselves score applicants.",
   "fact_questions": {

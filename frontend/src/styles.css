@@ -1109,3 +1109,42 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
   flex: 0 0 auto;
 }
 
+.dimension-card { display: grid; gap: 1.5rem; }
+.dimension-section { border-top: 1px solid var(--line); padding-top: 1.25rem; }
+.dimension-section > div:first-child h3 { margin: 0 0 0.3rem; }
+.dimension-section > div:first-child p { color: var(--muted); margin: 0 0 1rem; }
+.dimension-list { display: grid; gap: 0.75rem; }
+.dimension-list > article {
+  align-items: start;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(300px, 1.5fr);
+  padding: 1rem;
+}
+.dimension-list > article > div:first-child { display: grid; gap: 0.3rem; }
+.dimension-list > article span,
+.dimension-list > article small { color: var(--muted); font-size: 0.78rem; }
+.dimension-inputs { display: grid; gap: 0.55rem; grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+.dimension-inputs--context { grid-template-columns: repeat(2, minmax(145px, 1fr)); }
+.dimension-inputs input,
+.dimension-inputs select { min-width: 0; }
+
+@media (max-width: 780px) {
+  .dimension-list > article { grid-template-columns: 1fr; }
+  .dimension-inputs,
+  .dimension-inputs--context { grid-template-columns: 1fr; }
+}
+
+.dimension-results { margin-top: 1rem; }
+.dimension-result-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.dimension-result-grid > article { border: 1px solid var(--line); border-radius: 14px; padding: 1rem; }
+.dimension-result-grid header { align-items: center; display: flex; gap: 0.75rem; justify-content: space-between; }
+.dimension-result-stats { display: grid; gap: 0.45rem; margin: 1rem 0; }
+.dimension-result-stats span { color: var(--muted); font-size: 0.82rem; }
+.dimension-result-stats b { color: var(--ink); margin-right: 0.25rem; }
+.dimension-result-detail { border-top: 1px solid var(--line); display: grid; gap: 0.35rem; padding: 0.8rem 0; }
+.dimension-result-detail span,
+.dimension-result-detail small { color: var(--muted); font-size: 0.78rem; }

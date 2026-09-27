@@ -10,9 +10,17 @@ from sqlalchemy import UniqueConstraint
 from sqlmodel import Field as SQLField
 from sqlmodel import Session, SQLModel, select
 
+from greensmecapt.assessment.financial import (
+    FinancialAssessmentPolicy,
+    FinancialObservation,
+)
+from greensmecapt.assessment.fuzzy_dematel import DematelSpecification
 from greensmecapt.assessment.normalization import NormalizationPolicy
 from greensmecapt.assessment.observations import CriterionResponse
+from greensmecapt.assessment.performance_context import MetricComparisonContext
 from greensmecapt.assessment.profiles import AssessmentContext, AssessmentPolicy
+from greensmecapt.assessment.readiness import ReadinessObservation
+from greensmecapt.document_intelligence.semantics import MetricCatalog
 from greensmecapt.domain import StructuredInvestmentRecord
 from greensmecapt.persistence.repository import PersistenceNotFoundError
 from greensmecapt.persistence.tables import AuditEventRow
@@ -43,6 +51,7 @@ class SMEAssessmentProfileRevisionRow(SQLModel, table=True):
     approval_fingerprint: str = SQLField(index=True)
     assessment_policy_json: str
     normalization_policy_json: str
+    supplemental_inputs_json: str = SQLField(default="{}")
     approved_by: str = SQLField(index=True)
     approved_at: datetime = SQLField(default_factory=_utc_now)
 
@@ -83,6 +92,12 @@ class StoredAssessmentProfileRevision(BaseModel):
     approval_fingerprint: str = Field(min_length=64, max_length=64)
     assessment_policy: AssessmentPolicy
     normalization_policy: NormalizationPolicy
+    financial_policy: FinancialAssessmentPolicy | None = None
+    readiness_specification: DematelSpecification | None = None
+    metric_catalog: MetricCatalog | None = None
+    financial_observations: tuple[FinancialObservation, ...] = ()
+    readiness_observations: tuple[ReadinessObservation, ...] = ()
+    metric_contexts: tuple[MetricComparisonContext, ...] = ()
     approved_by: str = Field(min_length=1)
     approved_at: datetime
 
@@ -120,6 +135,12 @@ class AssessmentProfileRepository:
         record_snapshot: StructuredInvestmentRecord,
         assessment_policy: AssessmentPolicy,
         normalization_policy: NormalizationPolicy,
+        financial_policy: FinancialAssessmentPolicy,
+        readiness_specification: DematelSpecification,
+        metric_catalog: MetricCatalog,
+        financial_observations: tuple[FinancialObservation, ...] = (),
+        readiness_observations: tuple[ReadinessObservation, ...] = (),
+        metric_contexts: tuple[MetricComparisonContext, ...] = (),
         actor_id: str,
         commit: bool = True,
     ) -> StoredAssessmentProfileRevision:
@@ -138,6 +159,12 @@ class AssessmentProfileRepository:
             record_snapshot=record_snapshot,
             assessment_policy=assessment_policy,
             normalization_policy=normalization_policy,
+            financial_policy=financial_policy,
+            readiness_specification=readiness_specification,
+            metric_catalog=metric_catalog,
+            financial_observations=financial_observations,
+            readiness_observations=readiness_observations,
+            metric_contexts=metric_contexts,
         )
         fingerprint = hashlib.sha256(serialized.encode()).hexdigest()
         latest = self._latest_row(sme_id)
@@ -155,6 +182,14 @@ class AssessmentProfileRepository:
             approval_fingerprint=fingerprint,
             assessment_policy_json=assessment_policy.model_dump_json(),
             normalization_policy_json=normalization_policy.model_dump_json(),
+            supplemental_inputs_json=_serialize_supplemental_inputs(
+                financial_observations=financial_observations,
+                readiness_observations=readiness_observations,
+                metric_contexts=metric_contexts,
+                financial_policy=financial_policy,
+                readiness_specification=readiness_specification,
+                metric_catalog=metric_catalog,
+            ),
             approved_by=actor_id,
             approved_at=_utc_now(),
         )
@@ -388,6 +423,12 @@ def _serialize_approval(
     record_snapshot: StructuredInvestmentRecord,
     assessment_policy: AssessmentPolicy,
     normalization_policy: NormalizationPolicy,
+    financial_policy: FinancialAssessmentPolicy,
+    readiness_specification: DematelSpecification,
+    metric_catalog: MetricCatalog,
+    financial_observations: tuple[FinancialObservation, ...],
+    readiness_observations: tuple[ReadinessObservation, ...],
+    metric_contexts: tuple[MetricComparisonContext, ...],
 ) -> str:
     return json.dumps(
         {
@@ -398,6 +439,18 @@ def _serialize_approval(
             "record_snapshot": record_snapshot.model_dump(mode="json"),
             "assessment_policy": assessment_policy.model_dump(mode="json"),
             "normalization_policy": normalization_policy.model_dump(mode="json"),
+            "financial_policy": financial_policy.model_dump(mode="json"),
+            "readiness_specification": readiness_specification.model_dump(mode="json"),
+            "metric_catalog": metric_catalog.model_dump(mode="json"),
+            "financial_observations": [
+                item.model_dump(mode="json") for item in financial_observations
+            ],
+            "readiness_observations": [
+                item.model_dump(mode="json") for item in readiness_observations
+            ],
+            "metric_contexts": [
+                item.model_dump(mode="json") for item in metric_contexts
+            ],
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -407,6 +460,7 @@ def _serialize_approval(
 def _revision_from_row(
     row: SMEAssessmentProfileRevisionRow,
 ) -> StoredAssessmentProfileRevision:
+    supplemental = json.loads(row.supplemental_inputs_json or "{}")
     return StoredAssessmentProfileRevision(
         revision_id=row.revision_id,
         sme_id=row.sme_id,
@@ -426,8 +480,68 @@ def _revision_from_row(
         normalization_policy=NormalizationPolicy.model_validate_json(
             row.normalization_policy_json
         ),
+        financial_policy=(
+            FinancialAssessmentPolicy.model_validate(
+                supplemental["financial_policy"]
+            )
+            if "financial_policy" in supplemental
+            else None
+        ),
+        readiness_specification=(
+            DematelSpecification.model_validate(
+                supplemental["readiness_specification"]
+            )
+            if "readiness_specification" in supplemental
+            else None
+        ),
+        metric_catalog=(
+            MetricCatalog.model_validate(supplemental["metric_catalog"])
+            if "metric_catalog" in supplemental
+            else None
+        ),
+        financial_observations=tuple(
+            FinancialObservation.model_validate(item)
+            for item in supplemental.get("financial_observations", ())
+        ),
+        readiness_observations=tuple(
+            ReadinessObservation.model_validate(item)
+            for item in supplemental.get("readiness_observations", ())
+        ),
+        metric_contexts=tuple(
+            MetricComparisonContext.model_validate(item)
+            for item in supplemental.get("metric_contexts", ())
+        ),
         approved_by=row.approved_by,
         approved_at=row.approved_at,
+    )
+
+
+def _serialize_supplemental_inputs(
+    *,
+    financial_observations: tuple[FinancialObservation, ...],
+    readiness_observations: tuple[ReadinessObservation, ...],
+    metric_contexts: tuple[MetricComparisonContext, ...],
+    financial_policy: FinancialAssessmentPolicy,
+    readiness_specification: DematelSpecification,
+    metric_catalog: MetricCatalog,
+) -> str:
+    return json.dumps(
+        {
+            "financial_policy": financial_policy.model_dump(mode="json"),
+            "readiness_specification": readiness_specification.model_dump(mode="json"),
+            "metric_catalog": metric_catalog.model_dump(mode="json"),
+            "financial_observations": [
+                item.model_dump(mode="json") for item in financial_observations
+            ],
+            "readiness_observations": [
+                item.model_dump(mode="json") for item in readiness_observations
+            ],
+            "metric_contexts": [
+                item.model_dump(mode="json") for item in metric_contexts
+            ],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
     )
 
 

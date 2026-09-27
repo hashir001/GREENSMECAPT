@@ -273,7 +273,7 @@ def create_app(
 
     app = FastAPI(
         title="GREENSMECAPT API",
-        version="0.5.0",
+        version="0.6.0",
         description=(
             "Evidence-aware assessment and decision-support "
             "platform for green SMEs."

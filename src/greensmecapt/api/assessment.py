@@ -12,18 +12,26 @@ from greensmecapt.assessment.cohort import (
     CohortConfiguration,
 )
 from greensmecapt.assessment.electre_iii import ElectreIIIError
+from greensmecapt.assessment.financial import (
+    FinancialAssessmentPolicy,
+    FinancialObservation,
+)
+from greensmecapt.assessment.fuzzy_dematel import DematelSpecification
 from greensmecapt.assessment.fuzzy_topsis import FuzzyTopsisError
 from greensmecapt.assessment.normalization import NormalizationPolicy
 from greensmecapt.assessment.observations import CriterionResponse
+from greensmecapt.assessment.performance_context import MetricComparisonContext
 from greensmecapt.assessment.profiles import (
     AssessmentContext,
     AssessmentPolicy,
 )
+from greensmecapt.assessment.readiness import ReadinessObservation
 from greensmecapt.assessment.workflow import (
     AssessmentWorkflow,
     AssessmentWorkflowError,
     PreparedAssessment,
 )
+from greensmecapt.document_intelligence.semantics import MetricCatalog
 from greensmecapt.persistence import (
     ApplicationRepository,
     ApplicationStatus,
@@ -56,6 +64,9 @@ class AssessmentSubmission(BaseModel):
 
     context: AssessmentContext
     responses: tuple[CriterionResponse, ...] = ()
+    financial_observations: tuple[FinancialObservation, ...] = ()
+    readiness_observations: tuple[ReadinessObservation, ...] = ()
+    metric_contexts: tuple[MetricComparisonContext, ...] = ()
 
 
 class CohortAssessmentRequest(BaseModel):
@@ -112,6 +123,9 @@ class AssessmentConfigurationResponse(BaseModel):
 
     assessment_policy: AssessmentPolicy
     normalization_policy: NormalizationPolicy
+    financial_policy: FinancialAssessmentPolicy
+    readiness_specification: DematelSpecification
+    metric_catalog: MetricCatalog
 
 
 class ProfilePublicationRequest(BaseModel):
@@ -164,6 +178,9 @@ def build_assessment_router(
         return AssessmentConfigurationResponse(
             assessment_policy=workflow.assessment_policy,
             normalization_policy=workflow.normalization_policy,
+            financial_policy=workflow.financial_policy,
+            readiness_specification=workflow.readiness_specification,
+            metric_catalog=workflow.metric_catalog,
         )
 
     @router.post(
@@ -189,6 +206,9 @@ def build_assessment_router(
                 record=record,
                 context=submission.context,
                 responses=submission.responses,
+                financial_observations=submission.financial_observations,
+                readiness_observations=submission.readiness_observations,
+                metric_contexts=submission.metric_contexts,
             )
         except PersistenceNotFoundError as error:
             raise HTTPException(
@@ -234,6 +254,9 @@ def build_assessment_router(
                 record=record,
                 context=submission.context,
                 responses=submission.responses,
+                financial_observations=submission.financial_observations,
+                readiness_observations=submission.readiness_observations,
+                metric_contexts=submission.metric_contexts,
             )
             revision = AssessmentProfileRepository(session).approve(
                 context=submission.context,
@@ -241,6 +264,12 @@ def build_assessment_router(
                 record_snapshot=record,
                 assessment_policy=workflow.assessment_policy,
                 normalization_policy=workflow.normalization_policy,
+                financial_policy=workflow.financial_policy,
+                readiness_specification=workflow.readiness_specification,
+                metric_catalog=workflow.metric_catalog,
+                financial_observations=submission.financial_observations,
+                readiness_observations=submission.readiness_observations,
+                metric_contexts=submission.metric_contexts,
                 actor_id=principal.user_id,
                 commit=False,
             )
@@ -347,6 +376,9 @@ def build_assessment_router(
                     ),
                     context=submission.context,
                     responses=submission.responses,
+                    financial_observations=submission.financial_observations,
+                    readiness_observations=submission.readiness_observations,
+                    metric_contexts=submission.metric_contexts,
                 )
                 for submission in request.submissions
             )
@@ -429,6 +461,21 @@ def build_assessment_router(
                     != workflow.normalization_policy.policy_id
                     or profile.normalization_policy.version
                     != workflow.normalization_policy.version
+                    or profile.financial_policy is None
+                    or profile.financial_policy.policy_id
+                    != workflow.financial_policy.policy_id
+                    or profile.financial_policy.version
+                    != workflow.financial_policy.version
+                    or profile.readiness_specification is None
+                    or profile.readiness_specification.specification_id
+                    != workflow.readiness_specification.specification_id
+                    or profile.readiness_specification.version
+                    != workflow.readiness_specification.version
+                    or profile.metric_catalog is None
+                    or profile.metric_catalog.catalog_id
+                    != workflow.metric_catalog.catalog_id
+                    or profile.metric_catalog.version
+                    != workflow.metric_catalog.version
                 ):
                     raise ValueError(
                         f"Published profile for SME {profile.sme_id!r} "
@@ -439,6 +486,9 @@ def build_assessment_router(
                     record=profile.record_snapshot,
                     context=profile.context,
                     responses=profile.responses,
+                    financial_observations=profile.financial_observations,
+                    readiness_observations=profile.readiness_observations,
+                    metric_contexts=profile.metric_contexts,
                 )
                 for profile in profiles
             )

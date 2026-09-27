@@ -35,11 +35,34 @@ A raw total describes quantity, not performance. Before comparing electricity, w
 
 The metric catalogue enforces these comparison-context requirements. Even direct ratios still require a period and operational scope.
 
+The assessment workflow now reports each accepted metric as `ready`,
+`incomplete`, `needs_review` or `no_measurement`. When a supported denominator
+is supplied, it calculates an intensity while retaining the original total and
+its sources. It does not infer a missing denominator, baseline or benchmark.
+
 ## 4. Financial separation
 
 Green-finance availability, grants and incentives belong to readiness/context. ROA, revenue growth, liquidity, cash flow, leverage, project cost, requested amount and expected savings describe the SME and transaction. They must not be collapsed.
 
-## 5. Calibration still required
+The financial layer reports core-data coverage and retains supporting
+transaction values. It may calculate requested-project-cost coverage and a
+simple undiscounted payback period when compatible source values exist. It has
+no aggregate financial score or pass/fail decision until an approved financial
+calibration is supplied.
+
+## 5. Roles and publication
+
+- SME users maintain their own company and source documents.
+- Reviewers validate evidence and supply governed assessment observations.
+- Experts provide DEMATEL influence judgments; they do not assess applicants.
+- Investors read frozen published profiles and cannot change assessment inputs.
+- Administrators may access all workspaces and govern users/configuration.
+
+Activity yes/no/unclear inputs are reviewer-side applicability routing, not an
+expert survey and not a readiness score. Readiness uses the six evidence states
+listed above.
+
+## 6. Calibration still required
 
 The following remain unresolved until supplied and approved:
 

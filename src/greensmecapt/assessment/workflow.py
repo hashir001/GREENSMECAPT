@@ -21,6 +21,17 @@ from greensmecapt.assessment.electre_iii import (
     load_electre_configuration,
     run_electre_iii,
 )
+from greensmecapt.assessment.financial import (
+    FinancialAssessmentPolicy,
+    FinancialInvestmentAssessment,
+    FinancialObservation,
+    build_financial_assessment,
+    load_financial_policy,
+)
+from greensmecapt.assessment.fuzzy_dematel import (
+    DematelSpecification,
+    load_dematel_specification,
+)
 from greensmecapt.assessment.fuzzy_topsis import (
     FuzzyTopsisResult,
     run_fuzzy_topsis,
@@ -36,6 +47,11 @@ from greensmecapt.assessment.observations import (
     ObservationSet,
     build_observations,
 )
+from greensmecapt.assessment.performance_context import (
+    EnvironmentalPerformanceContextProfile,
+    MetricComparisonContext,
+    build_performance_context_profile,
+)
 from greensmecapt.assessment.profiles import (
     AssessmentContext,
     AssessmentPolicy,
@@ -43,10 +59,19 @@ from greensmecapt.assessment.profiles import (
     build_profile,
     load_policy,
 )
+from greensmecapt.assessment.readiness import (
+    ReadinessObservation,
+    SMEReadinessProfile,
+    build_readiness_profile,
+)
 from greensmecapt.assessment.robustness import (
     RankingRobustnessResult,
     RobustnessConfiguration,
     analyze_ranking_robustness,
+)
+from greensmecapt.document_intelligence.semantics import (
+    MetricCatalog,
+    load_metric_catalog,
 )
 from greensmecapt.domain import (
     EvidenceItem,
@@ -75,6 +100,9 @@ class PreparedAssessment(AssessmentWorkflowModel):
     profile: AssessmentProfile
     observations: ObservationSet
     normalized_inputs: NormalizedAssessmentInputs
+    financial_assessment: FinancialInvestmentAssessment
+    readiness_profile: SMEReadinessProfile
+    performance_context: EnvironmentalPerformanceContextProfile
     activity_fact_evidence_ids: dict[str, tuple[str, ...]] = Field(
         default_factory=dict
     )
@@ -99,12 +127,18 @@ class AssessmentWorkflow:
         *,
         assessment_policy: AssessmentPolicy,
         normalization_policy: NormalizationPolicy,
+        financial_policy: FinancialAssessmentPolicy,
+        readiness_specification: DematelSpecification,
+        metric_catalog: MetricCatalog,
         electre_configuration: ElectreIIIConfiguration,
         robustness_configuration: RobustnessConfiguration | None = None,
         calibration_manifest: MCDMCalibrationManifest | None = None,
     ) -> None:
         self._assessment_policy = assessment_policy
         self._normalization_policy = normalization_policy
+        self._financial_policy = financial_policy
+        self._readiness_specification = readiness_specification
+        self._metric_catalog = metric_catalog
         self._electre_configuration = electre_configuration
         self._robustness_configuration = (
             robustness_configuration or RobustnessConfiguration()
@@ -122,6 +156,18 @@ class AssessmentWorkflow:
         """Expose the immutable normalization policy used by this workflow."""
 
         return self._normalization_policy
+
+    @property
+    def financial_policy(self) -> FinancialAssessmentPolicy:
+        return self._financial_policy
+
+    @property
+    def readiness_specification(self) -> DematelSpecification:
+        return self._readiness_specification
+
+    @property
+    def metric_catalog(self) -> MetricCatalog:
+        return self._metric_catalog
 
     @classmethod
     def from_environment(
@@ -149,6 +195,30 @@ class AssessmentWorkflow:
                     )
                 )
             ),
+            financial_policy=load_financial_policy(
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_FINANCIAL_POLICY",
+                        "config/financial_assessment.development.json",
+                    )
+                )
+            ),
+            readiness_specification=load_dematel_specification(
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_READINESS_SPECIFICATION",
+                        "config/dematel_specification.development.json",
+                    )
+                )
+            ),
+            metric_catalog=load_metric_catalog(
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_METRIC_CATALOG",
+                        "config/metric_catalog.development.json",
+                    )
+                )
+            ),
             electre_configuration=load_electre_configuration(
                 Path(
                     configured.get(
@@ -173,6 +243,9 @@ class AssessmentWorkflow:
         record: StructuredInvestmentRecord,
         context: AssessmentContext,
         responses: Sequence[CriterionResponse] = (),
+        financial_observations: Sequence[FinancialObservation] = (),
+        readiness_observations: Sequence[ReadinessObservation] = (),
+        metric_contexts: Sequence[MetricComparisonContext] = (),
     ) -> PreparedAssessment:
         """Resolve applicability, observations and normalized inputs."""
 
@@ -196,11 +269,51 @@ class AssessmentWorkflow:
             observations,
             self._normalization_policy,
         )
+        valid_source_ids = {
+            *(item.document_id for item in record.documents),
+            *(item.evidence_id for item in record.evidence_items),
+        }
+        referenced_source_ids = {
+            source_id
+            for collection in (
+                financial_observations,
+                readiness_observations,
+                metric_contexts,
+            )
+            for item in collection
+            for source_id in item.source_ids
+        }
+        unknown_source_ids = referenced_source_ids - valid_source_ids
+        if unknown_source_ids:
+            raise AssessmentWorkflowError(
+                "Assessment inputs reference unknown sources: "
+                f"{sorted(unknown_source_ids)}"
+            )
+        financial = build_financial_assessment(
+            sme_id=record.sme.sme_id,
+            policy=self._financial_policy,
+            observations=financial_observations,
+            evidence_items=record.evidence_items,
+        )
+        readiness = build_readiness_profile(
+            record.sme.sme_id,
+            self._readiness_specification,
+            tuple(readiness_observations),
+        )
+        performance_context = build_performance_context_profile(
+            sme_id=record.sme.sme_id,
+            catalog=self._metric_catalog,
+            evidence_items=record.evidence_items,
+            contexts=metric_contexts,
+        )
 
         return PreparedAssessment(
             profile=profile,
             observations=observations,
             normalized_inputs=normalized,
+            financial_assessment=financial,
+            readiness_profile=readiness,
+            performance_context=performance_context,
             activity_fact_evidence_ids=fact_evidence,
         )
 

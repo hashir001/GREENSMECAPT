@@ -1,0 +1,77 @@
+{
+  "policy_id": "greensmecapt_financial_assessment",
+  "version": "1.0.0",
+  "status": "development",
+  "calibration_status": "requires_financial_calibration",
+  "metrics": [
+    {
+      "metric_id": "roa_percentage",
+      "title": "Return on assets",
+      "group": "business_health",
+      "importance": "core",
+      "allowed_units": ["percent"],
+      "requires_reporting_period": true,
+      "description": "Profitability relative to the asset base; retained separately from environmental performance."
+    },
+    {
+      "metric_id": "revenue_growth_percentage",
+      "title": "Revenue growth",
+      "group": "business_health",
+      "importance": "core",
+      "allowed_units": ["percent"],
+      "requires_reporting_period": true,
+      "description": "Period-over-period revenue change with an explicit comparison basis."
+    },
+    {
+      "metric_id": "current_ratio",
+      "title": "Current ratio",
+      "group": "business_health",
+      "importance": "core",
+      "allowed_units": ["ratio"],
+      "requires_reporting_period": true,
+      "description": "Current assets relative to current liabilities."
+    },
+    {
+      "metric_id": "operating_cash_flow",
+      "title": "Operating cash flow",
+      "group": "business_health",
+      "importance": "supporting",
+      "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true,
+      "description": "Supporting liquidity evidence; no universal pass threshold is assumed."
+    },
+    {
+      "metric_id": "debt_to_assets_percentage",
+      "title": "Debt to assets",
+      "group": "business_health",
+      "importance": "supporting",
+      "allowed_units": ["percent"],
+      "requires_reporting_period": true,
+      "description": "Supporting leverage information for investor review."
+    },
+    {
+      "metric_id": "requested_amount",
+      "title": "Requested amount",
+      "group": "investment_case",
+      "importance": "supporting",
+      "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "description": "Capital requested by the SME."
+    },
+    {
+      "metric_id": "project_cost",
+      "title": "Project cost",
+      "group": "investment_case",
+      "importance": "supporting",
+      "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "description": "Total cost of the proposed project."
+    },
+    {
+      "metric_id": "expected_annual_savings",
+      "title": "Expected annual savings",
+      "group": "investment_case",
+      "importance": "supporting",
+      "allowed_units": ["aed_per_year", "usd_per_year", "eur_per_year", "gbp_per_year", "pkr_per_year"],
+      "description": "Projected annual savings, retained as a projection rather than achieved performance."
+    }
+  ]
+}

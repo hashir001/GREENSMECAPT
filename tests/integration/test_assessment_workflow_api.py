@@ -175,6 +175,12 @@ def test_compare_smes_through_api(tmp_path: Path) -> None:
     assert result["electre_iii"]["rank_levels"][0]["sme_ids"] == [
         "sme_strong"
     ]
+    preparation = result["preparations"][0]
+    assert preparation["financial_assessment"]["status"] == "insufficient"
+    assert preparation["financial_assessment"]["aggregate_score"] is None
+    assert len(preparation["readiness_profile"]["factors"]) == 7
+    assert preparation["readiness_profile"]["causal_results_available"] is False
+    assert preparation["performance_context"]["metric_catalog_version"] == "1.2.0"
 
 
 def test_retrieve_persisted_assessment_run(tmp_path: Path) -> None:
@@ -361,6 +367,14 @@ def test_reviewer_can_retrieve_versioned_assessment_configuration(
         payload["normalization_policy"]["policy_id"]
         == "greensmecapt_normalization"
     )
+    assert payload["financial_policy"]["calibration_status"] == (
+        "requires_financial_calibration"
+    )
+    assert len(payload["readiness_specification"]["factors"]) == 7
+    assert payload["readiness_specification"]["calibration_status"] == (
+        "requires_expert_calibration"
+    )
+    assert payload["metric_catalog"]["version"] == "1.2.0"
     assert "very_high" in (
         payload["normalization_policy"]
         ["default_linguistic_scale"]
