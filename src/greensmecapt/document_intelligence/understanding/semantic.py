@@ -124,8 +124,8 @@ class HybridSemanticExtractor:
                 .require_intelligent_success
             ):
                 raise HybridSemanticExtractionError(
-                    "Required intelligent semantic extraction "
-                    "failed."
+                    "Required intelligent semantic extraction failed: "
+                    f"{error}"
                 ) from error
 
             return _result(
