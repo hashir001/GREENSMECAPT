@@ -284,11 +284,7 @@ def _intelligent_service_from_environment(
     )
 
     if provider_name == "vertex_gemini":
-        if not model:
-            raise DocumentProcessingConfigurationError(
-                "Vertex Gemini extraction requires "
-                "GREENSMECAPT_SEMANTIC_MODEL."
-            )
+        vertex_model = model or "gemini-2.5-flash"
         project_id = (
             environment.get("GREENSMECAPT_VERTEX_PROJECT_ID", "").strip()
             or environment.get(
@@ -309,7 +305,7 @@ def _intelligent_service_from_environment(
                     "GREENSMECAPT_VERTEX_LOCATION",
                     "global",
                 ),
-                model=model,
+                model=vertex_model,
                 allow_remote=allow_remote,
                 timeout_seconds=timeout_seconds,
                 maximum_output_tokens=maximum_output_tokens,
