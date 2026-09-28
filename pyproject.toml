@@ -39,6 +39,9 @@ document-ai = [
 google-document-ai = [
     "google-cloud-documentai>=3.7,<4.0",
 ]
+vertex-semantic = [
+    "google-genai>=1.0,<2.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
