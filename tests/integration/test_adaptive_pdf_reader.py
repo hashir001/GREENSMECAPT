@@ -213,8 +213,8 @@ def _make_document(
     )
 
 
-def test_keep_clean_digital_page_native() -> None:
-    """A clean digital page should avoid structured OCR."""
+def test_route_clean_digital_page_through_document_ocr() -> None:
+    """Digital PDFs use the same primary Document OCR route as scans."""
 
     content = _make_pdf(
         (
@@ -229,9 +229,9 @@ def test_keep_clean_digital_page_native() -> None:
         content=content,
     )
 
-    assert parser.page_numbers == []
-    assert result.document.pages[0].text_source is TextSource.PDF_EMBEDDED
-    assert result.processing_records[0].mode is PageProcessingMode.NATIVE
+    assert parser.page_numbers == [1]
+    assert result.document.pages[0].text_source is TextSource.OCR
+    assert result.processing_records[0].mode is PageProcessingMode.STRUCTURED_OCR
 
 
 def test_route_scanned_page_to_structured_ocr() -> None:
@@ -250,8 +250,8 @@ def test_route_scanned_page_to_structured_ocr() -> None:
     assert result.processing_records[0].mode is PageProcessingMode.STRUCTURED_OCR
 
 
-def test_route_scanned_financial_page_to_form_parser() -> None:
-    """Financial statements should use the specialized form route."""
+def test_route_scanned_financial_page_to_document_ocr() -> None:
+    """Financial statements should use Document OCR, not Form Parser."""
 
     content = _make_pdf((None,))
     document_ocr = FakeStructuredParser()
@@ -268,13 +268,13 @@ def test_route_scanned_financial_page_to_form_parser() -> None:
         content=content,
     )
 
-    assert document_ocr.page_numbers == []
-    assert form_parser.page_numbers == [1]
-    assert result.document.pages[0].tables
+    assert document_ocr.page_numbers == [1]
+    assert form_parser.page_numbers == []
+    assert result.document.pages[0].tables == ()
 
 
 def test_process_mixed_pdf_page_by_page() -> None:
-    """Digital and scanned pages should use different routes."""
+    """Digital and scanned pages should use the same OCR route."""
 
     content = _make_pdf(
         (
@@ -289,11 +289,10 @@ def test_process_mixed_pdf_page_by_page() -> None:
         content=content,
     )
 
-    assert parser.page_numbers == [2]
+    assert parser.page_numbers == [1, 2]
     assert len(result.document.pages) == 2
 
-    assert result.document.pages[0].text_source is TextSource.PDF_EMBEDDED
-    assert result.document.pages[1].text_source is TextSource.OCR
+    assert all(page.text_source is TextSource.OCR for page in result.document.pages)
 
 
 def test_read_only_requested_pdf_pages() -> None:
@@ -319,8 +318,8 @@ def test_read_only_requested_pdf_pages() -> None:
     assert parser.page_numbers == [2]
 
 
-def test_hybrid_processing_adds_missing_table() -> None:
-    """A table-oriented page may combine native and visual data."""
+def test_document_ocr_preserves_detected_table() -> None:
+    """Document OCR should preserve detected tables without native merging."""
 
     content = _make_pdf(
         ("Environmental metrics for 2024 include energy, emissions, waste and water totals.",)
@@ -338,11 +337,11 @@ def test_hybrid_processing_adds_missing_table() -> None:
     page = result.document.pages[0]
 
     assert parser.page_numbers == [1]
-    assert page.text_source is TextSource.HYBRID
+    assert page.text_source is TextSource.OCR
     assert len(page.tables) == 1
     assert page.tables[0].value_at(1, 1) == "68"
 
-    assert result.processing_records[0].mode is PageProcessingMode.HYBRID
+    assert result.processing_records[0].mode is PageProcessingMode.STRUCTURED_OCR
 
 
 def test_fallback_ocr_after_structured_failure() -> None:
@@ -387,8 +386,8 @@ def test_preserve_and_render_detected_visual_region() -> None:
         assert 145 <= image.height <= 155
 
 
-def test_hybrid_merge_preserves_structured_visual_regions() -> None:
-    """Native text must not erase charts found by structured parsing."""
+def test_document_ocr_preserves_structured_visual_regions() -> None:
+    """Document OCR output should preserve detected charts."""
 
     content = _make_pdf(
         ("Environmental metrics for 2024 include energy, emissions, waste and water totals.",)
@@ -403,5 +402,5 @@ def test_hybrid_merge_preserves_structured_visual_regions() -> None:
         content=content,
     )
 
-    assert result.document.pages[0].text_source is TextSource.HYBRID
+    assert result.document.pages[0].text_source is TextSource.OCR
     assert result.document.pages[0].visual_regions[0].region_id == "page_1_chart_1"
