@@ -39,6 +39,11 @@ const ApprovedComparisonPage = lazy(() =>
     default: module.ApprovedComparisonPage,
   })),
 )
+const SavedComparisonPage = lazy(() =>
+  import('./pages/SavedComparisonPage').then((module) => ({
+    default: module.SavedComparisonPage,
+  })),
+)
 const AssessmentResultPage = lazy(() =>
   import('./pages/AssessmentResultPage').then((module) => ({
     default: module.AssessmentResultPage,
@@ -138,6 +143,11 @@ export default function App() {
           } />
           <Route path="/assessments/new" element={<AssessmentBuilderRoute />} />
           <Route path="/assessments/compare" element={<ApprovedComparisonRoute />} />
+          <Route path="/assessments/saved-comparison" element={
+            <RoleRoute roles={['admin', 'reviewer', 'investor']}>
+              <SavedComparisonPage />
+            </RoleRoute>
+          } />
           <Route path="/assessments/:runId" element={
             <RoleRoute roles={['admin', 'reviewer', 'investor']}>
               <AssessmentResultPage />
