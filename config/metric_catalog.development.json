@@ -253,6 +253,70 @@
       ]
     },
     {
+      "indicator_id": "expected_annual_electricity_savings_kwh",
+      "criterion_id": "investment_case",
+      "name": "Expected annual electricity savings",
+      "aliases": [
+        "expected annual electricity savings",
+        "electricity reduction",
+        "less grid draw",
+        "reduction in grid electricity"
+      ],
+      "units": [
+        {
+          "canonical_unit": "kwh_per_year",
+          "aliases": [
+            "kwh",
+            "kilowatt hours"
+          ],
+          "multiplier": 1
+        },
+        {
+          "canonical_unit": "kwh_per_year",
+          "aliases": [
+            "mwh",
+            "megawatt hours"
+          ],
+          "multiplier": 1000
+        }
+      ],
+      "minimum": 0,
+      "maximum": null,
+      "assessment_use": "evidence_only",
+      "comparison_requirements": [
+        "forecast_basis"
+      ]
+    },
+    {
+      "indicator_id": "expected_annual_water_savings_m3",
+      "criterion_id": "investment_case",
+      "name": "Expected annual water savings",
+      "aliases": [
+        "expected annual water savings",
+        "water reduction",
+        "less intake",
+        "reduction in water intake"
+      ],
+      "units": [
+        {
+          "canonical_unit": "m3_per_year",
+          "aliases": [
+            "m3",
+            "m³",
+            "cubic metres",
+            "cubic meters"
+          ],
+          "multiplier": 1
+        }
+      ],
+      "minimum": 0,
+      "maximum": null,
+      "assessment_use": "evidence_only",
+      "comparison_requirements": [
+        "forecast_basis"
+      ]
+    },
+    {
       "indicator_id": "roa_percentage",
       "criterion_id": "financial_health",
       "name": "Return on assets",
@@ -416,7 +480,9 @@
         "finance requested",
         "external capital sought",
         "requested facility",
-        "seeks finance"
+        "seeks finance",
+        "external financing amount",
+        "external finance sought"
       ],
       "units": [
         {
@@ -427,16 +493,6 @@
             "dirhams"
           ],
           "multiplier": 1
-        },
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed thousand",
-            "aed thousands",
-            "aed 000",
-            "thousand aed"
-          ],
-          "multiplier": 1000
         },
         {
           "canonical_unit": "aed",
@@ -460,7 +516,9 @@
         "total project cost",
         "investment cost",
         "total programme cost",
-        "capital programme total"
+        "capital programme total",
+        "programme cost",
+        "total programme"
       ],
       "units": [
         {
@@ -471,16 +529,6 @@
             "dirhams"
           ],
           "multiplier": 1
-        },
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed thousand",
-            "aed thousands",
-            "aed 000",
-            "thousand aed"
-          ],
-          "multiplier": 1000
         },
         {
           "canonical_unit": "aed",
@@ -505,7 +553,9 @@
         "estimated annual savings",
         "annual avoided operating spend",
         "yearly avoided operating spend",
-        "annual benefit"
+        "annual benefit",
+        "annual avoided operating spend",
+        "forecast annual benefit"
       ],
       "units": [
         {
@@ -519,26 +569,8 @@
         {
           "canonical_unit": "aed_per_year",
           "aliases": [
-            "aed",
-            "dirham",
-            "dirhams"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "aed_per_year",
-          "aliases": [
-            "aed thousand per year",
-            "aed thousands per year",
-            "aed 000 per year"
-          ],
-          "multiplier": 1000
-        },
-        {
-          "canonical_unit": "aed_per_year",
-          "aliases": [
-            "aed million per year",
-            "aed million annually"
+            "aed million",
+            "million aed"
           ],
           "multiplier": 1000000
         }
