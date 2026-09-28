@@ -19,6 +19,9 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     SemanticClaimPayload,
     SemanticProviderOutput,
 )
+from greensmecapt.document_intelligence.semantics.intelligence.service import (
+    _raw_unit_occurs_in_value,
+)
 from greensmecapt.domain import (
     EvidenceValidationStatus,
     SourceDocument,
@@ -119,6 +122,17 @@ def _extract(*claims):
         catalog=load_metric_catalog(CATALOG_PATH),
     )
 
+
+
+def test_ground_currency_scale_words_around_number() -> None:
+    assert _raw_unit_occurs_in_value(
+        raw_value="AED 3.20 million",
+        raw_unit="AED million",
+    )
+    assert not _raw_unit_occurs_in_value(
+        raw_value="AED 3.20 million",
+        raw_unit="AED billion",
+    )
 
 def test_convert_grounded_claim_to_evidence() -> None:
     """A fully grounded claim should become evidence."""
