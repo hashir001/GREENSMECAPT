@@ -10,6 +10,7 @@ type EvidenceReviewPanelProps = {
   evidenceItems: EvidenceItem[]
   canValidate: boolean
   conflictEvidenceIds?: Set<string>
+  contextRequiredEvidenceIds?: Set<string>
   companyNames?: Record<string, string>
   documentNames?: Record<string, string>
   onValidate: (evidenceId: string, status: 'accepted' | 'rejected', reason?: string) => Promise<void>
@@ -24,7 +25,7 @@ function valueLabel(item: EvidenceItem) {
   return `${item.normalized_value}${item.unit === 'percent' ? '%' : item.unit ? ` ${item.unit}` : ''}`
 }
 
-export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEvidenceIds = new Set(), companyNames = {}, documentNames = {}, onValidate }: EvidenceReviewPanelProps) {
+export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEvidenceIds = new Set(), contextRequiredEvidenceIds = new Set(), companyNames = {}, documentNames = {}, onValidate }: EvidenceReviewPanelProps) {
   const [filter, setFilter] = useState<Filter>('all')
   const [rejectingId, setRejectingId] = useState('')
   const [reason, setReason] = useState('')
@@ -78,9 +79,11 @@ export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEviden
       <div className="evidence-grid">
         {filtered.map((item) => {
           const conflict = conflictEvidenceIds.has(item.evidence_id)
+          const contextRequired = contextRequiredEvidenceIds.has(item.evidence_id)
+          const flagged = conflict || contextRequired
           const companyName = companyNames[item.sme_id]
           return (
-            <article className={`evidence-card ${conflict ? 'evidence-card--conflict' : ''}`} key={item.evidence_id}>
+            <article className={`evidence-card ${flagged ? 'evidence-card--conflict' : ''}`} key={item.evidence_id}>
               <div className="evidence-card__header">
                 <div>
                   {companyName && <span className="evidence-card__company">{companyName}</span>}
@@ -88,13 +91,16 @@ export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEviden
                   <span>{item.reporting_period || 'Period not stated'} · {item.scope || 'Scope not stated'}</span>
                 </div>
                 <StatusPill
-                  label={conflict ? 'conflict' : item.validation_status}
-                  tone={conflict ? 'warning' : item.validation_status === 'accepted' ? 'positive' : item.validation_status === 'rejected' ? 'danger' : 'neutral'}
+                  label={conflict ? 'conflict' : contextRequired ? 'context needed' : item.validation_status}
+                  tone={flagged ? 'warning' : item.validation_status === 'accepted' ? 'positive' : item.validation_status === 'rejected' ? 'danger' : 'neutral'}
                 />
               </div>
 
               {conflict && (
-                <div className="evidence-alert"><AlertTriangle size={15} /> This value conflicts with another source in the same context.</div>
+                <div className="evidence-alert"><AlertTriangle size={15} /> Different values were reported for the same period and scope.</div>
+              )}
+              {contextRequired && (
+                <div className="evidence-alert"><AlertTriangle size={15} /> Multiple values were found, but their period or scope is not yet captured.</div>
               )}
 
               <div className="evidence-value">
