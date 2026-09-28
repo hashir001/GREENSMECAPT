@@ -18,6 +18,7 @@ from greensmecapt.document_intelligence.models import (
 )
 from greensmecapt.document_intelligence.readers.adaptive_pdf import (
     AdaptivePdfDocumentReader,
+    _preserve_native_table_structure,
 )
 from greensmecapt.document_intelligence.structure import (
     PageProcessingMode,
@@ -343,6 +344,24 @@ def test_document_ocr_preserves_detected_table() -> None:
 
     assert result.processing_records[0].mode is PageProcessingMode.STRUCTURED_OCR
 
+
+
+def test_preserve_native_pdf_tables_with_document_ocr_text() -> None:
+    """Born-digital tables should survive an OCR-primary text route."""
+
+    image = PILImage.new("RGB", (612, 792), "white")
+    native_page = TableStructuredParser().parse(image, page_number=1)
+    ocr_page = FakeStructuredParser().parse(image, page_number=1)
+
+    merged = _preserve_native_table_structure(
+        native_page=native_page,
+        structured_page=ocr_page,
+    )
+
+    assert merged.text == "Structured OCR content for page 1"
+    assert merged.text_source is TextSource.HYBRID
+    assert len(merged.tables) == 1
+    assert merged.tables[0].value_at(1, 1) == "68"
 
 def test_fallback_ocr_after_structured_failure() -> None:
     """Simple OCR should remain available as a fallback."""
