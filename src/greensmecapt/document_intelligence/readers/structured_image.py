@@ -23,8 +23,6 @@ from greensmecapt.domain import DocumentType, SourceDocument
 
 _FORM_ORIENTED_DOCUMENT_TYPES = frozenset(
     {
-        DocumentType.FINANCIAL_STATEMENT,
-        DocumentType.UTILITY_BILL,
         DocumentType.FUNDING_REQUEST,
     }
 )
