@@ -186,15 +186,15 @@ def test_reject_unconfigured_indicator() -> None:
     )
 
 
-def test_reject_unit_absent_from_raw_value() -> None:
-    """The model cannot attach a unit absent from its value."""
+def test_reject_unit_absent_from_source_quote() -> None:
+    """The model cannot attach a unit absent from its source quote."""
 
     report = _extract(
         _claim(raw_unit="%")
     )
 
     assert report.evidence_items == ()
-    assert "does not occur in the raw value" in (
+    assert "does not occur in the source quote" in (
         report.rejected_claims[0].reason
     )
 
