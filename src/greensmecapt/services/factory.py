@@ -19,6 +19,8 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     OpenAICompatibleSemanticProvider,
     QualitativeInstruction,
     QualitativeValueType,
+    VertexGeminiProviderConfiguration,
+    VertexGeminiSemanticProvider,
 )
 from greensmecapt.document_intelligence.structure import (
     GoogleDocumentAIConfiguration,
@@ -249,35 +251,98 @@ def _intelligent_service_from_environment(
     *,
     policy: AssessmentPolicy | None = None,
 ) -> IntelligentSemanticExtractionService | None:
+    provider_name = environment.get(
+        "GREENSMECAPT_SEMANTIC_PROVIDER",
+        "",
+    ).strip().casefold()
     endpoint = environment.get("GREENSMECAPT_SEMANTIC_ENDPOINT")
     model = environment.get("GREENSMECAPT_SEMANTIC_MODEL")
 
-    if endpoint is None and model is None:
+    if not provider_name and endpoint is None and model is None:
         return None
 
-    if not endpoint or not model:
-        raise DocumentProcessingConfigurationError(
-            "Intelligent extraction requires both "
-            "GREENSMECAPT_SEMANTIC_ENDPOINT and "
-            "GREENSMECAPT_SEMANTIC_MODEL."
-        )
+    if not provider_name:
+        provider_name = "openai_compatible"
 
-    provider = OpenAICompatibleSemanticProvider(
-        OpenAICompatibleProviderConfiguration(
-            endpoint=endpoint,
-            model=model,
-            api_key_environment_variable=(environment.get("GREENSMECAPT_SEMANTIC_API_KEY_ENV")),
-            allow_remote=_environment_boolean(
-                environment,
-                ("GREENSMECAPT_SEMANTIC_ALLOW_REMOTE"),
-                default=False,
-            ),
-            token_parameter=environment.get(
-                "GREENSMECAPT_SEMANTIC_TOKEN_PARAMETER",
-                "max_tokens",
-            ),
-        )
+    allow_remote = _environment_boolean(
+        environment,
+        "GREENSMECAPT_SEMANTIC_ALLOW_REMOTE",
+        default=False,
     )
+    timeout_seconds = _environment_float(
+        environment,
+        "GREENSMECAPT_SEMANTIC_TIMEOUT_SECONDS",
+        default=120.0,
+        minimum_exclusive=0.0,
+    )
+    maximum_output_tokens = _environment_integer(
+        environment,
+        "GREENSMECAPT_SEMANTIC_MAX_OUTPUT_TOKENS",
+        default=8192,
+        minimum=256,
+        maximum=32768,
+    )
+
+    if provider_name == "vertex_gemini":
+        if not model:
+            raise DocumentProcessingConfigurationError(
+                "Vertex Gemini extraction requires "
+                "GREENSMECAPT_SEMANTIC_MODEL."
+            )
+        project_id = (
+            environment.get("GREENSMECAPT_VERTEX_PROJECT_ID", "").strip()
+            or environment.get(
+                "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID",
+                "",
+            ).strip()
+        )
+        if not project_id:
+            raise DocumentProcessingConfigurationError(
+                "Vertex Gemini extraction requires "
+                "GREENSMECAPT_VERTEX_PROJECT_ID or "
+                "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID."
+            )
+        provider = VertexGeminiSemanticProvider(
+            VertexGeminiProviderConfiguration(
+                project_id=project_id,
+                location=environment.get(
+                    "GREENSMECAPT_VERTEX_LOCATION",
+                    "global",
+                ),
+                model=model,
+                allow_remote=allow_remote,
+                timeout_seconds=timeout_seconds,
+                maximum_output_tokens=maximum_output_tokens,
+            )
+        )
+    elif provider_name == "openai_compatible":
+        if not endpoint or not model:
+            raise DocumentProcessingConfigurationError(
+                "OpenAI-compatible extraction requires both "
+                "GREENSMECAPT_SEMANTIC_ENDPOINT and "
+                "GREENSMECAPT_SEMANTIC_MODEL."
+            )
+        provider = OpenAICompatibleSemanticProvider(
+            OpenAICompatibleProviderConfiguration(
+                endpoint=endpoint,
+                model=model,
+                api_key_environment_variable=(
+                    environment.get("GREENSMECAPT_SEMANTIC_API_KEY_ENV")
+                ),
+                allow_remote=allow_remote,
+                timeout_seconds=timeout_seconds,
+                maximum_output_tokens=maximum_output_tokens,
+                token_parameter=environment.get(
+                    "GREENSMECAPT_SEMANTIC_TOKEN_PARAMETER",
+                    "max_tokens",
+                ),
+            )
+        )
+    else:
+        raise DocumentProcessingConfigurationError(
+            "GREENSMECAPT_SEMANTIC_PROVIDER must be either "
+            "'openai_compatible' or 'vertex_gemini'."
+        )
 
     return IntelligentSemanticExtractionService(
         provider,
@@ -297,7 +362,6 @@ def _intelligent_service_from_environment(
             maximum=500_000,
         ),
     )
-
 
 def _qualitative_instructions(
     policy: AssessmentPolicy,
