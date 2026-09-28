@@ -10,12 +10,8 @@ from greensmecapt.persistence.applications import (
     ApplicationStatus,
     SMEApplicationRow,
 )
-from greensmecapt.persistence.assessment_profiles import (
-    SMEAssessmentProfilePublicationRow,
-    SMEAssessmentProfileRevisionRow,
-)
+from greensmecapt.persistence.assessment_profiles import SMEAssessmentProfileRevisionRow
 from greensmecapt.persistence.assessment_runs import AssessmentRunRow
-from greensmecapt.persistence.financial_submissions import FinancialSubmissionRow
 from greensmecapt.persistence.repository import (
     PersistenceConflictError,
     PersistenceNotFoundError,
@@ -231,89 +227,92 @@ class DestructiveMutationRepository:
 
         affected_run_ids: list[str] = []
         for run in self._session.exec(select(AssessmentRunRow)).all():
-            if sme_id in json.loads(run.sme_ids_json):
+            try:
+                run_sme_ids = json.loads(run.sme_ids_json)
+            except (TypeError, json.JSONDecodeError):
+                run_sme_ids = []
+            if sme_id in run_sme_ids:
                 affected_run_ids.append(run.run_id)
-                self._session.delete(run)
 
-        publications = self._session.exec(
-            select(SMEAssessmentProfilePublicationRow).where(
-                SMEAssessmentProfilePublicationRow.sme_id == sme_id
-            )
-        ).all()
-        revisions = self._session.exec(
-            select(SMEAssessmentProfileRevisionRow).where(
-                SMEAssessmentProfileRevisionRow.sme_id == sme_id
-            )
-        ).all()
-        for row in publications:
-            self._session.delete(row)
-        for row in revisions:
-            self._session.delete(row)
-
-        # Profiles created before the immutable-revision migration live in a
-        # superseded table that is intentionally no longer mapped by SQLModel.
-        # Explicitly clear it so legacy demo records cannot block a hard purge.
-        legacy_profiles_deleted = 0
+        # Use direct statements in child-to-parent order. This is deliberate:
+        # older Supabase projects may contain tables or foreign keys created by
+        # earlier schema versions that are not represented by today's ORM.
         bind = self._session.get_bind()
-        if inspect(bind).has_table("sme_assessment_profiles"):
+        existing_tables = set(inspect(bind).get_table_names())
+
+        def delete_rows(table: str, predicate: str, parameters: dict[str, object]) -> int:
+            if table not in existing_tables:
+                return 0
             result = self._session.execute(
-                text(
-                    "delete from sme_assessment_profiles "
-                    "where sme_id = :sme_id"
-                ),
-                {"sme_id": sme_id},
+                text(f"delete from {table} where {predicate}"),
+                parameters,
             )
-            legacy_profiles_deleted = result.rowcount or 0
+            return result.rowcount or 0
 
-        financial_submission = self._session.exec(
-            select(FinancialSubmissionRow).where(FinancialSubmissionRow.sme_id == sme_id)
-        ).first()
-        if financial_submission is not None:
-            self._session.delete(financial_submission)
+        for run_id in affected_run_ids:
+            delete_rows("assessment_runs", "run_id = :run_id", {"run_id": run_id})
+            delete_rows(
+                "audit_events",
+                "entity_type = 'assessment_run' and entity_id = :run_id",
+                {"run_id": run_id},
+            )
 
-        deleted_evidence = 0
-        deleted_jobs = 0
-        for document in documents:
-            checkpoints = self._session.exec(
-                select(DocumentBatchCheckpointRow).where(
-                    DocumentBatchCheckpointRow.document_id == document.document_id
-                )
-            ).all()
-            jobs = self._session.exec(
-                select(DocumentProcessingJobRow).where(
-                    DocumentProcessingJobRow.document_id == document.document_id
-                )
-            ).all()
-            evidence = self._session.exec(
-                select(EvidenceRow).where(EvidenceRow.document_id == document.document_id)
-            ).all()
-            processing = self._session.get(DocumentProcessingRow, document.document_id)
-            for row in checkpoints:
-                self._session.delete(row)
-            for row in jobs:
-                self._session.delete(row)
-            for row in evidence:
-                self._session.delete(row)
-            if processing is not None:
-                self._session.delete(processing)
-            self._session.delete(document)
-            deleted_evidence += len(evidence)
-            deleted_jobs += len(jobs)
+        deleted_publications = delete_rows(
+            "sme_assessment_profile_publications",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
+        deleted_revisions = delete_rows(
+            "sme_assessment_profile_revisions",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
+        deleted_legacy_profiles = delete_rows(
+            "sme_assessment_profiles",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
+        deleted_financial_submissions = delete_rows(
+            "financial_submissions",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
 
-        old_audit_events = self._session.exec(
-            select(AuditEventRow).where(AuditEventRow.sme_id == sme_id)
-        ).all()
-        run_audit_events = self._session.exec(
-            select(AuditEventRow).where(AuditEventRow.entity_type == "assessment_run")
-        ).all()
-        for row in old_audit_events:
-            self._session.delete(row)
-        for row in run_audit_events:
-            if row.entity_id in affected_run_ids:
-                self._session.delete(row)
+        # Batch checkpoints reference jobs/documents but do not carry sme_id.
+        # Resolve them through the document IDs before deleting either parent.
+        document_ids = [document.document_id for document in documents]
+        deleted_checkpoints = 0
+        for document_id in document_ids:
+            deleted_checkpoints += delete_rows(
+                "document_batch_checkpoints",
+                "document_id = :document_id",
+                {"document_id": document_id},
+            )
 
-        self._session.delete(application)
-        self._session.delete(sme)
+        deleted_evidence = delete_rows(
+            "evidence_items",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
+        deleted_jobs = delete_rows(
+            "document_processing_jobs",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
+        deleted_processing = delete_rows(
+            "document_processing",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
+        deleted_documents = delete_rows(
+            "documents",
+            "sme_id = :sme_id",
+            {"sme_id": sme_id},
+        )
+        delete_rows("audit_events", "sme_id = :sme_id", {"sme_id": sme_id})
+        delete_rows("sme_applications", "sme_id = :sme_id", {"sme_id": sme_id})
+        delete_rows("smes", "sme_id = :sme_id", {"sme_id": sme_id})
+
         self._session.add(
             AuditEventRow(
                 entity_type="sme_purge",
@@ -324,12 +323,15 @@ class DestructiveMutationRepository:
                 previous_value_json=json.dumps(
                     {
                         "legal_name": sme.legal_name,
-                        "deleted_documents": len(documents),
+                        "deleted_documents": deleted_documents,
                         "deleted_evidence": deleted_evidence,
                         "deleted_jobs": deleted_jobs,
-                        "deleted_profile_revisions": len(revisions),
-                        "deleted_legacy_profiles": legacy_profiles_deleted,
-                        "deleted_financial_submission": financial_submission is not None,
+                        "deleted_processing_rows": deleted_processing,
+                        "deleted_checkpoints": deleted_checkpoints,
+                        "deleted_profile_publications": deleted_publications,
+                        "deleted_profile_revisions": deleted_revisions,
+                        "deleted_legacy_profiles": deleted_legacy_profiles,
+                        "deleted_financial_submissions": deleted_financial_submissions,
                         "deleted_assessment_runs": affected_run_ids,
                     },
                     sort_keys=True,
