@@ -179,7 +179,7 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
     ].map(([factor_id, domain_id, title]) => ({ factor_id, domain_id, title, definition: title, source_status: 'research_synthesized' })),
   },
   metric_catalog: {
-    catalog_id: 'greensmecapt_environmental_metrics', version: '1.2.0',
+    catalog_id: 'greensmecapt_environmental_metrics', version: '1.3.0',
     metrics: [
       ['renewable_energy_percentage', 'renewable_energy', 'Renewable energy share', 'direct_ratio'],
       ['electricity_consumption_kwh', 'energy_efficiency', 'Electricity consumption', 'requires_comparison_context'],
