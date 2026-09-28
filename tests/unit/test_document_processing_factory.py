@@ -114,6 +114,21 @@ def test_configure_vertex_gemini_semantic_extraction() -> None:
     assert service._provider.model_name == "gemini-2.5-flash"
 
 
+
+def test_vertex_gemini_reuses_document_ai_project_and_defaults() -> None:
+    service = _intelligent_service_from_environment(
+        {
+            "GREENSMECAPT_SEMANTIC_PROVIDER": "vertex_gemini",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID": "shared-project",
+            "GREENSMECAPT_SEMANTIC_ALLOW_REMOTE": "true",
+        }
+    )
+
+    assert service is not None
+    assert service._provider.model_name == "gemini-2.5-flash"
+    assert service._provider._configuration.project_id == "shared-project"
+    assert service._provider._configuration.location == "global"
+
 def test_reject_unknown_semantic_provider() -> None:
     with pytest.raises(
         DocumentProcessingConfigurationError,
