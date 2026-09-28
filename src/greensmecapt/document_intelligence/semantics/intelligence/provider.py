@@ -285,8 +285,8 @@ class OpenAICompatibleSemanticProvider:
 
 
 _SYSTEM_PROMPT = """
-You extract environmental metrics and governed context claims from supplied
-document segments.
+You extract environmental, financial, investment and governed context claims
+from supplied document segments.
 
 Rules:
 1. Use only the supplied segments, allowed metrics and qualitative_claims.
@@ -294,7 +294,7 @@ Rules:
 3. Copy source_quote exactly from one segment.
 4. Copy raw_value exactly as written.
 5. raw_number is the number explicitly represented by raw_value.
-6. raw_unit is the unit explicitly written beside the number.
+6. raw_unit is the unit explicitly written in the same source quote, including\n   a nearby table header or scale label that clearly governs the number.
 7. Use the exact segment_id and indicator_id supplied.
 8. Return no claim when the metric, value, or unit is uncertain.
 9. Do not convert units. The application performs conversion.
