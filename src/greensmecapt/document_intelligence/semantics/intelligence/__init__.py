@@ -22,6 +22,10 @@ from greensmecapt.document_intelligence.semantics.intelligence.provider import (
 from greensmecapt.document_intelligence.semantics.intelligence.service import (
     IntelligentSemanticExtractionService,
 )
+from greensmecapt.document_intelligence.semantics.intelligence.vertex_gemini import (
+    VertexGeminiProviderConfiguration,
+    VertexGeminiSemanticProvider,
+)
 
 __all__ = [
     "IntelligentExtractionReport",
@@ -40,4 +44,6 @@ __all__ = [
     "SemanticProviderConnection",
     "SemanticProviderOutput",
     "SemanticSourceSegment",
+    "VertexGeminiProviderConfiguration",
+    "VertexGeminiSemanticProvider",
 ]
