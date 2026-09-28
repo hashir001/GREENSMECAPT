@@ -82,24 +82,19 @@ class AssessmentRunRepository:
         if existing is not None:
             if existing.result_json != serialized:
                 raise PersistenceConflictError(
-                    f"Assessment run {run_id!r} already exists "
-                    "with a different result."
+                    f"Assessment run {run_id!r} already exists with a different result."
                 )
 
             return _record_from_row(existing)
 
-        sme_ids = tuple(
-            item.profile.sme_id for item in result.preparations
-        )
+        sme_ids = tuple(item.profile.sme_id for item in result.preparations)
         row = AssessmentRunRow(
             run_id=run_id,
             cohort_id=result.comparable_topsis.cohort_id,
             cohort_version=result.comparable_topsis.cohort_version,
             requested_by=actor_id,
             sme_ids_json=json.dumps(sme_ids),
-            comparison_status=(
-                result.comparable_topsis.comparison_status.value
-            ),
+            comparison_status=(result.comparable_topsis.comparison_status.value),
             result_json=serialized,
         )
 
@@ -116,9 +111,7 @@ class AssessmentRunRepository:
                             "cohort_id": row.cohort_id,
                             "cohort_version": row.cohort_version,
                             "sme_ids": sme_ids,
-                            "comparison_status": (
-                                row.comparison_status
-                            ),
+                            "comparison_status": (row.comparison_status),
                         },
                         sort_keys=True,
                     ),
@@ -140,11 +133,47 @@ class AssessmentRunRepository:
         row = self._session.get(AssessmentRunRow, run_id)
 
         if row is None:
-            raise PersistenceNotFoundError(
-                f"Assessment run {run_id!r} was not found."
-            )
+            raise PersistenceNotFoundError(f"Assessment run {run_id!r} was not found.")
 
         return _record_from_row(row)
+
+    def delete(
+        self,
+        *,
+        run_id: str,
+        actor_id: str,
+        reason: str,
+    ) -> None:
+        """Permanently delete one completed run and retain a deletion audit."""
+
+        row = self._session.get(AssessmentRunRow, run_id)
+        if row is None:
+            raise PersistenceNotFoundError(f"Assessment run {run_id!r} was not found.")
+        previous = {
+            "cohort_id": row.cohort_id,
+            "cohort_version": row.cohort_version,
+            "sme_ids": json.loads(row.sme_ids_json),
+        }
+        old_events = self._session.exec(
+            select(AuditEventRow).where(
+                AuditEventRow.entity_type == "assessment_run",
+                AuditEventRow.entity_id == run_id,
+            )
+        ).all()
+        for event in old_events:
+            self._session.delete(event)
+        self._session.delete(row)
+        self._session.add(
+            AuditEventRow(
+                entity_type="assessment_run",
+                entity_id=run_id,
+                action="assessment_run_deleted",
+                actor_id=actor_id,
+                reason=reason,
+                previous_value_json=json.dumps(previous, sort_keys=True),
+            )
+        )
+        self._session.commit()
 
     def list(
         self,
@@ -154,9 +183,7 @@ class AssessmentRunRepository:
         statement = select(AssessmentRunRow)
 
         if requested_by is not None:
-            statement = statement.where(
-                AssessmentRunRow.requested_by == requested_by
-            )
+            statement = statement.where(AssessmentRunRow.requested_by == requested_by)
 
         rows = self._session.exec(statement).all()
         ordered = sorted(
@@ -192,8 +219,5 @@ def _record_from_row(row: AssessmentRunRow) -> AssessmentRunRecord:
 
     return AssessmentRunRecord(
         **summary.model_dump(),
-        result=CohortAssessmentResult.model_validate_json(
-            row.result_json
-        ),
+        result=CohortAssessmentResult.model_validate_json(row.result_json),
     )
-

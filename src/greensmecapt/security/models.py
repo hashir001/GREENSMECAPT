@@ -26,6 +26,7 @@ class ApplicationPermission(StrEnum):
     MANAGE_DOCUMENTS = "manage_documents"
     VALIDATE_EVIDENCE = "validate_evidence"
     RUN_ASSESSMENTS = "run_assessments"
+    DELETE_ASSESSMENT_RUN = "delete_assessment_run"
     APPROVE_PROFILES = "approve_profiles"
     PUBLISH_PROFILES = "publish_profiles"
     VIEW_PUBLISHED_PROFILES = "view_published_profiles"
@@ -46,12 +47,8 @@ _GLOBAL_PERMISSIONS: dict[ApplicationRole, frozenset[ApplicationPermission]] = {
             ApplicationPermission.VIEW_PUBLISHED_PROFILES,
         }
     ),
-    ApplicationRole.EXPERT: frozenset(
-        {ApplicationPermission.COMPLETE_EXPERT_SURVEY}
-    ),
-    ApplicationRole.INVESTOR: frozenset(
-        {ApplicationPermission.VIEW_PUBLISHED_PROFILES}
-    ),
+    ApplicationRole.EXPERT: frozenset({ApplicationPermission.COMPLETE_EXPERT_SURVEY}),
+    ApplicationRole.INVESTOR: frozenset({ApplicationPermission.VIEW_PUBLISHED_PROFILES}),
     ApplicationRole.SME_USER: frozenset(),
 }
 

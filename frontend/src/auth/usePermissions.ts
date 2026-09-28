@@ -24,6 +24,7 @@ export function usePermissions() {
     canCreateSMEs: isPreviewMode || role === 'admin',
     canUpdateSMEs: role === 'admin' || role === 'sme_user',
     canDeleteSMEs: role === 'admin',
+    canDeleteAssessmentRuns: role === 'admin',
     canUploadDocuments: isPreviewMode || documentRole,
     canProcessDocuments: isPreviewMode || documentRole,
     canDeleteDocuments: isPreviewMode || documentRole,

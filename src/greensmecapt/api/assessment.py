@@ -87,9 +87,7 @@ class CohortAssessmentRequest(BaseModel):
         gt=0.0,
         le=1.0,
     )
-    submissions: tuple[AssessmentSubmission, ...] = Field(
-        min_length=2
-    )
+    submissions: tuple[AssessmentSubmission, ...] = Field(min_length=2)
 
 
 class AutomaticCohortAssessmentRequest(BaseModel):
@@ -141,6 +139,14 @@ class ProfilePublicationRequest(BaseModel):
     expected_application_revision: int = Field(ge=1)
 
 
+class AssessmentRunDeletionRequest(BaseModel):
+    """Require an explicit reason for permanent run deletion."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    reason: str = Field(min_length=1, max_length=1000)
+
+
 def build_assessment_router(
     *,
     get_session: Callable[[], Iterator[Session]],
@@ -149,18 +155,11 @@ def build_assessment_router(
     """Build assessment routes with application-owned dependencies."""
 
     router = APIRouter(prefix="/assessments", tags=["assessments"])
-    assessment_dependency = require_permission(
-        ApplicationPermission.RUN_ASSESSMENTS
-    )
-    approval_dependency = require_permission(
-        ApplicationPermission.APPROVE_PROFILES
-    )
-    publication_dependency = require_permission(
-        ApplicationPermission.PUBLISH_PROFILES
-    )
-    results_dependency = require_permission(
-        ApplicationPermission.VIEW_PUBLISHED_PROFILES
-    )
+    assessment_dependency = require_permission(ApplicationPermission.RUN_ASSESSMENTS)
+    approval_dependency = require_permission(ApplicationPermission.APPROVE_PROFILES)
+    publication_dependency = require_permission(ApplicationPermission.PUBLISH_PROFILES)
+    results_dependency = require_permission(ApplicationPermission.VIEW_PUBLISHED_PROFILES)
+    run_deletion_dependency = require_permission(ApplicationPermission.DELETE_ASSESSMENT_RUN)
 
     @router.get(
         "/configuration",
@@ -321,9 +320,7 @@ def build_assessment_router(
             )
             ApplicationRepository(session).transition(
                 sme_id=sme_id,
-                transition=ApplicationTransition(
-                    target_status=ApplicationStatus.PUBLISHED
-                ),
+                transition=ApplicationTransition(target_status=ApplicationStatus.PUBLISHED),
                 actor_id=principal.user_id,
                 expected_revision=request.expected_application_revision,
                 commit=False,
@@ -371,9 +368,7 @@ def build_assessment_router(
         try:
             preparations = tuple(
                 workflow.prepare(
-                    record=repository.get_record(
-                        submission.context.sme_id
-                    ),
+                    record=repository.get_record(submission.context.sme_id),
                     context=submission.context,
                     responses=submission.responses,
                     financial_observations=submission.financial_observations,
@@ -388,12 +383,8 @@ def build_assessment_router(
                 CohortConfiguration(
                     cohort_id=request.cohort_id,
                     version=request.version,
-                    minimum_shared_criteria=(
-                        request.minimum_shared_criteria
-                    ),
-                    minimum_shared_weight_ratio=(
-                        request.minimum_shared_weight_ratio
-                    ),
+                    minimum_shared_criteria=(request.minimum_shared_criteria),
+                    minimum_shared_weight_ratio=(request.minimum_shared_weight_ratio),
                 ),
             )
 
@@ -447,35 +438,25 @@ def build_assessment_router(
         profile_repository = AssessmentProfileRepository(session)
 
         try:
-            profiles = tuple(
-                profile_repository.get_published(sme_id)
-                for sme_id in request.sme_ids
-            )
+            profiles = tuple(profile_repository.get_published(sme_id) for sme_id in request.sme_ids)
             for profile in profiles:
                 if (
-                    profile.assessment_policy.policy_id
-                    != workflow.assessment_policy.policy_id
-                    or profile.assessment_policy.version
-                    != workflow.assessment_policy.version
+                    profile.assessment_policy.policy_id != workflow.assessment_policy.policy_id
+                    or profile.assessment_policy.version != workflow.assessment_policy.version
                     or profile.normalization_policy.policy_id
                     != workflow.normalization_policy.policy_id
-                    or profile.normalization_policy.version
-                    != workflow.normalization_policy.version
+                    or profile.normalization_policy.version != workflow.normalization_policy.version
                     or profile.financial_policy is None
-                    or profile.financial_policy.policy_id
-                    != workflow.financial_policy.policy_id
-                    or profile.financial_policy.version
-                    != workflow.financial_policy.version
+                    or profile.financial_policy.policy_id != workflow.financial_policy.policy_id
+                    or profile.financial_policy.version != workflow.financial_policy.version
                     or profile.readiness_specification is None
                     or profile.readiness_specification.specification_id
                     != workflow.readiness_specification.specification_id
                     or profile.readiness_specification.version
                     != workflow.readiness_specification.version
                     or profile.metric_catalog is None
-                    or profile.metric_catalog.catalog_id
-                    != workflow.metric_catalog.catalog_id
-                    or profile.metric_catalog.version
-                    != workflow.metric_catalog.version
+                    or profile.metric_catalog.catalog_id != workflow.metric_catalog.catalog_id
+                    or profile.metric_catalog.version != workflow.metric_catalog.version
                 ):
                     raise ValueError(
                         f"Published profile for SME {profile.sme_id!r} "
@@ -497,12 +478,8 @@ def build_assessment_router(
                 CohortConfiguration(
                     cohort_id=request.cohort_id,
                     version=request.version,
-                    minimum_shared_criteria=(
-                        request.minimum_shared_criteria
-                    ),
-                    minimum_shared_weight_ratio=(
-                        request.minimum_shared_weight_ratio
-                    ),
+                    minimum_shared_criteria=(request.minimum_shared_criteria),
+                    minimum_shared_weight_ratio=(request.minimum_shared_weight_ratio),
                 ),
             )
 
@@ -546,14 +523,8 @@ def build_assessment_router(
     ) -> tuple[AssessmentRunSummary, ...]:
         """List completed comparisons without returning large matrices."""
 
-        requested_by = (
-            principal.user_id
-            if principal.role is ApplicationRole.INVESTOR
-            else None
-        )
-        return AssessmentRunRepository(session).list(
-            requested_by=requested_by
-        )
+        requested_by = principal.user_id if principal.role is ApplicationRole.INVESTOR else None
+        return AssessmentRunRepository(session).list(requested_by=requested_by)
 
     @router.get(
         "/runs/{run_id}",
@@ -575,10 +546,35 @@ def build_assessment_router(
                 principal.role is ApplicationRole.INVESTOR
                 and record.requested_by != principal.user_id
             ):
-                raise PersistenceNotFoundError(
-                    f"Assessment run {run_id!r} was not found."
-                )
+                raise PersistenceNotFoundError(f"Assessment run {run_id!r} was not found.")
             return record
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+    @router.delete(
+        "/runs/{run_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    def delete_assessment_run(
+        run_id: str,
+        request: AssessmentRunDeletionRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(run_deletion_dependency),
+        ],
+    ) -> None:
+        """Allow an administrator to permanently remove a completed run."""
+
+        try:
+            AssessmentRunRepository(session).delete(
+                run_id=run_id,
+                actor_id=principal.user_id,
+                reason=request.reason,
+            )
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

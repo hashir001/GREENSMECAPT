@@ -713,6 +713,13 @@ export async function getPreviewAssessmentRun(runId: string): Promise<Assessment
   return clone({ ...previewLatestRun, ...summary })
 }
 
+export async function deletePreviewAssessmentRun(runId: string): Promise<void> {
+  const index = previewRuns.findIndex((run) => run.run_id === runId)
+  if (index < 0) throw new Error('Assessment run was not found.')
+  previewRuns.splice(index, 1)
+  previewRunRecords.delete(runId)
+}
+
 export async function createPreviewAssessment(request: CohortAssessmentRequest): Promise<AssessmentRunRecord> {
   if (previewRuns.some((run) => run.run_id === request.run_id)) {
     throw new Error('An assessment run with this identifier already exists.')

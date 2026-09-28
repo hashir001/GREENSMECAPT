@@ -219,8 +219,6 @@ export function CompanyDetailPage() {
   const canDeleteWorkspace = Boolean(
     application
     && permissions.canDeleteSMEs
-    && ['draft', 'withdrawn'].includes(application.status)
-    && record?.documents.length === 0,
   )
   const availableTransitions = application
     ? lifecycleActions(application.status, permissions.role)
@@ -420,7 +418,7 @@ export function CompanyDetailPage() {
         <div className="company-create-backdrop" role="presentation" onMouseDown={() => { setDeleteDocumentId(''); setDeleteWorkspaceOpen(false) }}>
           <div className="company-create-dialog destructive-dialog" onMouseDown={(event) => event.stopPropagation()}>
             <header>
-              <div><span className="eyebrow">Permanent deletion</span><h2>{deleteWorkspaceOpen ? 'Delete company workspace?' : 'Delete source document?'}</h2><p>{deleteWorkspaceOpen ? 'Only an empty draft or withdrawn workspace can be deleted.' : 'Derived evidence and processing history for this document will also be removed.'}</p></div>
+              <div><span className="eyebrow">Permanent deletion</span><h2>{deleteWorkspaceOpen ? 'Delete company and all data?' : 'Delete source document?'}</h2><p>{deleteWorkspaceOpen ? 'This permanently removes the company, documents, evidence, profiles and assessment runs containing it.' : 'Derived evidence and processing history for this document will also be removed.'}</p></div>
               <button className="icon-button" type="button" aria-label="Close deletion form" onClick={() => { setDeleteDocumentId(''); setDeleteWorkspaceOpen(false) }}><X size={17} /></button>
             </header>
             <div className="destructive-dialog__body">
@@ -465,7 +463,7 @@ export function CompanyDetailPage() {
           {application && <StatusPill label={application.status.replaceAll('_', ' ')} tone={application.status === 'published' || application.status === 'approved' ? 'positive' : 'neutral'} />}
           {availableTransitions.map((action) => <button className="secondary-button secondary-button--light" type="button" key={action.target} disabled={mutationBusy} onClick={() => requestTransition(action)}>{action.label}</button>)}
           {canEditSME && <button className="secondary-button secondary-button--light" type="button" onClick={openEdit}><Pencil size={15} /> Edit details</button>}
-          {canDeleteWorkspace && <button className="danger-button danger-button--compact" type="button" onClick={() => { setReason(''); setDeleteWorkspaceOpen(true) }}><Trash2 size={15} /> Delete workspace</button>}
+          {canDeleteWorkspace && <button className="danger-button danger-button--compact" type="button" onClick={() => { setReason(''); setDeleteWorkspaceOpen(true) }}><Trash2 size={15} /> Delete company</button>}
         </div>
         <div className="company-hero__metrics">
           <div><FileStack size={18} /><strong>{record.documents.length}</strong><span>documents</span></div>

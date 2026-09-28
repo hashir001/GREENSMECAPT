@@ -159,8 +159,20 @@ def test_compare_smes_through_api(tmp_path: Path) -> None:
                 ],
             },
         )
+        deleted = client.request(
+            "DELETE",
+            "/assessments/runs/run_001",
+            headers=ADMIN_HEADERS,
+            json={"reason": "Demo cleanup"},
+        )
+        missing = client.get(
+            "/assessments/runs/run_001",
+            headers=ADMIN_HEADERS,
+        )
 
     assert response.status_code == 200
+    assert deleted.status_code == 204
+    assert missing.status_code == 404
     record = response.json()
     result = record["result"]
     assert record["run_id"] == "run_001"

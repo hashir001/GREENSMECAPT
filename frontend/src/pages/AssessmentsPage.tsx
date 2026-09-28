@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ChevronRight, Plus, Users } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronRight, Plus, Trash2, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -20,11 +20,25 @@ function formattedDate(value: string): string {
 export function AssessmentsPage() {
   const {
     canCompareApprovedProfiles,
+    canDeleteAssessmentRuns,
     canRunAssessments,
   } = usePermissions()
   const [runs, setRuns] = useState<AssessmentRunSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  async function deleteRun(runId: string) {
+    if (!window.confirm('Permanently delete this assessment run?')) return
+    const reason = window.prompt('Deletion reason (required):')?.trim()
+    if (!reason) return
+    setError('')
+    try {
+      await api.deleteAssessmentRun(runId, reason)
+      setRuns((current) => current.filter((run) => run.run_id !== runId))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Assessment run could not be deleted.')
+    }
+  }
 
   useEffect(() => {
     void api.listAssessmentRuns()
@@ -89,9 +103,16 @@ export function AssessmentsPage() {
                     <span>Version {run.cohort_version}</span>
                   </div>
                 </div>
-                <Link className="icon-button" to={`/assessments/${run.run_id}`} aria-label={`Open ${run.run_id}`}>
-                  <ChevronRight size={20} />
-                </Link>
+                <div className="assessment-card__actions">
+                  {canDeleteAssessmentRuns && (
+                    <button className="icon-button icon-button--danger" type="button" aria-label={`Delete ${run.run_id}`} onClick={() => void deleteRun(run.run_id)}>
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                  <Link className="icon-button" to={`/assessments/${run.run_id}`} aria-label={`Open ${run.run_id}`}>
+                    <ChevronRight size={20} />
+                  </Link>
+                </div>
               </article>
             ))}
       </section>

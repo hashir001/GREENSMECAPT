@@ -741,19 +741,29 @@ def test_failed_document_delete_restores_storage_and_database(
     assert (tmp_path / "documents" / storage_key).exists()
 
 
-def test_admin_deletes_only_empty_draft_workspace(
+def test_admin_purges_sme_documents_and_storage(
     tmp_path: Path,
 ) -> None:
-    """Hard deletion is available for an empty draft and nothing broader."""
+    """Admin purge should remove an SME and all private source objects."""
 
     with _client(tmp_path) as client:
         _create_sme(client)
+        upload = client.post(
+            "/smes/sme_001/documents",
+            headers=ADMIN_HEADERS,
+            data={
+                "document_type": "sustainability_report",
+                "expected_application_revision": "1",
+            },
+            files={"file": ("report.txt", b"Green evidence.", "text/plain")},
+        )
+        storage_key = upload.json()["storage_key"]
         deleted = client.request(
             "DELETE",
             "/smes/sme_001",
             headers=ADMIN_HEADERS,
             json={
-                "expected_application_revision": 1,
+                "expected_application_revision": 2,
                 "reason": "Duplicate workspace",
             },
         )
@@ -764,6 +774,7 @@ def test_admin_deletes_only_empty_draft_workspace(
 
     assert deleted.status_code == 204
     assert missing.status_code == 404
+    assert not (tmp_path / "documents" / storage_key).exists()
 
 
 def test_investor_cannot_upload_sme_document(

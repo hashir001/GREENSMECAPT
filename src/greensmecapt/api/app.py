@@ -249,22 +249,10 @@ def create_app(
     validate_deployment_environment()
 
     database = Database(database_url)
-    verifier = (
-        token_verifier
-        or verifier_from_environment()
-    )
-    storage_backend = (
-        document_storage
-        or storage_from_environment()
-    )
-    processing_service = (
-        document_processor
-        or build_document_processing_service(storage_backend)
-    )
-    identity_service = (
-        identity_administrator
-        or identity_admin_from_environment()
-    )
+    verifier = token_verifier or verifier_from_environment()
+    storage_backend = document_storage or storage_from_environment()
+    processing_service = document_processor or build_document_processing_service(storage_backend)
+    identity_service = identity_administrator or identity_admin_from_environment()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -274,10 +262,7 @@ def create_app(
     app = FastAPI(
         title="GREENSMECAPT API",
         version="0.6.0",
-        description=(
-            "Evidence-aware assessment and decision-support "
-            "platform for green SMEs."
-        ),
+        description=("Evidence-aware assessment and decision-support platform for green SMEs."),
         lifespan=lifespan,
     )
     cors_origins = cors_origins_from_environment()
@@ -314,9 +299,7 @@ def create_app(
         """Execute queued work in an independent database session."""
 
         with database.session() as worker_session:
-            DocumentProcessingJobService(
-                processing_service
-            ).run(
+            DocumentProcessingJobService(processing_service).run(
                 repository=GreenSMERepository(worker_session),
                 job_id=job_id,
             )
@@ -346,12 +329,8 @@ def create_app(
 
         del principal
         return SystemCapabilities(
-            semantic_provider_configured=(
-                processing_service.semantic_provider_configured
-            ),
-            visual_provider_configured=(
-                processing_service.visual_provider_configured
-            ),
+            semantic_provider_configured=(processing_service.semantic_provider_configured),
+            visual_provider_configured=(processing_service.visual_provider_configured),
             identity_admin_configured=identity_service.configured,
         )
 
@@ -362,9 +341,7 @@ def create_app(
     def list_managed_users(
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_permission(ApplicationPermission.MANAGE_USERS)
-            ),
+            Depends(require_permission(ApplicationPermission.MANAGE_USERS)),
         ],
     ) -> tuple[ManagedUser, ...]:
         """List users through the server-only Supabase admin boundary."""
@@ -388,9 +365,7 @@ def create_app(
         request: UserInvitationRequest,
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_permission(ApplicationPermission.MANAGE_USERS)
-            ),
+            Depends(require_permission(ApplicationPermission.MANAGE_USERS)),
         ],
     ) -> ManagedUser:
         """Invite a user with validated role and SME access claims."""
@@ -418,22 +393,15 @@ def create_app(
         request: UserAccessRequest,
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_permission(ApplicationPermission.MANAGE_USERS)
-            ),
+            Depends(require_permission(ApplicationPermission.MANAGE_USERS)),
         ],
     ) -> ManagedUser:
         """Replace role claims while preventing accidental self-lockout."""
 
-        if (
-            user_id == principal.user_id
-            and request.role is not ApplicationRole.ADMIN
-        ):
+        if user_id == principal.user_id and request.role is not ApplicationRole.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Administrators cannot remove their own admin access."
-                ),
+                detail=("Administrators cannot remove their own admin access."),
             )
 
         try:
@@ -488,9 +456,7 @@ def create_app(
         ],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_permission(ApplicationPermission.CREATE_SME)
-            ),
+            Depends(require_permission(ApplicationPermission.CREATE_SME)),
         ],
     ) -> SME:
         repository = GreenSMERepository(session)
@@ -537,16 +503,10 @@ def create_app(
         if principal.role is ApplicationRole.INVESTOR:
             return tuple(
                 profile.record_snapshot.sme
-                for profile in AssessmentProfileRepository(
-                    session
-                ).list_published_profiles()
+                for profile in AssessmentProfileRepository(session).list_published_profiles()
             )
 
-        return tuple(
-            sme
-            for sme in smes
-            if principal.can_access_sme(sme.sme_id)
-        )
+        return tuple(sme for sme in smes if principal.can_access_sme(sme.sme_id))
 
     @app.get(
         "/smes/{sme_id}/application",
@@ -605,16 +565,12 @@ def create_app(
             current = applications.get(sme_id)
             if (
                 current.status is ApplicationStatus.PUBLISHED
-                and request.target_status
-                is not ApplicationStatus.PUBLISHED
+                and request.target_status is not ApplicationStatus.PUBLISHED
             ):
                 AssessmentProfileRepository(session).withdraw(
                     sme_id=sme_id,
                     actor_id=principal.user_id,
-                    reason=(
-                        request.reason
-                        or "Application publication status changed"
-                    ),
+                    reason=(request.reason or "Application publication status changed"),
                     commit=False,
                 )
             updated = applications.transition(
@@ -669,9 +625,7 @@ def create_app(
         _require_sme_access(principal, sme_id)
 
         try:
-            return GreenSMERepository(
-                session
-            ).get_sme(sme_id)
+            return GreenSMERepository(session).get_sme(sme_id)
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -688,9 +642,7 @@ def create_app(
         session: Annotated[Session, Depends(get_session)],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_sme_permission(ApplicationPermission.EDIT_SME)
-            ),
+            Depends(require_sme_permission(ApplicationPermission.EDIT_SME)),
         ],
     ) -> SMEUpdateResponse:
         """Update editable application metadata in one transaction."""
@@ -711,9 +663,7 @@ def create_app(
                 sme_id=sme_id,
                 legal_name=request.legal_name or current.legal_name,
                 sector=request.sector or current.sector,
-                jurisdiction=(
-                    request.jurisdiction or current.jurisdiction
-                ),
+                jurisdiction=(request.jurisdiction or current.jurisdiction),
                 actor_id=principal.user_id,
                 reason=reason,
                 commit=False,
@@ -756,31 +706,69 @@ def create_app(
         session: Annotated[Session, Depends(get_session)],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_permission(ApplicationPermission.DELETE_SME)
-            ),
+            Depends(require_permission(ApplicationPermission.DELETE_SME)),
         ],
     ) -> Response:
-        """Delete only an empty, unpublished draft or withdrawn workspace."""
+        """Permanently purge an SME and all associated platform data."""
 
+        repository = GreenSMERepository(session)
+        backups: list[tuple[StoredDocumentRegistration, bytes]] = []
+        storage_deleted: list[StoredDocumentRegistration] = []
         try:
-            DestructiveMutationRepository(session).delete_empty_sme(
+            record = repository.get_record(sme_id)
+            for document in record.documents:
+                registration = repository.get_stored_document(document.document_id)
+                backups.append(
+                    (
+                        registration,
+                        storage_backend.read(registration.storage_key),
+                    )
+                )
+            registrations = DestructiveMutationRepository(session).purge_sme(
                 sme_id=sme_id,
                 actor_id=principal.user_id,
                 expected_revision=request.expected_application_revision,
                 reason=request.reason,
+                commit=False,
             )
+            for registration in registrations:
+                storage_backend.delete(registration.storage_key)
+                storage_deleted.append(registration)
+            session.commit()
             return Response(status_code=status.HTTP_204_NO_CONTENT)
         except PersistenceNotFoundError as error:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
             ) from error
-        except PersistenceConflictError as error:
+        except (PersistenceConflictError, DocumentStorageError) as error:
+            session.rollback()
+            deleted_keys = {registration.storage_key for registration in storage_deleted}
+            for registration, content in backups:
+                if registration.storage_key in deleted_keys:
+                    _restore_deleted_document(
+                        storage_backend=storage_backend,
+                        registration=registration,
+                        content=content,
+                        storage_deleted=True,
+                    )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
+        except Exception:
+            session.rollback()
+            deleted_keys = {registration.storage_key for registration in storage_deleted}
+            for registration, content in backups:
+                if registration.storage_key in deleted_keys:
+                    _restore_deleted_document(
+                        storage_backend=storage_backend,
+                        registration=registration,
+                        content=content,
+                        storage_deleted=True,
+                    )
+            raise
 
     @app.get(
         "/smes/{sme_id}/record",
@@ -800,9 +788,7 @@ def create_app(
         _require_sme_access(principal, sme_id)
 
         try:
-            return GreenSMERepository(
-                session
-            ).get_record(sme_id)
+            return GreenSMERepository(session).get_record(sme_id)
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -822,11 +808,7 @@ def create_app(
         ],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_sme_permission(
-                    ApplicationPermission.MANAGE_DOCUMENTS
-                )
-            ),
+            Depends(require_sme_permission(ApplicationPermission.MANAGE_DOCUMENTS)),
         ],
         file: Annotated[UploadFile, File()],
         document_type: Annotated[
@@ -859,15 +841,10 @@ def create_app(
         if mime_type not in _ALLOWED_MIME_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail=(
-                    f"Unsupported document MIME type: "
-                    f"{mime_type!r}."
-                ),
+                detail=(f"Unsupported document MIME type: {mime_type!r}."),
             )
 
-        content = await file.read(
-            _MAXIMUM_UPLOAD_BYTES + 1
-        )
+        content = await file.read(_MAXIMUM_UPLOAD_BYTES + 1)
 
         if not content:
             raise HTTPException(
@@ -881,12 +858,8 @@ def create_app(
                 detail="Uploaded document exceeds 20 MiB.",
             )
 
-        original_name = (
-            file.filename or "uploaded-document"
-        )
-        safe_name = Path(
-            original_name.replace("\\", "/")
-        ).name
+        original_name = file.filename or "uploaded-document"
+        safe_name = Path(original_name.replace("\\", "/")).name
 
         if not safe_name:
             safe_name = "uploaded-document"
@@ -957,11 +930,7 @@ def create_app(
         session: Annotated[Session, Depends(get_session)],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_sme_permission(
-                    ApplicationPermission.MANAGE_DOCUMENTS
-                )
-            ),
+            Depends(require_sme_permission(ApplicationPermission.MANAGE_DOCUMENTS)),
         ],
     ) -> DocumentDeletionResponse:
         """Delete a source, its derived data and its private stored object."""
@@ -983,9 +952,7 @@ def create_app(
                 document_id=document_id,
                 sme_id=sme_id,
             )
-            original_content = storage_backend.read(
-                registration.storage_key
-            )
+            original_content = storage_backend.read(registration.storage_key)
             DestructiveMutationRepository(session).delete_document(
                 sme_id=sme_id,
                 document_id=document_id,
@@ -1080,8 +1047,7 @@ def create_app(
             media_type=registration.document.mime_type,
             headers={
                 "Content-Disposition": (
-                    "inline; filename*=UTF-8''"
-                    + quote(registration.document.file_name)
+                    "inline; filename*=UTF-8''" + quote(registration.document.file_name)
                 ),
                 "Cache-Control": "private, no-store",
             },
@@ -1135,11 +1101,7 @@ def create_app(
         ],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_sme_permission(
-                    ApplicationPermission.MANAGE_DOCUMENTS
-                )
-            ),
+            Depends(require_sme_permission(ApplicationPermission.MANAGE_DOCUMENTS)),
         ],
     ) -> DocumentProcessingResult:
         _require_sme_access(principal, sme_id)
@@ -1190,11 +1152,7 @@ def create_app(
         ],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_sme_permission(
-                    ApplicationPermission.MANAGE_DOCUMENTS
-                )
-            ),
+            Depends(require_sme_permission(ApplicationPermission.MANAGE_DOCUMENTS)),
         ],
     ) -> DocumentProcessingJob:
         """Queue heavy processing and return a durable polling handle."""
@@ -1264,10 +1222,7 @@ def create_app(
         return repository.list_document_batch_checkpoints(job_id)
 
     @app.get(
-        (
-            "/smes/{sme_id}/documents/{document_id}"
-            "/processing-jobs/latest"
-        ),
+        ("/smes/{sme_id}/documents/{document_id}/processing-jobs/latest"),
         response_model=DocumentProcessingJob | None,
     )
     def get_latest_document_processing_job(
@@ -1291,9 +1246,7 @@ def create_app(
             document_id=document_id,
             sme_id=sme_id,
         )
-        return repository.get_latest_document_processing_job(
-            document_id
-        )
+        return repository.get_latest_document_processing_job(document_id)
 
     @app.get(
         "/smes/{sme_id}/documents/{document_id}/processing-jobs/{job_id}",
@@ -1354,11 +1307,7 @@ def create_app(
         ],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_sme_permission(
-                    ApplicationPermission.MANAGE_DOCUMENTS
-                )
-            ),
+            Depends(require_sme_permission(ApplicationPermission.MANAGE_DOCUMENTS)),
         ],
     ) -> DocumentProcessingJob:
         """Retry failed work without creating an unbounded job chain."""
@@ -1386,9 +1335,7 @@ def create_app(
                 detail="Only a failed document processing job can be retried.",
             )
 
-        if (
-            job.attempt_count >= job.max_attempts
-        ):
+        if job.attempt_count >= job.max_attempts:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Document processing job exhausted its retry limit.",
@@ -1413,24 +1360,18 @@ def create_app(
         ],
         principal: Annotated[
             AuthPrincipal,
-            Depends(
-                require_permission(ApplicationPermission.VALIDATE_EVIDENCE)
-            ),
+            Depends(require_permission(ApplicationPermission.VALIDATE_EVIDENCE)),
         ],
     ) -> EvidenceItem:
         try:
-            evidence = GreenSMERepository(
-                session
-            ).get_evidence(evidence_id)
+            evidence = GreenSMERepository(session).get_evidence(evidence_id)
 
             _require_sme_access(
                 principal,
                 evidence.sme_id,
             )
 
-            return GreenSMERepository(
-                session
-            ).set_evidence_validation(
+            return GreenSMERepository(session).set_evidence_validation(
                 evidence_id=evidence_id,
                 status=request.status,
                 actor_id=principal.user_id,
@@ -1452,8 +1393,7 @@ def _require_application_transition_role(
     """Prevent actors from selecting lifecycle states they do not own."""
 
     allowed_targets = {
-        ApplicationRole.ADMIN: set(ApplicationStatus)
-        - {ApplicationStatus.PUBLISHED},
+        ApplicationRole.ADMIN: set(ApplicationStatus) - {ApplicationStatus.PUBLISHED},
         ApplicationRole.REVIEWER: {
             ApplicationStatus.UNDER_REVIEW,
             ApplicationStatus.CHANGES_REQUESTED,
@@ -1468,10 +1408,7 @@ def _require_application_transition_role(
     if target_status not in allowed_targets.get(role, set()):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "The authenticated role cannot select this "
-                "application status."
-            ),
+            detail=("The authenticated role cannot select this application status."),
         )
 
 
@@ -1532,9 +1469,7 @@ def _restore_deleted_document(
         content=content,
     )
     if restored_key != registration.storage_key:
-        raise DocumentStorageError(
-            "Deleted document storage could not be restored consistently."
-        )
+        raise DocumentStorageError("Deleted document storage could not be restored consistently.")
 
 
 def _require_sme_access(
@@ -1546,9 +1481,7 @@ def _require_sme_access(
     if not principal.can_access_sme(sme_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "The authenticated user cannot access this SME."
-            ),
+            detail=("The authenticated user cannot access this SME."),
         )
 
 

@@ -27,6 +27,7 @@ import type {
 import {
   createPreviewSME,
   deletePreviewDocument,
+  deletePreviewAssessmentRun,
   deletePreviewSME,
   getPreviewApplication,
   createPreviewAssessment,
@@ -885,5 +886,20 @@ export const api = {
             encodeURIComponent(runId)
           }`,
         )
+  ),
+
+  deleteAssessmentRun: (
+    runId: string,
+    reason: string,
+  ) => (
+    isPreviewMode
+      ? deletePreviewAssessmentRun(runId)
+      : authenticatedRequest(
+          `/assessments/runs/${encodeURIComponent(runId)}`,
+          {
+            method: 'DELETE',
+            body: JSON.stringify({ reason }),
+          },
+        ).then(() => undefined)
   ),
 }
