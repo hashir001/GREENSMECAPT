@@ -8,18 +8,28 @@ from pydantic import ValidationError
 from greensmecapt.document_intelligence.semantics.intelligence import (
     MetricInstruction,
     SemanticExtractionRequest,
+    SemanticProviderError,
     SemanticSourceSegment,
     VertexGeminiProviderConfiguration,
     VertexGeminiSemanticProvider,
 )
 
 
+class _ProviderStatusError(Exception):
+    def __init__(self, code: int) -> None:
+        super().__init__(f"provider status {code}")
+        self.code = code
+
+
 class _Models:
-    def __init__(self) -> None:
+    def __init__(self, *, error: Exception | None = None) -> None:
         self.calls: list[dict[str, object]] = []
+        self.error = error
 
     def generate_content(self, **kwargs):
         self.calls.append(kwargs)
+        if self.error is not None:
+            raise self.error
         return SimpleNamespace(
             parsed={
                 "claims": [
@@ -79,6 +89,25 @@ def test_vertex_provider_returns_validated_structured_output() -> None:
 
     assert output.claims[0].raw_number == 1250
     assert models.calls[0]["model"] == "gemini-2.5-flash"
+    config = models.calls[0]["config"]
+    assert config["thinking_config"] == {"thinking_budget": 0}
+    assert config["response_mime_type"] == "application/json"
+    assert isinstance(config["response_schema"], dict)
+    assert "additionalProperties" not in str(config["response_schema"])
+
+
+def test_vertex_provider_translates_access_denial() -> None:
+    models = _Models(error=_ProviderStatusError(403))
+    provider = VertexGeminiSemanticProvider(
+        VertexGeminiProviderConfiguration(
+            project_id="project",
+            allow_remote=True,
+        ),
+        client=SimpleNamespace(models=models),
+    )
+
+    with pytest.raises(SemanticProviderError, match=r"roles/aiplatform\.user"):
+        provider.extract(_request())
 
 
 def test_vertex_configuration_requires_remote_approval() -> None:
