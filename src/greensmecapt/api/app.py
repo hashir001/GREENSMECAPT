@@ -28,11 +28,11 @@ from greensmecapt.api.configuration import (
     cors_origins_from_environment,
     validate_deployment_environment,
 )
-from greensmecapt.assessment.workflow import AssessmentWorkflow
 from greensmecapt.assessment.financial import (
     FinancialAssessmentPolicy,
     FinancialObservation,
 )
+from greensmecapt.assessment.workflow import AssessmentWorkflow
 from greensmecapt.document_intelligence.semantics.intelligence import (
     SemanticProviderConnection,
     SemanticProviderError,
@@ -420,7 +420,8 @@ def create_app(
                 ApplicationStatus.WITHDRAWN,
             }:
                 raise PersistenceConflictError(
-                    "Financial information cannot be changed after final approval, publication, archival or withdrawal."
+                    "Financial information cannot be changed after final "
+                    "approval, publication, archival or withdrawal."
                 )
             return FinancialSubmissionRepository(session).save_draft(
                 sme_id=sme_id,
@@ -879,18 +880,20 @@ def create_app(
         """Permanently purge an SME and all associated platform data."""
 
         repository = GreenSMERepository(session)
-        backups: list[tuple[StoredDocumentRegistration, bytes]] = []
+        backups: list[tuple[StoredDocumentRegistration, bytes | None]] = []
         storage_deleted: list[StoredDocumentRegistration] = []
         try:
             record = repository.get_record(sme_id)
             for document in record.documents:
                 registration = repository.get_stored_document(document.document_id)
-                backups.append(
-                    (
-                        registration,
-                        storage_backend.read(registration.storage_key),
-                    )
-                )
+                try:
+                    content = storage_backend.read(registration.storage_key)
+                except DocumentStorageError:
+                    # Legacy rows may point to an already-missing object or an
+                    # old key format. That must not make the database record
+                    # impossible to purge.
+                    content = None
+                backups.append((registration, content))
             registrations = DestructiveMutationRepository(session).purge_sme(
                 sme_id=sme_id,
                 actor_id=principal.user_id,
@@ -899,8 +902,14 @@ def create_app(
                 commit=False,
             )
             for registration in registrations:
-                storage_backend.delete(registration.storage_key)
-                storage_deleted.append(registration)
+                try:
+                    storage_backend.delete(registration.storage_key)
+                    storage_deleted.append(registration)
+                except DocumentStorageError:
+                    # Hard deletion remains possible for legacy/orphaned
+                    # storage metadata. Current valid objects are still
+                    # removed normally.
+                    pass
             session.commit()
             return Response(status_code=status.HTTP_204_NO_CONTENT)
         except PersistenceNotFoundError as error:
@@ -913,7 +922,7 @@ def create_app(
             session.rollback()
             deleted_keys = {registration.storage_key for registration in storage_deleted}
             for registration, content in backups:
-                if registration.storage_key in deleted_keys:
+                if content is not None and registration.storage_key in deleted_keys:
                     _restore_deleted_document(
                         storage_backend=storage_backend,
                         registration=registration,
@@ -928,7 +937,7 @@ def create_app(
             session.rollback()
             deleted_keys = {registration.storage_key for registration in storage_deleted}
             for registration, content in backups:
-                if registration.storage_key in deleted_keys:
+                if content is not None and registration.storage_key in deleted_keys:
                     _restore_deleted_document(
                         storage_backend=storage_backend,
                         registration=registration,

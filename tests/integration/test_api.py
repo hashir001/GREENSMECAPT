@@ -4,6 +4,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from greensmecapt.api import create_app
 from greensmecapt.security import (
@@ -174,6 +175,14 @@ class DeleteThenFailStorage(LocalDocumentStorage):
     def delete(self, storage_key: str) -> None:
         super().delete(storage_key)
         raise DocumentStorageError("Simulated post-delete failure.")
+
+
+class UnreadableLegacyStorage(LocalDocumentStorage):
+    """Represent legacy metadata whose source object can no longer be read."""
+
+    def read(self, storage_key: str) -> bytes:
+        del storage_key
+        raise DocumentStorageError("Legacy source object is unavailable.")
 
 
 def _create_sme(client: TestClient) -> None:
@@ -816,6 +825,74 @@ def test_admin_purges_sme_documents_and_storage(
     assert deleted.status_code == 204
     assert missing.status_code == 404
     assert not (tmp_path / "documents" / storage_key).exists()
+
+
+def test_admin_purge_tolerates_unreadable_legacy_storage(
+    tmp_path: Path,
+) -> None:
+    storage = UnreadableLegacyStorage(tmp_path / "documents")
+    with _client(tmp_path, storage) as client:
+        _create_sme(client)
+        upload = client.post(
+            "/smes/sme_001/documents",
+            headers=ADMIN_HEADERS,
+            data={
+                "document_type": "sustainability_report",
+                "expected_application_revision": "1",
+            },
+            files={"file": ("legacy.txt", b"Old evidence.", "text/plain")},
+        )
+        deleted = client.request(
+            "DELETE",
+            "/smes/sme_001",
+            headers=ADMIN_HEADERS,
+            json={
+                "expected_application_revision": upload.json()["application"]["revision"],
+                "reason": "Legacy demo cleanup",
+            },
+        )
+
+    assert deleted.status_code == 204
+
+
+def test_admin_purge_removes_superseded_profile_rows(
+    tmp_path: Path,
+) -> None:
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        with client.app.state.database.session() as session:
+            session.execute(text(
+                "create table sme_assessment_profiles ("
+                "sme_id text primary key, profile_version integer not null, "
+                "context_json text not null, responses_json text not null, "
+                "approved_by text not null, created_at text, updated_at text)"
+            ))
+            session.execute(
+                text(
+                    "insert into sme_assessment_profiles "
+                    "(sme_id, profile_version, context_json, responses_json, approved_by) "
+                    "values (:sme_id, 1, '{}', '[]', 'legacy-reviewer')"
+                ),
+                {"sme_id": "sme_001"},
+            )
+            session.commit()
+
+        deleted = client.request(
+            "DELETE",
+            "/smes/sme_001",
+            headers=ADMIN_HEADERS,
+            json={
+                "expected_application_revision": 1,
+                "reason": "Remove superseded profile",
+            },
+        )
+        with client.app.state.database.session() as session:
+            legacy_count = session.execute(
+                text("select count(*) from sme_assessment_profiles")
+            ).scalar_one()
+
+    assert deleted.status_code == 204
+    assert legacy_count == 0
 
 
 def test_investor_cannot_upload_sme_document(

@@ -2,6 +2,7 @@
 
 import json
 
+from sqlalchemy import inspect, text
 from sqlmodel import Session, select
 
 from greensmecapt.domain import DocumentJobStatus, DocumentProcessingStatus
@@ -249,6 +250,21 @@ class DestructiveMutationRepository:
         for row in revisions:
             self._session.delete(row)
 
+        # Profiles created before the immutable-revision migration live in a
+        # superseded table that is intentionally no longer mapped by SQLModel.
+        # Explicitly clear it so legacy demo records cannot block a hard purge.
+        legacy_profiles_deleted = 0
+        bind = self._session.get_bind()
+        if inspect(bind).has_table("sme_assessment_profiles"):
+            result = self._session.execute(
+                text(
+                    "delete from sme_assessment_profiles "
+                    "where sme_id = :sme_id"
+                ),
+                {"sme_id": sme_id},
+            )
+            legacy_profiles_deleted = result.rowcount or 0
+
         financial_submission = self._session.exec(
             select(FinancialSubmissionRow).where(FinancialSubmissionRow.sme_id == sme_id)
         ).first()
@@ -312,6 +328,7 @@ class DestructiveMutationRepository:
                         "deleted_evidence": deleted_evidence,
                         "deleted_jobs": deleted_jobs,
                         "deleted_profile_revisions": len(revisions),
+                        "deleted_legacy_profiles": legacy_profiles_deleted,
                         "deleted_financial_submission": financial_submission is not None,
                         "deleted_assessment_runs": affected_run_ids,
                     },
