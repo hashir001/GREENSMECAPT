@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ChevronRight, Plus, Trash2, Users } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronRight, Eye, Plus, Trash2, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -58,6 +58,13 @@ export function AssessmentsPage() {
           <p>Every completed comparison remains reproducible and available for review.</p>
         </div>
         <div className="page-heading__actions">
+          <Link
+            className="secondary-button"
+            to="/assessments/saved-comparison"
+          >
+            <Eye size={17} />
+            View saved comparison
+          </Link>
           {canRunAssessments && (
             <Link
               className="secondary-button"
