@@ -122,7 +122,9 @@ class FinancialSubmissionRepository:
             self._session.add(row)
         else:
             if expected_revision != row.revision:
-                raise PersistenceConflictError("The financial submission changed after it was loaded.")
+                raise PersistenceConflictError(
+                    "The financial submission changed after it was loaded."
+                )
             if row.status not in {
                 FinancialSubmissionStatus.DRAFT.value,
                 FinancialSubmissionStatus.CHANGES_REQUESTED.value,
@@ -151,7 +153,9 @@ class FinancialSubmissionRepository:
             FinancialSubmissionStatus.DRAFT.value,
             FinancialSubmissionStatus.CHANGES_REQUESTED.value,
         }:
-            raise PersistenceConflictError("Only an editable financial submission can be submitted.")
+            raise PersistenceConflictError(
+                "Only an editable financial submission can be submitted."
+            )
         if not _deserialize(row.observations_json):
             raise ValueError("Add at least one financial observation before submitting.")
         now = _utc_now()
