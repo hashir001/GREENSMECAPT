@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable
 from io import BytesIO
-import logging
 from threading import Lock
 from typing import Any
 
