@@ -215,7 +215,7 @@ export function DocumentIntelligencePanel({
         <IntelligenceMetric icon={Table2} label="Structured tables" value={manifest?.table_page_count ?? '—'} detail="pages with preserved rows" />
         <IntelligenceMetric icon={Sparkles} label="Visual regions" value={manifest?.visual_page_count ?? '—'} detail={`${visualDecisions.length} routed decisions`} />
         <IntelligenceMetric icon={FileSearch} label="Evidence" value={processing?.state.evidence_count ?? 0} detail={`${report?.rejected_intelligent_claim_count ?? 0} rejected AI proposals`} />
-        <IntelligenceMetric icon={Layers3} label="Needs review" value={reviewPages} detail="unreadable or visual pages" />
+        <IntelligenceMetric icon={Layers3} label="Page exceptions" value={reviewPages} detail="unreadable or visually uncertain pages" />
       </div>
 
       {!report && canProcess && status !== 'running' && status !== 'queued' && (
