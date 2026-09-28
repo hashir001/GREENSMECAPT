@@ -11,11 +11,7 @@ export function usePermissions() {
   const effectiveRole: ApplicationRole | null = isPreviewMode ? 'reviewer' : role
   return {
     role: effectiveRole,
-    homePath: effectiveRole === 'sme_user'
-      ? '/companies'
-      : effectiveRole === 'expert'
-        ? '/settings'
-        : '/',
+    homePath: '/',
     canViewDashboard: isPreviewMode || reviewerRole || role === 'investor',
     canViewSMEs: isPreviewMode || documentRole,
     canViewAssessments: isPreviewMode || reviewerRole || role === 'investor',

@@ -8,6 +8,9 @@ import type {
   DocumentDeletionResponse,
   DocumentUploadResponse,
   EvidenceItem,
+  FinancialObservation,
+  FinancialPolicy,
+  FinancialSubmission,
   ApplicationRole,
   ManagedUser,
   SME,
@@ -387,6 +390,58 @@ async function runPreviewDocumentJob(
 }
 
 export const api = {
+  getFinancialConfiguration: () => apiRequest<FinancialPolicy>('/financial/configuration'),
+
+  getFinancialSubmission: (smeId: string) => apiRequest<FinancialSubmission | null>(
+    `/smes/${encodeURIComponent(smeId)}/financial-submission`,
+  ),
+
+  listFinancialSubmissions: () => apiRequest<FinancialSubmission[]>(
+    '/financial/submissions',
+  ),
+
+  saveFinancialSubmission: (
+    smeId: string,
+    expectedRevision: number | null,
+    observations: FinancialObservation[],
+  ) => apiRequest<FinancialSubmission>(
+    `/smes/${encodeURIComponent(smeId)}/financial-submission`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        expected_revision: expectedRevision,
+        observations,
+      }),
+    },
+  ),
+
+  submitFinancialSubmission: (smeId: string, expectedRevision: number) => (
+    apiRequest<FinancialSubmission>(
+      `/smes/${encodeURIComponent(smeId)}/financial-submission/submit`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ expected_revision: expectedRevision }),
+      },
+    )
+  ),
+
+  reviewFinancialSubmission: (
+    smeId: string,
+    expectedRevision: number,
+    decision: 'approved' | 'changes_requested',
+    note?: string,
+  ) => apiRequest<FinancialSubmission>(
+    `/smes/${encodeURIComponent(smeId)}/financial-submission/review`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        expected_revision: expectedRevision,
+        decision,
+        note: note || null,
+      }),
+    },
+  ),
+
   getSystemCapabilities: () => (
     isPreviewMode
       ? Promise.resolve<SystemCapabilities>({

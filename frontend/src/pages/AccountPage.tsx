@@ -35,6 +35,7 @@ const roles: ApplicationRole[] = [
   'investor',
   'sme_user',
 ]
+const controlledInviteRoles: ApplicationRole[] = ['reviewer', 'expert']
 
 function assignmentsFromInput(value: string): string[] {
   return [...new Set(
@@ -63,7 +64,6 @@ export function AccountPage() {
   const [identityNotice, setIdentityNotice] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<ApplicationRole>('reviewer')
-  const [inviteAssignments, setInviteAssignments] = useState('')
   const rawAssignments = user?.app_metadata.sme_ids
   const assignments = Array.isArray(rawAssignments)
     ? rawAssignments.filter((value): value is string => typeof value === 'string')
@@ -127,16 +127,13 @@ export function AccountPage() {
       const invited = await api.inviteManagedUser(
         inviteEmail,
         inviteRole,
-        inviteRole === 'sme_user'
-          ? assignmentsFromInput(inviteAssignments)
-          : [],
+        [],
       )
       setManagedUsers((current) => [
         ...current.filter((item) => item.user_id !== invited.user_id),
         invited,
       ].sort((left, right) => left.email.localeCompare(right.email)))
       setInviteEmail('')
-      setInviteAssignments('')
       setIdentityNotice(`Invitation sent to ${invited.email}.`)
     } catch (caught) {
       setIdentityError(
@@ -370,7 +367,7 @@ export function AccountPage() {
             <div className="panel__header">
               <div>
                 <span className="eyebrow">Supabase access control</span>
-                <h2>Invite and assign users</h2>
+                <h2>Controlled staff and expert access</h2>
               </div>
               <span className="account-card__icon"><Users size={21} /></span>
             </div>
@@ -392,20 +389,10 @@ export function AccountPage() {
                   value={inviteRole}
                   onChange={(event) => setInviteRole(event.target.value as ApplicationRole)}
                 >
-                  {roles.map((item) => (
+                  {controlledInviteRoles.map((item) => (
                     <option key={item} value={item}>{humanize(item)}</option>
                   ))}
                 </select>
-              </label>
-              <label>
-                <span>SME IDs {inviteRole === 'sme_user' ? '(required)' : '(not used)'}</span>
-                <input
-                  value={inviteAssignments}
-                  onChange={(event) => setInviteAssignments(event.target.value)}
-                  placeholder="sme_001, sme_002"
-                  disabled={inviteRole !== 'sme_user'}
-                  required={inviteRole === 'sme_user'}
-                />
               </label>
               <button className="primary-button" type="submit" disabled={identityLoading}>
                 <UserPlus size={15} />

@@ -358,6 +358,36 @@ export type FinancialObservation = {
   narrative?: string
 }
 
+export type FinancialSubmissionStatus =
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'changes_requested'
+  | 'approved'
+
+export type FinancialSubmission = {
+  submission_id: string
+  sme_id: string
+  status: FinancialSubmissionStatus
+  revision: number
+  observations: FinancialObservation[]
+  submitted_by: string | null
+  reviewed_by: string | null
+  review_note: string | null
+  created_at: string
+  updated_at: string
+  submitted_at: string | null
+  reviewed_at: string | null
+}
+
+export type FinancialPolicy = {
+  policy_id: string
+  version: string
+  status: string
+  calibration_status: string
+  metrics: FinancialMetricDefinition[]
+}
+
 export type ReadinessFactorDefinition = {
   factor_id: string
   domain_id: string

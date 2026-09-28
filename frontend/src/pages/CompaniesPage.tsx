@@ -80,9 +80,9 @@ export function CompaniesPage() {
     <>
       <section className="page-heading">
         <div>
-          <span className="eyebrow">Company intelligence</span>
+          <span className="eyebrow">{permissions.role === 'investor' ? 'Published opportunities' : 'Company intelligence'}</span>
           <h1>SME portfolio</h1>
-          <p>Explore the companies, sectors and evidence records available to you.</p>
+          <p>{permissions.role === 'investor' ? 'Explore only reviewer-approved, published SME profiles.' : 'Explore the companies, sectors and evidence records available to you.'}</p>
         </div>
         {permissions.canCreateSMEs && (
           <button className="primary-button" type="button" onClick={() => setCreateOpen(true)}>
@@ -153,9 +153,11 @@ export function CompaniesPage() {
                     <span>{company.sector}</span>
                     <span><MapPin size={14} /> {company.jurisdiction}</span>
                   </div>
-                  <Link className="company-card__action" to={`/companies/${company.sme_id}`}>
-                    Open company record <ArrowUpRight size={16} />
-                  </Link>
+                  {permissions.role === 'investor'
+                    ? <span className="company-card__action">Published profile <StatusPill label="Approved" tone="positive" /></span>
+                    : <Link className="company-card__action" to={`/companies/${company.sme_id}`}>
+                        Open company record <ArrowUpRight size={16} />
+                      </Link>}
                 </article>
               ))}
         </div>

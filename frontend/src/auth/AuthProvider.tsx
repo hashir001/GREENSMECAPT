@@ -48,6 +48,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (error) throw error
       },
+      signUp: async (input) => {
+        if (!supabase) throw new Error('Supabase is not configured.')
+
+        const { data, error } = await supabase.auth.signUp({
+          email: input.email,
+          password: input.password,
+          options: {
+            data: {
+              greensmecapt_requested_role: input.role,
+              company_name: input.companyName,
+              company_sector: input.companySector,
+              company_jurisdiction: input.companyJurisdiction,
+            },
+          },
+        })
+
+        if (error) throw error
+        if (data.session) await supabase.auth.refreshSession()
+        return { requiresEmailConfirmation: data.session === null }
+      },
       requestPasswordReset: async (email: string) => {
         if (!supabase) throw new Error('Supabase is not configured.')
 

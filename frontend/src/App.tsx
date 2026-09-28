@@ -54,6 +54,11 @@ const AccountPage = lazy(() =>
     default: module.AccountPage,
   })),
 )
+const FinancialPage = lazy(() =>
+  import('./pages/FinancialPage').then((module) => ({
+    default: module.FinancialPage,
+  })),
+)
 
 function ApprovedComparisonRoute() {
   const { canCompareApprovedProfiles } = usePermissions()
@@ -92,9 +97,6 @@ function RoleRoute({
 }
 
 function HomeRoute() {
-  const { homePath } = usePermissions()
-
-  if (homePath !== '/') return <Navigate to={homePath} replace />
   return <DashboardPage />
 }
 
@@ -120,7 +122,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomeRoute />} />
           <Route path="/companies" element={
-            <RoleRoute roles={['admin', 'reviewer', 'sme_user']}>
+            <RoleRoute roles={['admin', 'reviewer', 'investor', 'sme_user']}>
               <CompaniesPage />
             </RoleRoute>
           } />
@@ -144,6 +146,11 @@ export default function App() {
           <Route path="/evidence" element={
             <RoleRoute roles={['admin', 'reviewer']}>
               <EvidenceReviewPage />
+            </RoleRoute>
+          } />
+          <Route path="/financial" element={
+            <RoleRoute roles={['admin', 'reviewer', 'sme_user']}>
+              <FinancialPage />
             </RoleRoute>
           } />
           <Route path="/settings" element={<AccountPage />} />

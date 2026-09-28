@@ -6,6 +6,8 @@ import {
   Layers3,
   RefreshCw,
   ShieldCheck,
+  Landmark,
+  FileCheck2,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -14,10 +16,13 @@ import { MetricCard } from '../components/MetricCard'
 import { RankingChart } from '../components/RankingChart'
 import { StatusPill } from '../components/StatusPill'
 import { api } from '../lib/api'
+import { usePermissions } from '../auth/usePermissions'
 import type {
   AssessmentRunRecord,
   AssessmentRunSummary,
   SME,
+  SMEApplication,
+  FinancialSubmission,
 } from '../types/api'
 
 type DashboardState = {
@@ -37,6 +42,14 @@ function shortDate(value: string): string {
 }
 
 export function DashboardPage() {
+  const { role } = usePermissions()
+
+  if (role === 'sme_user') return <SMEDashboard />
+  if (role === 'expert') return <ExpertDashboard />
+  return <PortfolioDashboard role={role} />
+}
+
+function PortfolioDashboard({ role }: { role: string | null }) {
   const [state, setState] = useState(initialState)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -94,8 +107,8 @@ export function DashboardPage() {
     <>
       <section className="page-heading">
         <div>
-          <span className="eyebrow">Portfolio command centre</span>
-          <h1>Investment overview</h1>
+          <span className="eyebrow">{role === 'investor' ? 'Investor workspace' : role === 'reviewer' ? 'Reviewer workspace' : 'Platform administration'}</span>
+          <h1>{role === 'investor' ? 'Published opportunities' : role === 'reviewer' ? 'Review & assessment overview' : 'Platform overview'}</h1>
           <p>
             Evidence quality, assessment coverage and ranked opportunities in one view.
           </p>
@@ -278,6 +291,54 @@ export function DashboardPage() {
       </section>
     </>
   )
+}
+
+function SMEDashboard() {
+  const [company, setCompany] = useState<SME | null>(null)
+  const [application, setApplication] = useState<SMEApplication | null>(null)
+  const [financial, setFinancial] = useState<FinancialSubmission | null>(null)
+  const [documentCount, setDocumentCount] = useState(0)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    void api.listSMEs().then(async (companies) => {
+      const owned = companies[0] ?? null
+      setCompany(owned)
+      if (!owned) return
+      const [record, app, finance] = await Promise.all([
+        api.getSMERecord(owned.sme_id),
+        api.getSMEApplication(owned.sme_id),
+        api.getFinancialSubmission(owned.sme_id),
+      ])
+      setDocumentCount(record.documents.length)
+      setApplication(app)
+      setFinancial(finance)
+    }).catch((caught: unknown) => {
+      setError(caught instanceof Error ? caught.message : 'Your workspace could not be loaded.')
+    })
+  }, [])
+
+  return <>
+    <section className="page-heading"><div><span className="eyebrow">SME workspace</span><h1>{company?.legal_name ?? 'Your company'}</h1><p>Complete your evidence, financial information and application for review.</p></div></section>
+    {error && <div className="error-banner">{error}</div>}
+    <section className="metric-grid">
+      <MetricCard icon={Building2} label="Application" value={application?.status.replaceAll('_', ' ') ?? 'Loading'} detail="Current review stage" />
+      <MetricCard icon={FileCheck2} label="Source documents" value={String(documentCount)} detail="Uploaded evidence files" tone="blue" />
+      <MetricCard icon={Landmark} label="Financial review" value={financial?.status.replaceAll('_', ' ') ?? 'Not started'} detail="Separate from environmental scoring" tone="gold" />
+      <MetricCard icon={ShieldCheck} label="Evidence control" value="Human reviewed" detail="No automatic approval" tone="plum" />
+    </section>
+    <section className="dashboard-grid">
+      <article className="panel"><div className="panel__header"><div><span className="eyebrow">Company record</span><h2>Documents and evidence</h2></div></div><p className="dashboard-guidance">Upload source documents, inspect extracted facts and submit the application when the record is ready.</p>{company && <Link className="primary-button" to={`/companies/${company.sme_id}`}>Open company workspace <ArrowUpRight size={15} /></Link>}</article>
+      <article className="panel"><div className="panel__header"><div><span className="eyebrow">Investment information</span><h2>Financial submission</h2></div></div><p className="dashboard-guidance">Enter business-health and funding-request facts with a source for every reported value.</p><Link className="secondary-button" to="/financial">Open financial workspace <ArrowUpRight size={15} /></Link></article>
+    </section>
+  </>
+}
+
+function ExpertDashboard() {
+  return <>
+    <section className="page-heading"><div><span className="eyebrow">Expert workspace</span><h1>DEMATEL calibration</h1><p>Your expert interface is isolated from SME, reviewer and investor data.</p></div></section>
+    <section className="panel empty-state"><span className="empty-state__icon"><Layers3 size={21} /></span><strong>Expert study awaiting activation</strong><p>The confirmed four driver domains and seven operational subdrivers are ready. Pairwise judgments stay unavailable until the expert study is approved—no values are fabricated.</p></section>
+  </>
 }
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {

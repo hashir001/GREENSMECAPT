@@ -41,6 +41,7 @@ from greensmecapt.persistence import (
     AssessmentRunRecord,
     AssessmentRunRepository,
     AssessmentRunSummary,
+    FinancialSubmissionRepository,
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
@@ -249,11 +250,19 @@ def build_assessment_router(
                     "assessment profile can be approved."
                 )
             record = GreenSMERepository(session).get_record(sme_id)
+            approved_financial = FinancialSubmissionRepository(
+                session
+            ).approved_observations(sme_id)
+            financial_observations = (
+                approved_financial
+                if approved_financial
+                else submission.financial_observations
+            )
             workflow.prepare(
                 record=record,
                 context=submission.context,
                 responses=submission.responses,
-                financial_observations=submission.financial_observations,
+                financial_observations=financial_observations,
                 readiness_observations=submission.readiness_observations,
                 metric_contexts=submission.metric_contexts,
             )
@@ -266,7 +275,7 @@ def build_assessment_router(
                 financial_policy=workflow.financial_policy,
                 readiness_specification=workflow.readiness_specification,
                 metric_catalog=workflow.metric_catalog,
-                financial_observations=submission.financial_observations,
+                financial_observations=financial_observations,
                 readiness_observations=submission.readiness_observations,
                 metric_contexts=submission.metric_contexts,
                 actor_id=principal.user_id,

@@ -29,6 +29,10 @@ from greensmecapt.api.configuration import (
     validate_deployment_environment,
 )
 from greensmecapt.assessment.workflow import AssessmentWorkflow
+from greensmecapt.assessment.financial import (
+    FinancialAssessmentPolicy,
+    FinancialObservation,
+)
 from greensmecapt.document_intelligence.semantics.intelligence import (
     SemanticProviderConnection,
     SemanticProviderError,
@@ -54,6 +58,9 @@ from greensmecapt.persistence import (
     AssessmentProfileRepository,
     Database,
     DestructiveMutationRepository,
+    FinancialSubmission,
+    FinancialSubmissionRepository,
+    FinancialSubmissionStatus,
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
@@ -236,6 +243,25 @@ class UserInvitationRequest(UserAccessRequest):
     )
 
 
+class FinancialSubmissionWriteRequest(BaseModel):
+    """Save the SME's current financial observations."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    expected_revision: int | None = Field(default=None, ge=1)
+    observations: tuple[FinancialObservation, ...]
+
+
+class FinancialSubmissionTransitionRequest(BaseModel):
+    """Revision-check a financial submit or review decision."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    expected_revision: int = Field(ge=1)
+    decision: FinancialSubmissionStatus | None = None
+    note: str | None = Field(default=None, min_length=1, max_length=2000)
+
+
 def create_app(
     *,
     database_url: str | None = None,
@@ -333,6 +359,147 @@ def create_app(
             visual_provider_configured=(processing_service.visual_provider_configured),
             identity_admin_configured=identity_service.configured,
         )
+
+    @app.get("/financial/configuration", response_model=FinancialAssessmentPolicy)
+    def get_financial_configuration(
+        principal: Annotated[AuthPrincipal, Depends(get_current_principal)],
+    ) -> FinancialAssessmentPolicy:
+        """Expose the versioned fields without inventing a financial score."""
+
+        del principal
+        return app.state.assessment_workflow.financial_policy
+
+    @app.get(
+        "/financial/submissions",
+        response_model=tuple[FinancialSubmission, ...],
+    )
+    def list_financial_submissions(
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_permission(ApplicationPermission.VALIDATE_EVIDENCE)),
+        ],
+    ) -> tuple[FinancialSubmission, ...]:
+        del principal
+        return FinancialSubmissionRepository(session).list_for_review()
+
+    @app.get(
+        "/smes/{sme_id}/financial-submission",
+        response_model=FinancialSubmission | None,
+    )
+    def get_financial_submission(
+        sme_id: str,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[AuthPrincipal, Depends(get_current_principal)],
+    ) -> FinancialSubmission | None:
+        _require_sme_access(principal, sme_id)
+        try:
+            return FinancialSubmissionRepository(session).get(sme_id)
+        except PersistenceNotFoundError:
+            return None
+
+    @app.put(
+        "/smes/{sme_id}/financial-submission",
+        response_model=FinancialSubmission,
+    )
+    def save_financial_submission(
+        sme_id: str,
+        request: FinancialSubmissionWriteRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_sme_permission(ApplicationPermission.EDIT_SME)),
+        ],
+    ) -> FinancialSubmission:
+        try:
+            application = ApplicationRepository(session).get(sme_id)
+            if application.status in {
+                ApplicationStatus.APPROVED,
+                ApplicationStatus.PUBLISHED,
+                ApplicationStatus.ARCHIVED,
+                ApplicationStatus.WITHDRAWN,
+            }:
+                raise PersistenceConflictError(
+                    "Financial information cannot be changed after final approval, publication, archival or withdrawal."
+                )
+            return FinancialSubmissionRepository(session).save_draft(
+                sme_id=sme_id,
+                observations=request.observations,
+                actor_id=principal.user_id,
+                expected_revision=request.expected_revision,
+            )
+        except PersistenceConflictError as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+    @app.post(
+        "/smes/{sme_id}/financial-submission/submit",
+        response_model=FinancialSubmission,
+    )
+    def submit_financial_submission(
+        sme_id: str,
+        request: FinancialSubmissionTransitionRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_sme_permission(ApplicationPermission.EDIT_SME)),
+        ],
+    ) -> FinancialSubmission:
+        try:
+            return FinancialSubmissionRepository(session).submit(
+                sme_id=sme_id,
+                actor_id=principal.user_id,
+                expected_revision=request.expected_revision,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+    @app.post(
+        "/smes/{sme_id}/financial-submission/review",
+        response_model=FinancialSubmission,
+    )
+    def review_financial_submission(
+        sme_id: str,
+        request: FinancialSubmissionTransitionRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_permission(ApplicationPermission.VALIDATE_EVIDENCE)),
+        ],
+    ) -> FinancialSubmission:
+        if request.decision is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="A financial review decision is required.",
+            )
+        try:
+            return FinancialSubmissionRepository(session).review(
+                sme_id=sme_id,
+                actor_id=principal.user_id,
+                expected_revision=request.expected_revision,
+                decision=request.decision,
+                note=request.note,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
 
     @app.get(
         "/admin/users",

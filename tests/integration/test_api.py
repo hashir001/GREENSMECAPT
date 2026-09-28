@@ -260,6 +260,47 @@ def test_non_admin_cannot_manage_users(tmp_path: Path) -> None:
     assert response.status_code == 403
 
 
+def test_sme_financial_submission_is_reviewed_separately(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        draft = client.put(
+            "/smes/sme_001/financial-submission",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_revision": None,
+                "observations": [
+                    {
+                        "observation_id": "finance_roa_001",
+                        "sme_id": "sme_001",
+                        "metric_id": "roa_percentage",
+                        "state": "unknown",
+                        "source_ids": [],
+                    }
+                ],
+            },
+        )
+        submitted = client.post(
+            "/smes/sme_001/financial-submission/submit",
+            headers=SME_ONE_HEADERS,
+            json={"expected_revision": draft.json()["revision"]},
+        )
+        reviewed = client.post(
+            "/smes/sme_001/financial-submission/review",
+            headers=REVIEWER_HEADERS,
+            json={
+                "expected_revision": submitted.json()["revision"],
+                "decision": "approved",
+            },
+        )
+
+    assert draft.status_code == 200
+    assert submitted.status_code == 200
+    assert submitted.json()["status"] == "submitted"
+    assert reviewed.status_code == 200
+    assert reviewed.json()["status"] == "approved"
+    assert reviewed.json()["observations"][0]["metric_id"] == "roa_percentage"
+
+
 def test_admin_cannot_remove_own_admin_access(tmp_path: Path) -> None:
     with _client(tmp_path) as client:
         response = client.patch(

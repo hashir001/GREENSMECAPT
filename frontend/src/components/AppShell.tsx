@@ -3,6 +3,7 @@ import {
   Building2,
   ChevronDown,
   FileSearch,
+  Landmark,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -20,10 +21,11 @@ import type { ApplicationRole } from '../types/api'
 import { Brand } from './Brand'
 
 const navigation = [
-  { label: 'Overview', path: '/', icon: LayoutDashboard, roles: ['admin', 'reviewer', 'investor'] },
-  { label: 'SME portfolio', path: '/companies', icon: Building2, roles: ['admin', 'reviewer', 'sme_user'] },
+  { label: 'Overview', path: '/', icon: LayoutDashboard, roles: ['admin', 'reviewer', 'expert', 'investor', 'sme_user'] },
+  { label: 'SME portfolio', path: '/companies', icon: Building2, roles: ['admin', 'reviewer', 'investor', 'sme_user'] },
   { label: 'Assessments', path: '/assessments', icon: BarChart3, roles: ['admin', 'reviewer', 'investor'] },
   { label: 'Evidence review', path: '/evidence', icon: FileSearch, roles: ['admin', 'reviewer'] },
+  { label: 'Financials', path: '/financial', icon: Landmark, roles: ['admin', 'reviewer', 'sme_user'] },
 ]
 
 function roleLabel(role: unknown): string {

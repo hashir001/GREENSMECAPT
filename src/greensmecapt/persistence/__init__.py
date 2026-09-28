@@ -21,6 +21,12 @@ from greensmecapt.persistence.assessment_runs import (
     AssessmentRunSummary,
 )
 from greensmecapt.persistence.database import Database
+from greensmecapt.persistence.financial_submissions import (
+    FinancialSubmission,
+    FinancialSubmissionRepository,
+    FinancialSubmissionRow,
+    FinancialSubmissionStatus,
+)
 from greensmecapt.persistence.mutations import DestructiveMutationRepository
 from greensmecapt.persistence.repository import (
     GreenSMERepository,
@@ -56,6 +62,10 @@ __all__ = [
     "DocumentProcessingJobRow",
     "DocumentProcessingRow",
     "EvidenceRow",
+    "FinancialSubmission",
+    "FinancialSubmissionRepository",
+    "FinancialSubmissionRow",
+    "FinancialSubmissionStatus",
     "GreenSMERepository",
     "PersistenceConflictError",
     "PersistenceNotFoundError",

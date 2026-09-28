@@ -14,6 +14,7 @@ from greensmecapt.persistence.assessment_profiles import (
     SMEAssessmentProfileRevisionRow,
 )
 from greensmecapt.persistence.assessment_runs import AssessmentRunRow
+from greensmecapt.persistence.financial_submissions import FinancialSubmissionRow
 from greensmecapt.persistence.repository import (
     PersistenceConflictError,
     PersistenceNotFoundError,
@@ -248,6 +249,12 @@ class DestructiveMutationRepository:
         for row in revisions:
             self._session.delete(row)
 
+        financial_submission = self._session.exec(
+            select(FinancialSubmissionRow).where(FinancialSubmissionRow.sme_id == sme_id)
+        ).first()
+        if financial_submission is not None:
+            self._session.delete(financial_submission)
+
         deleted_evidence = 0
         deleted_jobs = 0
         for document in documents:
@@ -305,6 +312,7 @@ class DestructiveMutationRepository:
                         "deleted_evidence": deleted_evidence,
                         "deleted_jobs": deleted_jobs,
                         "deleted_profile_revisions": len(revisions),
+                        "deleted_financial_submission": financial_submission is not None,
                         "deleted_assessment_runs": affected_run_ids,
                     },
                     sort_keys=True,
