@@ -334,18 +334,37 @@ def _page_segments(
         page.tables,
         start=1,
     ):
+        matrix = table.as_matrix()
+        header_text = " || ".join(
+            " | ".join(
+                value.strip()
+                for value in matrix[index]
+                if value.strip()
+            )
+            for index in table.header_row_indices
+            if 0 <= index < len(matrix)
+        )
+
         for row_index, row in enumerate(
-            table.as_matrix(),
+            matrix,
             start=1,
         ):
-            text = " | ".join(
+            row_text = " | ".join(
                 value.strip()
                 for value in row
                 if value.strip()
             )
 
-            if not text:
+            if not row_text:
                 continue
+
+            zero_based_row = row_index - 1
+            text = (
+                f"{header_text} || {row_text}"
+                if header_text
+                and zero_based_row not in table.header_row_indices
+                else row_text
+            )
 
             segments.append(
                 SemanticSourceSegment(
