@@ -20,6 +20,9 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     QualitativeInstruction,
     QualitativeValueType,
 )
+from greensmecapt.document_intelligence.structure import (
+    GoogleDocumentAIConfiguration,
+)
 from greensmecapt.document_intelligence.structure.paddle import (
     PaddleParserConfiguration,
     PaddleResourceProfile,
@@ -38,9 +41,7 @@ from greensmecapt.services.document_processing import (
 from greensmecapt.storage import DocumentStorage
 
 
-class DocumentProcessingConfigurationError(
-    ValueError
-):
+class DocumentProcessingConfigurationError(ValueError):
     """Raised when processing settings are incomplete."""
 
 
@@ -51,64 +52,40 @@ def build_document_processing_service(
 ) -> StoredDocumentProcessingService:
     """Build OCR, deterministic NLP and optional LLM extraction."""
 
-    configured_environment = (
-        environment
-        if environment is not None
-        else os.environ
-    )
+    configured_environment = environment if environment is not None else os.environ
     catalog_path = Path(
         configured_environment.get(
             "GREENSMECAPT_METRIC_CATALOG",
-            (
-                "config/"
-                "metric_catalog.development.json"
-            ),
+            ("config/metric_catalog.development.json"),
         )
     )
-    catalog = load_metric_catalog(
-        catalog_path
-    )
-    intelligent_service = (
-        _intelligent_service_from_environment(
-            configured_environment,
-            policy=load_policy(
-                Path(
-                    configured_environment.get(
-                        "GREENSMECAPT_ASSESSMENT_POLICY",
-                        "config/assessment_profiles.development.json",
-                    )
+    catalog = load_metric_catalog(catalog_path)
+    intelligent_service = _intelligent_service_from_environment(
+        configured_environment,
+        policy=load_policy(
+            Path(
+                configured_environment.get(
+                    "GREENSMECAPT_ASSESSMENT_POLICY",
+                    "config/assessment_profiles.development.json",
                 )
-            ),
-        )
+            )
+        ),
     )
-    reader_configuration = (
-        production_reader_configuration_from_environment(
-            configured_environment
-        )
-    )
+    reader_configuration = production_reader_configuration_from_environment(configured_environment)
 
     return StoredDocumentProcessingService(
         storage=storage,
-        reader=build_production_document_reader(
-            reader_configuration
-        ),
+        reader=build_production_document_reader(reader_configuration),
         semantic_extractor=HybridSemanticExtractor(
-            deterministic_extractor=(
-                SemanticMetricExtractor(catalog)
-            ),
+            deterministic_extractor=(SemanticMetricExtractor(catalog)),
             catalog=catalog,
-            intelligent_service=(
-                intelligent_service
-            ),
+            intelligent_service=(intelligent_service),
             configuration=(
                 HybridSemanticConfiguration(
                     require_intelligent_success=(
                         _environment_boolean(
                             configured_environment,
-                            (
-                                "GREENSMECAPT_"
-                                "SEMANTIC_REQUIRED"
-                            ),
+                            ("GREENSMECAPT_SEMANTIC_REQUIRED"),
                             default=False,
                         )
                     )
@@ -117,9 +94,7 @@ def build_document_processing_service(
         ),
         visual_service=VisualUnderstandingService(
             catalog=catalog,
-            provider=_visual_provider_from_environment(
-                configured_environment
-            ),
+            provider=_visual_provider_from_environment(configured_environment),
         ),
     )
 
@@ -129,58 +104,42 @@ def production_reader_configuration_from_environment(
 ) -> ProductionReaderConfiguration:
     """Build resource-aware OCR deployment settings."""
 
-    configured = (
-        environment
-        if environment is not None
-        else os.environ
-    )
+    configured = environment if environment is not None else os.environ
     raw_profile = configured.get(
         "GREENSMECAPT_PADDLE_PROFILE",
         PaddleResourceProfile.LOCAL_CPU.value,
     )
 
     try:
-        profile = PaddleResourceProfile(
-            raw_profile.strip().casefold()
-        )
+        profile = PaddleResourceProfile(raw_profile.strip().casefold())
     except ValueError as error:
-        allowed = ", ".join(
-            item.value
-            for item in PaddleResourceProfile
-        )
+        allowed = ", ".join(item.value for item in PaddleResourceProfile)
 
         raise DocumentProcessingConfigurationError(
-            "GREENSMECAPT_PADDLE_PROFILE must be "
-            f"one of: {allowed}."
+            f"GREENSMECAPT_PADDLE_PROFILE must be one of: {allowed}."
         ) from error
 
     cpu_threads = _environment_integer(
         configured,
         "GREENSMECAPT_PADDLE_CPU_THREADS",
-        default=(
-            2
-            if (
-                profile
-                is PaddleResourceProfile.LOCAL_CPU
-            )
-            else 4
-        ),
+        default=(2 if (profile is PaddleResourceProfile.LOCAL_CPU) else 4),
         minimum=1,
         maximum=64,
     )
-    paddle = (
-        PaddleParserConfiguration.for_profile(
-            profile,
-            device=configured.get(
-                "GREENSMECAPT_PADDLE_DEVICE",
-                "cpu",
-            ),
-            cpu_threads=cpu_threads,
-        )
+    paddle = PaddleParserConfiguration.for_profile(
+        profile,
+        device=configured.get(
+            "GREENSMECAPT_PADDLE_DEVICE",
+            "cpu",
+        ),
+        cpu_threads=cpu_threads,
     )
+
+    document_ai = _google_document_ai_configuration(configured)
 
     return ProductionReaderConfiguration(
         paddle=paddle,
+        google_document_ai=document_ai,
         pdf_render_dpi=_environment_integer(
             configured,
             "GREENSMECAPT_PDF_RENDER_DPI",
@@ -191,10 +150,7 @@ def production_reader_configuration_from_environment(
         enable_tesseract_fallback=(
             _environment_boolean(
                 configured,
-                (
-                    "GREENSMECAPT_"
-                    "TESSERACT_FALLBACK"
-                ),
+                ("GREENSMECAPT_TESSERACT_FALLBACK"),
                 default=True,
             )
         ),
@@ -214,13 +170,47 @@ def production_reader_configuration_from_environment(
         tesseract_timeout_seconds=(
             _environment_float(
                 configured,
-                (
-                    "GREENSMECAPT_"
-                    "TESSERACT_TIMEOUT_SECONDS"
-                ),
+                ("GREENSMECAPT_TESSERACT_TIMEOUT_SECONDS"),
                 default=30.0,
                 minimum_exclusive=0.0,
             )
+        ),
+    )
+
+
+def _google_document_ai_configuration(
+    environment: Mapping[str, str],
+) -> GoogleDocumentAIConfiguration | None:
+    provider = environment.get("GREENSMECAPT_STRUCTURED_OCR_PROVIDER", "paddle").strip().casefold()
+    if provider == "paddle":
+        return None
+    if provider != "google_document_ai":
+        raise DocumentProcessingConfigurationError(
+            "GREENSMECAPT_STRUCTURED_OCR_PROVIDER must be either 'paddle' or 'google_document_ai'."
+        )
+
+    names = {
+        "project_id": "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID",
+        "location": "GREENSMECAPT_GOOGLE_DOCUMENT_AI_LOCATION",
+        "processor_id": "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROCESSOR_ID",
+    }
+    values = {field: environment.get(name, "").strip() for field, name in names.items()}
+    missing = [name for field, name in names.items() if not values[field]]
+    if missing:
+        raise DocumentProcessingConfigurationError(
+            "Google Document AI configuration is missing: " + ", ".join(missing)
+        )
+
+    return GoogleDocumentAIConfiguration(
+        **values,
+        processor_version=(
+            environment.get("GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROCESSOR_VERSION") or None
+        ),
+        timeout_seconds=_environment_float(
+            environment,
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_TIMEOUT_SECONDS",
+            default=120.0,
+            minimum_exclusive=0.0,
         ),
     )
 
@@ -230,12 +220,8 @@ def _intelligent_service_from_environment(
     *,
     policy: AssessmentPolicy | None = None,
 ) -> IntelligentSemanticExtractionService | None:
-    endpoint = environment.get(
-        "GREENSMECAPT_SEMANTIC_ENDPOINT"
-    )
-    model = environment.get(
-        "GREENSMECAPT_SEMANTIC_MODEL"
-    )
+    endpoint = environment.get("GREENSMECAPT_SEMANTIC_ENDPOINT")
+    model = environment.get("GREENSMECAPT_SEMANTIC_MODEL")
 
     if endpoint is None and model is None:
         return None
@@ -251,20 +237,10 @@ def _intelligent_service_from_environment(
         OpenAICompatibleProviderConfiguration(
             endpoint=endpoint,
             model=model,
-            api_key_environment_variable=(
-                environment.get(
-                    
-                        "GREENSMECAPT_"
-                        "SEMANTIC_API_KEY_ENV"
-                    
-                )
-            ),
+            api_key_environment_variable=(environment.get("GREENSMECAPT_SEMANTIC_API_KEY_ENV")),
             allow_remote=_environment_boolean(
                 environment,
-                (
-                    "GREENSMECAPT_"
-                    "SEMANTIC_ALLOW_REMOTE"
-                ),
+                ("GREENSMECAPT_SEMANTIC_ALLOW_REMOTE"),
                 default=False,
             ),
             token_parameter=environment.get(
@@ -276,11 +252,7 @@ def _intelligent_service_from_environment(
 
     return IntelligentSemanticExtractionService(
         provider,
-        qualitative_instructions=(
-            _qualitative_instructions(policy)
-            if policy is not None
-            else ()
-        ),
+        qualitative_instructions=(_qualitative_instructions(policy) if policy is not None else ()),
         maximum_segments_per_request=_environment_integer(
             environment,
             "GREENSMECAPT_SEMANTIC_MAX_SEGMENTS",
@@ -328,12 +300,8 @@ def _qualitative_instructions(
 def _visual_provider_from_environment(
     environment: Mapping[str, str],
 ) -> OpenAICompatibleVisualProvider | None:
-    endpoint = environment.get(
-        "GREENSMECAPT_VISUAL_ENDPOINT"
-    )
-    model = environment.get(
-        "GREENSMECAPT_VISUAL_MODEL"
-    )
+    endpoint = environment.get("GREENSMECAPT_VISUAL_ENDPOINT")
+    model = environment.get("GREENSMECAPT_VISUAL_MODEL")
 
     if endpoint is None and model is None:
         return None
@@ -349,11 +317,7 @@ def _visual_provider_from_environment(
         OpenAICompatibleProviderConfiguration(
             endpoint=endpoint,
             model=model,
-            api_key_environment_variable=(
-                environment.get(
-                    "GREENSMECAPT_VISUAL_API_KEY_ENV"
-                )
-            ),
+            api_key_environment_variable=(environment.get("GREENSMECAPT_VISUAL_API_KEY_ENV")),
             allow_remote=_environment_boolean(
                 environment,
                 "GREENSMECAPT_VISUAL_ALLOW_REMOTE",
@@ -397,8 +361,7 @@ def _environment_boolean(
         return False
 
     raise DocumentProcessingConfigurationError(
-        f"Environment variable {name} must be "
-        "a boolean value."
+        f"Environment variable {name} must be a boolean value."
     )
 
 
@@ -419,23 +382,14 @@ def _environment_integer(
         value = int(raw_value)
     except ValueError as error:
         raise DocumentProcessingConfigurationError(
-            f"Environment variable {name} must "
-            "be an integer."
+            f"Environment variable {name} must be an integer."
         ) from error
 
-    if value < minimum or (
-        maximum is not None
-        and value > maximum
-    ):
-        upper = (
-            f" and at most {maximum}"
-            if maximum is not None
-            else ""
-        )
+    if value < minimum or (maximum is not None and value > maximum):
+        upper = f" and at most {maximum}" if maximum is not None else ""
 
         raise DocumentProcessingConfigurationError(
-            f"Environment variable {name} must be "
-            f"at least {minimum}{upper}."
+            f"Environment variable {name} must be at least {minimum}{upper}."
         )
 
     return value
@@ -457,14 +411,12 @@ def _environment_float(
         value = float(raw_value)
     except ValueError as error:
         raise DocumentProcessingConfigurationError(
-            f"Environment variable {name} must "
-            "be numeric."
+            f"Environment variable {name} must be numeric."
         ) from error
 
     if value <= minimum_exclusive:
         raise DocumentProcessingConfigurationError(
-            f"Environment variable {name} must be "
-            f"greater than {minimum_exclusive}."
+            f"Environment variable {name} must be greater than {minimum_exclusive}."
         )
 
     return value

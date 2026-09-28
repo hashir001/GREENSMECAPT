@@ -24,6 +24,9 @@ from greensmecapt.document_intelligence.readers.structured_image import (
     StructuredImageDocumentReader,
 )
 from greensmecapt.document_intelligence.structure import (
+    FallbackStructuredPageParser,
+    GoogleDocumentAIConfiguration,
+    GoogleDocumentAIStructuredPageParser,
     PaddleParserConfiguration,
     PaddleStructuredPageParser,
     StructuredPageParser,
@@ -56,9 +59,7 @@ class LazyPaddleStructuredPageParser:
                 parser = self._parser
 
                 if parser is None:
-                    parser = PaddleStructuredPageParser(
-                        self._configuration
-                    )
+                    parser = PaddleStructuredPageParser(self._configuration)
                     self._parser = parser
 
         return parser.parse(
@@ -76,9 +77,8 @@ class ProductionReaderConfiguration(BaseModel):
         str_strip_whitespace=True,
     )
 
-    paddle: PaddleParserConfiguration = Field(
-        default_factory=PaddleParserConfiguration
-    )
+    paddle: PaddleParserConfiguration = Field(default_factory=PaddleParserConfiguration)
+    google_document_ai: GoogleDocumentAIConfiguration | None = None
     pdf_render_dpi: int = Field(default=200, ge=72, le=600)
     enable_tesseract_fallback: bool = True
     tesseract_language: str = Field(default="eng", min_length=1)
@@ -98,20 +98,15 @@ def build_production_document_reader(
     resolved_structured_parser = (
         structured_parser
         if structured_parser is not None
-        else LazyPaddleStructuredPageParser(resolved.paddle)
+        else _configured_structured_parser(resolved)
     )
 
     resolved_fallback = fallback_ocr_engine
 
-    if (
-        resolved_fallback is None
-        and resolved.enable_tesseract_fallback
-    ):
+    if resolved_fallback is None and resolved.enable_tesseract_fallback:
         resolved_fallback = TesseractOcrEngine(
             language=resolved.tesseract_language,
-            page_segmentation_mode=(
-                resolved.tesseract_page_segmentation_mode
-            ),
+            page_segmentation_mode=(resolved.tesseract_page_segmentation_mode),
             timeout_seconds=resolved.tesseract_timeout_seconds,
         )
 
@@ -130,9 +125,18 @@ def build_production_document_reader(
         {
             "application/pdf": pdf_reader,
             "text/plain": text_reader,
-            **{
-                mime_type: image_reader
-                for mime_type in image_reader.supported_mime_types
-            },
+            **{mime_type: image_reader for mime_type in image_reader.supported_mime_types},
         }
+    )
+
+
+def _configured_structured_parser(
+    configuration: ProductionReaderConfiguration,
+) -> StructuredPageParser:
+    local = LazyPaddleStructuredPageParser(configuration.paddle)
+    if configuration.google_document_ai is None:
+        return local
+    return FallbackStructuredPageParser(
+        GoogleDocumentAIStructuredPageParser(configuration.google_document_ai),
+        local,
     )

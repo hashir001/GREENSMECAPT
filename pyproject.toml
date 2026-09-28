@@ -36,6 +36,9 @@ document-ai = [
     "paddleocr[doc-parser]>=3.0,<4.0",
     "paddlepaddle>=3.2,<3.3",
 ]
+google-document-ai = [
+    "google-cloud-documentai>=3.7,<4.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

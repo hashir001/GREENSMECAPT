@@ -1,5 +1,10 @@
 """Structured OCR and page-routing components."""
 
+from greensmecapt.document_intelligence.structure.google_document_ai import (
+    FallbackStructuredPageParser,
+    GoogleDocumentAIConfiguration,
+    GoogleDocumentAIStructuredPageParser,
+)
 from greensmecapt.document_intelligence.structure.paddle import (
     PaddleParserConfiguration,
     PaddleStructuredPageParser,
@@ -23,6 +28,9 @@ from greensmecapt.document_intelligence.structure.runtime import (
 )
 
 __all__ = [
+    "FallbackStructuredPageParser",
+    "GoogleDocumentAIConfiguration",
+    "GoogleDocumentAIStructuredPageParser",
     "PaddleParserConfiguration",
     "PaddleRuntimeReport",
     "PaddleStructuredPageParser",
