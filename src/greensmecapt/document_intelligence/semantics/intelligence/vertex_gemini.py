@@ -12,8 +12,8 @@ from greensmecapt.document_intelligence.semantics.intelligence.models import (
     SemanticProviderOutput,
 )
 from greensmecapt.document_intelligence.semantics.intelligence.provider import (
-    SemanticProviderError,
     _SYSTEM_PROMPT,
+    SemanticProviderError,
 )
 
 
