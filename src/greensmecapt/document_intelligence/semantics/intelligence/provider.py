@@ -311,8 +311,17 @@ boolean. Use true or false only when the quote states the fact clearly.
 summarize or rewrite the source; the application preserves the exact quote.
 16. A plan, target or intention is not an achieved result. A missing statement
 is not false. Return no claim when wording is ambiguous.
-17. Never turn a qualitative statement into a numeric metric or score.
-18. Return only the required JSON structure.
+17. In table segments, header rows and the data row are separated by ||.
+When columns represent different periods, return a separate claim for each
+period/value and copy enough of the exact segment into source_quote to preserve
+the governing period and unit.
+18. Never classify a forecast, reduction, saving, avoided amount, target or
+proposed operating effect as an actual consumption or emissions total. Use a
+separate allowed forecast or savings indicator when one is supplied.
+19. Currency scale words such as thousand or million belong to raw_unit and
+raw_value; never silently multiply raw_number.
+20. Never turn a qualitative statement into a numeric metric or score.
+21. Return only the required JSON structure.
 """.strip()
 
 
