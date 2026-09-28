@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from io import BytesIO
+import logging
 from threading import Lock
 from typing import Any
 
@@ -23,6 +24,8 @@ from greensmecapt.document_intelligence.structure.paddle import (
     StructuredParserUnavailableError,
     StructuredParsingError,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class GoogleDocumentAIConfiguration(BaseModel):
@@ -141,6 +144,12 @@ class GoogleDocumentAIStructuredPageParser:
                 ),
             )
 
+        _LOGGER.info(
+            "Google Document AI processed page %s with processor %s.",
+            page_number,
+            self._configuration.processor_name,
+        )
+
         return ExtractedPage(
             page_number=page_number,
             text=full_text,
@@ -192,7 +201,15 @@ class FallbackStructuredPageParser:
     def parse(self, image: Image, *, page_number: int) -> ExtractedPage:
         try:
             return self._preferred.parse(image, page_number=page_number)
-        except StructuredParsingError:
+        except StructuredParsingError as error:
+            _LOGGER.warning(
+                "Preferred structured parser %s failed on page %s; "
+                "using fallback %s: %s",
+                type(self._preferred).__name__,
+                page_number,
+                type(self._fallback).__name__,
+                error,
+            )
             return self._fallback.parse(image, page_number=page_number)
 
 
