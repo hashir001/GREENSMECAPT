@@ -1,5 +1,6 @@
 """Execute durable document-processing jobs."""
 
+import logging
 from uuid import uuid4
 
 from greensmecapt.domain import (
@@ -14,6 +15,8 @@ from greensmecapt.services.document_processing import (
     DocumentProcessingError,
     StoredDocumentProcessingService,
 )
+
+_LOGGER = logging.getLogger("uvicorn.error")
 
 
 class DocumentProcessingJobService:
@@ -52,6 +55,12 @@ class DocumentProcessingJobService:
                 worker_id=worker_id,
             )
         except DocumentProcessingError as error:
+            _LOGGER.exception(
+                "Document processing job %s failed [%s]: %s",
+                job.job_id,
+                error.code,
+                error.message,
+            )
             return repository.fail_document_processing_job(
                 job_id=job.job_id,
                 worker_id=worker_id,
@@ -59,6 +68,10 @@ class DocumentProcessingJobService:
                 failure_message=error.message,
             )
         except Exception:
+            _LOGGER.exception(
+                "Document processing job %s failed unexpectedly.",
+                job.job_id,
+            )
             return repository.fail_document_processing_job(
                 job_id=job.job_id,
                 worker_id=worker_id,
