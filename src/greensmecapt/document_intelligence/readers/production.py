@@ -79,6 +79,7 @@ class ProductionReaderConfiguration(BaseModel):
 
     paddle: PaddleParserConfiguration = Field(default_factory=PaddleParserConfiguration)
     google_document_ai: GoogleDocumentAIConfiguration | None = None
+    google_document_ai_form: GoogleDocumentAIConfiguration | None = None
     pdf_render_dpi: int = Field(default=200, ge=72, le=600)
     enable_tesseract_fallback: bool = True
     tesseract_language: str = Field(default="eng", min_length=1)
@@ -95,11 +96,11 @@ def build_production_document_reader(
     """Build MIME routing with adaptive PDF and structured image OCR."""
 
     resolved = configuration or ProductionReaderConfiguration()
-    resolved_structured_parser = (
-        structured_parser
-        if structured_parser is not None
-        else _configured_structured_parser(resolved)
-    )
+    if structured_parser is not None:
+        resolved_structured_parser = structured_parser
+        resolved_form_parser = None
+    else:
+        resolved_structured_parser, resolved_form_parser = _configured_structured_parsers(resolved)
 
     resolved_fallback = fallback_ocr_engine
 
@@ -112,11 +113,13 @@ def build_production_document_reader(
 
     pdf_reader = AdaptivePdfDocumentReader(
         structured_parser=resolved_structured_parser,
+        form_parser=resolved_form_parser,
         fallback_ocr_engine=resolved_fallback,
         render_dpi=resolved.pdf_render_dpi,
     )
     image_reader = StructuredImageDocumentReader(
         resolved_structured_parser,
+        form_parser=resolved_form_parser,
         fallback_ocr_engine=resolved_fallback,
     )
     text_reader = PlainTextDocumentReader()
@@ -130,13 +133,22 @@ def build_production_document_reader(
     )
 
 
-def _configured_structured_parser(
+def _configured_structured_parsers(
     configuration: ProductionReaderConfiguration,
-) -> StructuredPageParser:
+) -> tuple[StructuredPageParser, StructuredPageParser | None]:
     local = LazyPaddleStructuredPageParser(configuration.paddle)
     if configuration.google_document_ai is None:
-        return local
-    return FallbackStructuredPageParser(
+        return local, None
+    general = FallbackStructuredPageParser(
         GoogleDocumentAIStructuredPageParser(configuration.google_document_ai),
         local,
     )
+    form = (
+        FallbackStructuredPageParser(
+            GoogleDocumentAIStructuredPageParser(configuration.google_document_ai_form),
+            general,
+        )
+        if configuration.google_document_ai_form is not None
+        else None
+    )
+    return general, form

@@ -45,10 +45,7 @@ class FakeStructuredParser:
 
         return ExtractedPage(
             page_number=page_number,
-            text=(
-                f"Structured OCR content for page "
-                f"{page_number}"
-            ),
+            text=(f"Structured OCR content for page {page_number}"),
             text_source=TextSource.OCR,
             page_width=float(image.width),
             page_height=float(image.height),
@@ -71,10 +68,7 @@ class TableStructuredParser:
 
         return ExtractedPage(
             page_number=page_number,
-            text=(
-                "Environmental metrics 2024\n"
-                "Renewable electricity | 68 | %"
-            ),
+            text=("Environmental metrics 2024\nRenewable electricity | 68 | %"),
             text_source=TextSource.OCR,
             page_width=float(image.width),
             page_height=float(image.height),
@@ -170,9 +164,7 @@ class FailingStructuredParser:
         *,
         page_number: int,
     ) -> ExtractedPage:
-        raise StructuredParsingError(
-            "The page layout could not be recovered."
-        )
+        raise StructuredParsingError("The page layout could not be recovered.")
 
 
 class FakeFallbackOcr:
@@ -209,9 +201,7 @@ def _make_pdf(
 def _make_document(
     content: bytes,
     *,
-    document_type: DocumentType = (
-        DocumentType.OTHER
-    ),
+    document_type: DocumentType = (DocumentType.OTHER),
 ) -> SourceDocument:
     return SourceDocument(
         document_id="doc_adaptive_001",
@@ -234,22 +224,14 @@ def test_keep_clean_digital_page_native() -> None:
     )
     parser = FakeStructuredParser()
 
-    result = AdaptivePdfDocumentReader(
-        structured_parser=parser
-    ).read_with_diagnostics(
+    result = AdaptivePdfDocumentReader(structured_parser=parser).read_with_diagnostics(
         document=_make_document(content),
         content=content,
     )
 
     assert parser.page_numbers == []
-    assert (
-        result.document.pages[0].text_source
-        is TextSource.PDF_EMBEDDED
-    )
-    assert (
-        result.processing_records[0].mode
-        is PageProcessingMode.NATIVE
-    )
+    assert result.document.pages[0].text_source is TextSource.PDF_EMBEDDED
+    assert result.processing_records[0].mode is PageProcessingMode.NATIVE
 
 
 def test_route_scanned_page_to_structured_ocr() -> None:
@@ -258,22 +240,37 @@ def test_route_scanned_page_to_structured_ocr() -> None:
     content = _make_pdf((None,))
     parser = FakeStructuredParser()
 
-    result = AdaptivePdfDocumentReader(
-        structured_parser=parser
-    ).read_with_diagnostics(
+    result = AdaptivePdfDocumentReader(structured_parser=parser).read_with_diagnostics(
         document=_make_document(content),
         content=content,
     )
 
     assert parser.page_numbers == [1]
-    assert (
-        result.document.pages[0].text_source
-        is TextSource.OCR
+    assert result.document.pages[0].text_source is TextSource.OCR
+    assert result.processing_records[0].mode is PageProcessingMode.STRUCTURED_OCR
+
+
+def test_route_scanned_financial_page_to_form_parser() -> None:
+    """Financial statements should use the specialized form route."""
+
+    content = _make_pdf((None,))
+    document_ocr = FakeStructuredParser()
+    form_parser = TableStructuredParser()
+
+    result = AdaptivePdfDocumentReader(
+        structured_parser=document_ocr,
+        form_parser=form_parser,
+    ).read_with_diagnostics(
+        document=_make_document(
+            content,
+            document_type=DocumentType.FINANCIAL_STATEMENT,
+        ),
+        content=content,
     )
-    assert (
-        result.processing_records[0].mode
-        is PageProcessingMode.STRUCTURED_OCR
-    )
+
+    assert document_ocr.page_numbers == []
+    assert form_parser.page_numbers == [1]
+    assert result.document.pages[0].tables
 
 
 def test_process_mixed_pdf_page_by_page() -> None:
@@ -281,16 +278,13 @@ def test_process_mixed_pdf_page_by_page() -> None:
 
     content = _make_pdf(
         (
-            "This first page contains enough embedded "
-            "environmental reporting text.",
+            "This first page contains enough embedded environmental reporting text.",
             None,
         )
     )
     parser = FakeStructuredParser()
 
-    result = AdaptivePdfDocumentReader(
-        structured_parser=parser
-    ).read_with_diagnostics(
+    result = AdaptivePdfDocumentReader(structured_parser=parser).read_with_diagnostics(
         document=_make_document(content),
         content=content,
     )
@@ -298,14 +292,8 @@ def test_process_mixed_pdf_page_by_page() -> None:
     assert parser.page_numbers == [2]
     assert len(result.document.pages) == 2
 
-    assert (
-        result.document.pages[0].text_source
-        is TextSource.PDF_EMBEDDED
-    )
-    assert (
-        result.document.pages[1].text_source
-        is TextSource.OCR
-    )
+    assert result.document.pages[0].text_source is TextSource.PDF_EMBEDDED
+    assert result.document.pages[1].text_source is TextSource.OCR
 
 
 def test_read_only_requested_pdf_pages() -> None:
@@ -319,9 +307,7 @@ def test_read_only_requested_pdf_pages() -> None:
         )
     )
     parser = FakeStructuredParser()
-    batch = AdaptivePdfDocumentReader(
-        structured_parser=parser
-    ).read_page_batch(
+    batch = AdaptivePdfDocumentReader(structured_parser=parser).read_page_batch(
         document=_make_document(content),
         content=content,
         page_numbers=(2,),
@@ -337,21 +323,14 @@ def test_hybrid_processing_adds_missing_table() -> None:
     """A table-oriented page may combine native and visual data."""
 
     content = _make_pdf(
-        (
-            "Environmental metrics for 2024 include "
-            "energy, emissions, waste and water totals.",
-        )
+        ("Environmental metrics for 2024 include energy, emissions, waste and water totals.",)
     )
     parser = TableStructuredParser()
 
-    result = AdaptivePdfDocumentReader(
-        structured_parser=parser
-    ).read_with_diagnostics(
+    result = AdaptivePdfDocumentReader(structured_parser=parser).read_with_diagnostics(
         document=_make_document(
             content,
-            document_type=(
-                DocumentType.SUSTAINABILITY_REPORT
-            ),
+            document_type=(DocumentType.SUSTAINABILITY_REPORT),
         ),
         content=content,
     )
@@ -363,10 +342,7 @@ def test_hybrid_processing_adds_missing_table() -> None:
     assert len(page.tables) == 1
     assert page.tables[0].value_at(1, 1) == "68"
 
-    assert (
-        result.processing_records[0].mode
-        is PageProcessingMode.HYBRID
-    )
+    assert result.processing_records[0].mode is PageProcessingMode.HYBRID
 
 
 def test_fallback_ocr_after_structured_failure() -> None:
@@ -382,15 +358,8 @@ def test_fallback_ocr_after_structured_failure() -> None:
         content=content,
     )
 
-    assert (
-        result.document.pages[0].text
-        == "Fallback OCR recovered this page."
-    )
-    assert (
-        result.processing_records[0]
-        .used_fallback_ocr
-        is True
-    )
+    assert result.document.pages[0].text == "Fallback OCR recovered this page."
+    assert result.processing_records[0].used_fallback_ocr is True
 
 
 def test_preserve_and_render_detected_visual_region() -> None:
@@ -422,10 +391,7 @@ def test_hybrid_merge_preserves_structured_visual_regions() -> None:
     """Native text must not erase charts found by structured parsing."""
 
     content = _make_pdf(
-        (
-            "Environmental metrics for 2024 include energy, "
-            "emissions, waste and water totals.",
-        )
+        ("Environmental metrics for 2024 include energy, emissions, waste and water totals.",)
     )
     result = AdaptivePdfDocumentReader(
         structured_parser=VisualStructuredParser(),
@@ -438,7 +404,4 @@ def test_hybrid_merge_preserves_structured_visual_regions() -> None:
     )
 
     assert result.document.pages[0].text_source is TextSource.HYBRID
-    assert (
-        result.document.pages[0].visual_regions[0].region_id
-        == "page_1_chart_1"
-    )
+    assert result.document.pages[0].visual_regions[0].region_id == "page_1_chart_1"

@@ -135,11 +135,12 @@ def production_reader_configuration_from_environment(
         cpu_threads=cpu_threads,
     )
 
-    document_ai = _google_document_ai_configuration(configured)
+    document_ai, document_ai_form = _google_document_ai_configurations(configured)
 
     return ProductionReaderConfiguration(
         paddle=paddle,
         google_document_ai=document_ai,
+        google_document_ai_form=document_ai_form,
         pdf_render_dpi=_environment_integer(
             configured,
             "GREENSMECAPT_PDF_RENDER_DPI",
@@ -178,12 +179,15 @@ def production_reader_configuration_from_environment(
     )
 
 
-def _google_document_ai_configuration(
+def _google_document_ai_configurations(
     environment: Mapping[str, str],
-) -> GoogleDocumentAIConfiguration | None:
+) -> tuple[
+    GoogleDocumentAIConfiguration | None,
+    GoogleDocumentAIConfiguration | None,
+]:
     provider = environment.get("GREENSMECAPT_STRUCTURED_OCR_PROVIDER", "paddle").strip().casefold()
     if provider == "paddle":
-        return None
+        return None, None
     if provider != "google_document_ai":
         raise DocumentProcessingConfigurationError(
             "GREENSMECAPT_STRUCTURED_OCR_PROVIDER must be either 'paddle' or 'google_document_ai'."
@@ -192,7 +196,6 @@ def _google_document_ai_configuration(
     names = {
         "project_id": "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID",
         "location": "GREENSMECAPT_GOOGLE_DOCUMENT_AI_LOCATION",
-        "processor_id": "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROCESSOR_ID",
     }
     values = {field: environment.get(name, "").strip() for field, name in names.items()}
     missing = [name for field, name in names.items() if not values[field]]
@@ -201,7 +204,17 @@ def _google_document_ai_configuration(
             "Google Document AI configuration is missing: " + ", ".join(missing)
         )
 
-    return GoogleDocumentAIConfiguration(
+    ocr_processor_id = environment.get(
+        "GREENSMECAPT_GOOGLE_DOCUMENT_AI_OCR_PROCESSOR_ID", ""
+    ).strip()
+    if not ocr_processor_id:
+        missing.append("GREENSMECAPT_GOOGLE_DOCUMENT_AI_OCR_PROCESSOR_ID")
+    if missing:
+        raise DocumentProcessingConfigurationError(
+            "Google Document AI configuration is missing: " + ", ".join(missing)
+        )
+
+    common = dict(
         **values,
         processor_version=(
             environment.get("GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROCESSOR_VERSION") or None
@@ -213,6 +226,22 @@ def _google_document_ai_configuration(
             minimum_exclusive=0.0,
         ),
     )
+    ocr = GoogleDocumentAIConfiguration(
+        **common,
+        processor_id=ocr_processor_id,
+    )
+    form_processor_id = environment.get(
+        "GREENSMECAPT_GOOGLE_DOCUMENT_AI_FORM_PROCESSOR_ID", ""
+    ).strip()
+    form = (
+        GoogleDocumentAIConfiguration(
+            **common,
+            processor_id=form_processor_id,
+        )
+        if form_processor_id
+        else None
+    )
+    return ocr, form
 
 
 def _intelligent_service_from_environment(

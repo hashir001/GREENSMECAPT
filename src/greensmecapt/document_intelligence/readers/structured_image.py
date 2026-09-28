@@ -19,7 +19,15 @@ from greensmecapt.document_intelligence.structure import (
     StructuredPageParser,
     StructuredParsingError,
 )
-from greensmecapt.domain import SourceDocument
+from greensmecapt.domain import DocumentType, SourceDocument
+
+_FORM_ORIENTED_DOCUMENT_TYPES = frozenset(
+    {
+        DocumentType.FINANCIAL_STATEMENT,
+        DocumentType.UTILITY_BILL,
+        DocumentType.FUNDING_REQUEST,
+    }
+)
 
 
 class StructuredImageDocumentReader:
@@ -38,9 +46,11 @@ class StructuredImageDocumentReader:
         self,
         structured_parser: StructuredPageParser,
         *,
+        form_parser: StructuredPageParser | None = None,
         fallback_ocr_engine: OcrEngine | None = None,
     ) -> None:
         self._structured_parser = structured_parser
+        self._form_parser = form_parser
         self._fallback_ocr_engine = fallback_ocr_engine
 
     def read(
@@ -51,20 +61,22 @@ class StructuredImageDocumentReader:
         """Decode an image and preserve structured OCR output."""
 
         if document.mime_type not in self.supported_mime_types:
-            raise UnsupportedMimeTypeError(
-                f"Unsupported MIME type: {document.mime_type}"
-            )
+            raise UnsupportedMimeTypeError(f"Unsupported MIME type: {document.mime_type}")
 
         try:
             with Image.open(BytesIO(content)) as image:
                 prepared_image = image.convert("RGB")
         except (UnidentifiedImageError, OSError, ValueError) as error:
-            raise DocumentReadError(
-                "Document content is not a readable image."
-            ) from error
+            raise DocumentReadError("Document content is not a readable image.") from error
 
         try:
-            page = self._structured_parser.parse(
+            parser = (
+                self._form_parser
+                if self._form_parser is not None
+                and document.document_type in _FORM_ORIENTED_DOCUMENT_TYPES
+                else self._structured_parser
+            )
+            page = parser.parse(
                 prepared_image,
                 page_number=1,
             )
@@ -77,9 +89,7 @@ class StructuredImageDocumentReader:
                 ) from structured_error
 
         if page.page_number != 1:
-            raise DocumentReadError(
-                "Structured OCR returned an invalid image page number."
-            )
+            raise DocumentReadError("Structured OCR returned an invalid image page number.")
 
         return ExtractedDocument(
             document_id=document.document_id,
@@ -122,9 +132,7 @@ class StructuredImageDocumentReader:
         """Crop one detected region from a standalone source image."""
 
         if page.page_number != 1:
-            raise DocumentReadError(
-                "Image documents contain exactly one source page."
-            )
+            raise DocumentReadError("Image documents contain exactly one source page.")
 
         try:
             with Image.open(BytesIO(content)) as image:
@@ -142,6 +150,4 @@ class StructuredImageDocumentReader:
                 crop.save(output, format="PNG")
                 return output.getvalue()
         except (UnidentifiedImageError, OSError, ValueError) as error:
-            raise DocumentReadError(
-                "Visual image region could not be rendered."
-            ) from error
+            raise DocumentReadError("Visual image region could not be rendered.") from error

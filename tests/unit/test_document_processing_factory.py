@@ -67,13 +67,18 @@ def test_configure_google_document_ai_without_removing_local_fallback() -> None:
             "GREENSMECAPT_STRUCTURED_OCR_PROVIDER": "google_document_ai",
             "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID": "project",
             "GREENSMECAPT_GOOGLE_DOCUMENT_AI_LOCATION": "eu",
-            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROCESSOR_ID": "processor",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_OCR_PROCESSOR_ID": "ocr",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_FORM_PROCESSOR_ID": "form",
         }
     )
 
     assert configuration.google_document_ai is not None
     assert configuration.google_document_ai.processor_name == (
-        "projects/project/locations/eu/processors/processor"
+        "projects/project/locations/eu/processors/ocr"
+    )
+    assert configuration.google_document_ai_form is not None
+    assert configuration.google_document_ai_form.processor_name == (
+        "projects/project/locations/eu/processors/form"
     )
     assert configuration.paddle is not None
 

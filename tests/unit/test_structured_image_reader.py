@@ -21,7 +21,7 @@ from greensmecapt.document_intelligence.models import (
 from greensmecapt.document_intelligence.structure import (
     StructuredParsingError,
 )
-from greensmecapt.domain import SourceDocument
+from greensmecapt.domain import DocumentType, SourceDocument
 
 
 class TableParser:
@@ -102,6 +102,7 @@ def _document(
     content: bytes,
     *,
     mime_type: str = "image/png",
+    document_type: DocumentType = DocumentType.UNKNOWN,
 ) -> SourceDocument:
     return SourceDocument(
         document_id="image_001",
@@ -109,6 +110,7 @@ def _document(
         file_name="evidence.png",
         mime_type=mime_type,
         sha256=sha256(content).hexdigest(),
+        document_type=document_type,
     )
 
 
@@ -116,9 +118,7 @@ def test_preserve_structured_image_table() -> None:
     """Image reading should retain tables instead of flattening them."""
 
     content = _image_bytes()
-    extracted = StructuredImageDocumentReader(
-        TableParser()
-    ).read(_document(content), content)
+    extracted = StructuredImageDocumentReader(TableParser()).read(_document(content), content)
 
     assert extracted.total_pages == 1
     assert extracted.pages[0].tables[0].value_at(0, 1) == "72%"
@@ -160,3 +160,49 @@ def test_reject_unsupported_image_mime_type() -> None:
             _document(content, mime_type="application/pdf"),
             content,
         )
+
+
+class LabeledParser:
+    """Expose which cloud route handled an image."""
+
+    def __init__(self, label: str) -> None:
+        self.label = label
+
+    def parse(self, image: Image.Image, *, page_number: int) -> ExtractedPage:
+        return ExtractedPage(
+            page_number=page_number,
+            text=self.label,
+            text_source=TextSource.OCR,
+            page_width=float(image.width),
+            page_height=float(image.height),
+        )
+
+
+def test_route_financial_image_to_form_parser() -> None:
+    content = _image_bytes()
+    reader = StructuredImageDocumentReader(
+        LabeledParser("document ocr"),
+        form_parser=LabeledParser("form parser"),
+    )
+
+    extracted = reader.read(
+        _document(
+            content,
+            document_type=DocumentType.FINANCIAL_STATEMENT,
+        ),
+        content,
+    )
+
+    assert extracted.pages[0].text == "form parser"
+
+
+def test_route_general_image_to_document_ocr() -> None:
+    content = _image_bytes()
+    reader = StructuredImageDocumentReader(
+        LabeledParser("document ocr"),
+        form_parser=LabeledParser("form parser"),
+    )
+
+    extracted = reader.read(_document(content), content)
+
+    assert extracted.pages[0].text == "document ocr"
