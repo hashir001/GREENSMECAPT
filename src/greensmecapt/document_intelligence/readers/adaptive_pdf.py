@@ -366,13 +366,35 @@ class AdaptivePdfDocumentReader:
                             "Structured parser returned a different page number."
                         )
 
-                    extracted_pages.append(structured_page)
+                    final_page = _preserve_native_table_structure(
+                        native_page=native_page,
+                        structured_page=structured_page,
+                    )
+                    used_native_tables = (
+                        native_page is not None
+                        and bool(native_page.tables)
+                    )
+                    extracted_pages.append(final_page)
 
                     processing_records.append(
                         PageProcessingRecord(
                             page_number=page_number,
-                            mode=decision.mode,
-                            reasons=decision.reasons,
+                            mode=(
+                                PageProcessingMode.HYBRID
+                                if used_native_tables
+                                else decision.mode
+                            ),
+                            reasons=(
+                                *decision.reasons,
+                                *(
+                                    (
+                                        "Native PDF table structure was preserved "
+                                        "alongside OCR text.",
+                                    )
+                                    if used_native_tables
+                                    else ()
+                                ),
+                            ),
                         )
                     )
 
@@ -618,6 +640,28 @@ def _render_page(
 
     with Image.open(BytesIO(pixmap.tobytes("png"))) as image:
         return image.convert("RGB").copy()
+
+
+def _preserve_native_table_structure(
+    *,
+    native_page: ExtractedPage | None,
+    structured_page: ExtractedPage,
+) -> ExtractedPage:
+    """Keep OCR as the text source while retaining reliable native PDF tables."""
+
+    if native_page is None or not native_page.tables:
+        return structured_page
+
+    return structured_page.model_copy(
+        update={
+            "text_source": TextSource.HYBRID,
+            "tables": _merge_tables(
+                native_page.tables,
+                structured_page.tables,
+                page_number=structured_page.page_number,
+            ),
+        }
+    )
 
 
 def _merge_pages(
