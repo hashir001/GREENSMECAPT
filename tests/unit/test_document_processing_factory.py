@@ -9,6 +9,7 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
 from greensmecapt.services.factory import (
     DocumentProcessingConfigurationError,
     _environment_boolean,
+    _intelligent_service_from_environment,
     _qualitative_instructions,
     _visual_provider_from_environment,
     production_reader_configuration_from_environment,
@@ -93,5 +94,34 @@ def test_reject_incomplete_google_document_ai_configuration() -> None:
                 "GREENSMECAPT_STRUCTURED_OCR_PROVIDER": "google_document_ai",
                 "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID": "project",
                 "GREENSMECAPT_GOOGLE_DOCUMENT_AI_LOCATION": "eu",
+            }
+        )
+
+
+def test_configure_vertex_gemini_semantic_extraction() -> None:
+    service = _intelligent_service_from_environment(
+        {
+            "GREENSMECAPT_SEMANTIC_PROVIDER": "vertex_gemini",
+            "GREENSMECAPT_SEMANTIC_MODEL": "gemini-2.5-flash",
+            "GREENSMECAPT_VERTEX_PROJECT_ID": "project",
+            "GREENSMECAPT_VERTEX_LOCATION": "global",
+            "GREENSMECAPT_SEMANTIC_ALLOW_REMOTE": "true",
+        }
+    )
+
+    assert service is not None
+    assert service._provider.provider_name == "vertex_gemini"
+    assert service._provider.model_name == "gemini-2.5-flash"
+
+
+def test_reject_unknown_semantic_provider() -> None:
+    with pytest.raises(
+        DocumentProcessingConfigurationError,
+        match="SEMANTIC_PROVIDER",
+    ):
+        _intelligent_service_from_environment(
+            {
+                "GREENSMECAPT_SEMANTIC_PROVIDER": "unknown",
+                "GREENSMECAPT_SEMANTIC_MODEL": "model",
             }
         )
