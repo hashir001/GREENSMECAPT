@@ -691,6 +691,31 @@ def _contains_text(
     )
 
 
+def _raw_unit_occurs_in_value(
+    *,
+    raw_value: str,
+    raw_unit: str,
+) -> bool:
+    """Allow scale words around a written number without weakening grounding."""
+
+    normalized_value = _normalize_text(raw_value)
+    normalized_unit = _normalize_text(raw_unit)
+
+    if normalized_unit in normalized_value:
+        return True
+
+    unit_tokens = tuple(
+        token
+        for token in re.findall(r"[a-z0-9%³]+", normalized_unit)
+        if token
+    )
+    value_tokens = set(re.findall(r"[a-z0-9%³]+", normalized_value))
+
+    return bool(unit_tokens) and all(
+        token in value_tokens for token in unit_tokens
+    )
+
+
 def _raw_number_occurs_in_value(
     *,
     raw_number: float,
