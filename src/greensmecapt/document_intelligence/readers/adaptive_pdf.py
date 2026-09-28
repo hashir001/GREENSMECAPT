@@ -28,6 +28,7 @@ from greensmecapt.document_intelligence.readers.plain_text import (
 )
 from greensmecapt.document_intelligence.structure import (
     PageProcessingMode,
+    PageRoutingDecision,
     PageRoutingPolicy,
     PageSignals,
     StructuredPageParser,
@@ -59,8 +60,6 @@ _TABLE_ORIENTED_DOCUMENT_TYPES = frozenset(
 
 _FORM_ORIENTED_DOCUMENT_TYPES = frozenset(
     {
-        DocumentType.FINANCIAL_STATEMENT,
-        DocumentType.UTILITY_BILL,
         DocumentType.FUNDING_REQUEST,
     }
 )
@@ -342,19 +341,10 @@ class AdaptivePdfDocumentReader:
                     native_page=native_page,
                 )
 
-                decision = self._routing_policy.decide(signals)
-
-                if decision.mode is PageProcessingMode.NATIVE and native_page is not None:
-                    extracted_pages.append(native_page)
-
-                    processing_records.append(
-                        PageProcessingRecord(
-                            page_number=page_number,
-                            mode=decision.mode,
-                            reasons=decision.reasons,
-                        )
-                    )
-                    continue
+                decision = PageRoutingDecision(
+                    mode=PageProcessingMode.STRUCTURED_OCR,
+                    reasons=("Document OCR is the primary processing route.",),
+                )
 
                 image = _render_page(
                     pdf_page,
@@ -376,15 +366,7 @@ class AdaptivePdfDocumentReader:
                             "Structured parser returned a different page number."
                         )
 
-                    if decision.mode is PageProcessingMode.HYBRID and native_page is not None:
-                        final_page = _merge_pages(
-                            native_page=native_page,
-                            structured_page=structured_page,
-                        )
-                    else:
-                        final_page = structured_page
-
-                    extracted_pages.append(final_page)
+                    extracted_pages.append(structured_page)
 
                     processing_records.append(
                         PageProcessingRecord(
@@ -474,8 +456,9 @@ class AdaptivePdfDocumentReader:
     ) -> StructuredPageParser:
         """Use Form Parser only where its richer extraction is useful."""
 
-        if self._form_parser is not None and (
-            signals.expected_tables or document.document_type in _FORM_ORIENTED_DOCUMENT_TYPES
+        if (
+            self._form_parser is not None
+            and document.document_type in _FORM_ORIENTED_DOCUMENT_TYPES
         ):
             return self._form_parser
         return self._structured_parser
