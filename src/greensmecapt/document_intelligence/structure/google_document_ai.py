@@ -25,7 +25,7 @@ from greensmecapt.document_intelligence.structure.paddle import (
     StructuredParsingError,
 )
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("uvicorn.error")
 
 
 class GoogleDocumentAIConfiguration(BaseModel):
