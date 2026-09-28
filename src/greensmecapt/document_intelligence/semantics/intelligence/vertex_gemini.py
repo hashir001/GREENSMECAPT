@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from threading import Lock
 
@@ -15,6 +16,81 @@ from greensmecapt.document_intelligence.semantics.intelligence.provider import (
     _SYSTEM_PROMPT,
     SemanticProviderError,
 )
+
+_LOGGER = logging.getLogger("uvicorn.error")
+
+# Vertex structured output accepts a narrower schema vocabulary than Pydantic's
+# full JSON Schema. Keep the provider contract explicit, then validate the
+# returned payload again with the authoritative Pydantic models.
+_VERTEX_OUTPUT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "claims": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_id": {"type": "STRING"},
+                    "indicator_id": {"type": "STRING"},
+                    "raw_value": {"type": "STRING"},
+                    "raw_number": {"type": "NUMBER"},
+                    "raw_unit": {"type": "STRING"},
+                    "source_quote": {"type": "STRING"},
+                    "reporting_period": {
+                        "type": "STRING",
+                        "nullable": True,
+                    },
+                    "scope": {
+                        "type": "STRING",
+                        "nullable": True,
+                    },
+                },
+                "required": [
+                    "segment_id",
+                    "indicator_id",
+                    "raw_value",
+                    "raw_number",
+                    "raw_unit",
+                    "source_quote",
+                    "reporting_period",
+                    "scope",
+                ],
+            },
+        },
+        "qualitative_claims": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_id": {"type": "STRING"},
+                    "claim_id": {"type": "STRING"},
+                    "source_quote": {"type": "STRING"},
+                    "boolean_value": {
+                        "type": "BOOLEAN",
+                        "nullable": True,
+                    },
+                    "reporting_period": {
+                        "type": "STRING",
+                        "nullable": True,
+                    },
+                    "scope": {
+                        "type": "STRING",
+                        "nullable": True,
+                    },
+                },
+                "required": [
+                    "segment_id",
+                    "claim_id",
+                    "source_quote",
+                    "boolean_value",
+                    "reporting_period",
+                    "scope",
+                ],
+            },
+        },
+    },
+    "required": ["claims", "qualitative_claims"],
+}
 
 
 class VertexGeminiProviderConfiguration(BaseModel):
@@ -49,7 +125,7 @@ class VertexGeminiSemanticProvider:
     """Use Vertex Gemini structured output with the existing grounded contract."""
 
     provider_name = "vertex_gemini"
-    provider_version = "1.0.0"
+    provider_version = "1.1.0"
 
     def __init__(
         self,
@@ -81,15 +157,22 @@ class VertexGeminiSemanticProvider:
                     "max_output_tokens": (
                         self._configuration.maximum_output_tokens
                     ),
+                    "thinking_config": {"thinking_budget": 0},
                     "response_mime_type": "application/json",
-                    "response_schema": SemanticProviderOutput,
+                    "response_schema": _VERTEX_OUTPUT_SCHEMA,
                 },
             )
         except SemanticProviderError:
             raise
         except Exception as error:
+            _LOGGER.exception(
+                "Vertex Gemini request failed for project %s, location %s, model %s.",
+                self._configuration.project_id,
+                self._configuration.location,
+                self._configuration.model,
+            )
             raise SemanticProviderError(
-                "Vertex Gemini semantic extraction failed."
+                _provider_failure_message(error)
             ) from error
 
         parsed = getattr(response, "parsed", None)
@@ -147,8 +230,58 @@ class VertexGeminiSemanticProvider:
                     ),
                 )
             except Exception as error:
+                _LOGGER.exception(
+                    "Vertex Gemini client setup failed for project %s.",
+                    self._configuration.project_id,
+                )
                 raise SemanticProviderError(
-                    "Vertex Gemini credentials or client setup failed."
+                    "Vertex Gemini credentials or client setup failed. "
+                    "Verify GOOGLE_APPLICATION_CREDENTIALS."
                 ) from error
 
         return self._client
+
+
+def _provider_failure_message(error: Exception) -> str:
+    """Translate provider status codes into safe, actionable diagnostics."""
+
+    raw_code = getattr(error, "code", None)
+    try:
+        code = int(raw_code)
+    except (TypeError, ValueError):
+        code = None
+
+    if code == 400:
+        return (
+            "Vertex Gemini rejected the extraction request (400). "
+            "The backend log contains the rejected field."
+        )
+    if code == 401:
+        return (
+            "Vertex Gemini authentication failed (401). Verify "
+            "GOOGLE_APPLICATION_CREDENTIALS."
+        )
+    if code == 403:
+        return (
+            "Vertex Gemini access was denied (403). Enable the Vertex AI API "
+            "and grant Agent Platform User (roles/aiplatform.user) to the "
+            "backend service account."
+        )
+    if code == 404:
+        return (
+            "Vertex Gemini model access failed (404). Verify the configured "
+            "project, location and model."
+        )
+    if code == 429:
+        return (
+            "Vertex Gemini quota or rate limit was exceeded (429)."
+        )
+    if code in {500, 502, 503, 504}:
+        return (
+            f"Vertex Gemini was temporarily unavailable ({code})."
+        )
+
+    return (
+        "Vertex Gemini semantic extraction failed "
+        f"({type(error).__name__}). See the backend log."
+    )
