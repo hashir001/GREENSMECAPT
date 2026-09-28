@@ -178,7 +178,7 @@ class LabeledParser:
         )
 
 
-def test_route_financial_image_to_form_parser() -> None:
+def test_route_financial_image_to_document_ocr() -> None:
     content = _image_bytes()
     reader = StructuredImageDocumentReader(
         LabeledParser("document ocr"),
@@ -189,6 +189,24 @@ def test_route_financial_image_to_form_parser() -> None:
         _document(
             content,
             document_type=DocumentType.FINANCIAL_STATEMENT,
+        ),
+        content,
+    )
+
+    assert extracted.pages[0].text == "document ocr"
+
+
+def test_route_funding_request_image_to_form_parser() -> None:
+    content = _image_bytes()
+    reader = StructuredImageDocumentReader(
+        LabeledParser("document ocr"),
+        form_parser=LabeledParser("form parser"),
+    )
+
+    extracted = reader.read(
+        _document(
+            content,
+            document_type=DocumentType.FUNDING_REQUEST,
         ),
         content,
     )
