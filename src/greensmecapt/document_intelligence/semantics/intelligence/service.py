@@ -1,5 +1,6 @@
 """Ground intelligent semantic claims in document evidence."""
 
+import logging
 import re
 from hashlib import sha256
 from math import isclose
@@ -33,6 +34,8 @@ from greensmecapt.document_intelligence.semantics.models import (
     UnitRule,
 )
 from greensmecapt.domain import EvidenceItem, SourceDocument
+
+_LOGGER = logging.getLogger("uvicorn.error")
 
 _WRITTEN_NUMBER_PATTERN = re.compile(
     r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?(?![\w.])"
@@ -140,6 +143,14 @@ class IntelligentSemanticExtractionService:
 
         claim_index = 0
 
+        _LOGGER.info(
+            "Semantic extraction started for document %s using %s/%s in %s request(s).",
+            document.document_id,
+            self._provider.provider_name,
+            self._provider.model_name,
+            len(requests),
+        )
+
         for bounded_request in requests:
             provider_output = self._provider.extract(bounded_request)
             segments = {
@@ -190,6 +201,14 @@ class IntelligentSemanticExtractionService:
         unique_evidence = {
             item.evidence_id: item for item in evidence_items
         }
+
+        _LOGGER.info(
+            "Semantic extraction completed for document %s: %s evidence item(s), "
+            "%s rejected claim(s).",
+            document.document_id,
+            len(unique_evidence),
+            len(rejected_claims),
+        )
 
         return IntelligentExtractionReport(
             provider_name=self._provider.provider_name,
@@ -397,11 +416,11 @@ def _ground_claim(
         )
 
     if not _contains_text(
-        claim.raw_value,
+        claim.source_quote,
         claim.raw_unit,
     ):
         return (
-            "The raw unit does not occur in the raw value."
+            "The raw unit does not occur in the source quote."
         )
 
     if (
