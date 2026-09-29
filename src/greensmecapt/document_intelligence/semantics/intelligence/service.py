@@ -22,11 +22,11 @@ from greensmecapt.document_intelligence.semantics.intelligence.models import (
     QualitativeInstruction,
     QualitativeValueType,
     RejectedSemanticClaim,
+    SectorActivityProposalPayload,
     SemanticClaimPayload,
     SemanticExtractionRequest,
     SemanticProviderConnection,
     SemanticSourceSegment,
-    SectorActivityProposalPayload,
     UnmappedMaterialClaimPayload,
 )
 from greensmecapt.document_intelligence.semantics.intelligence.policy import (

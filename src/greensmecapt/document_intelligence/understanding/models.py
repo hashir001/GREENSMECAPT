@@ -7,11 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from greensmecapt.document_intelligence.orchestration import (
     DocumentProcessingManifest,
 )
-from greensmecapt.document_intelligence.semantics.intelligence.models import (
-    GroundedIntelligenceClaim,
-)
 from greensmecapt.document_intelligence.reconciliation import (
     EvidenceReconciliationReport,
+)
+from greensmecapt.document_intelligence.semantics.intelligence.models import (
+    GroundedIntelligenceClaim,
 )
 from greensmecapt.document_intelligence.vision import (
     VisualUnderstandingReport,

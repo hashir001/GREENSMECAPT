@@ -4,13 +4,13 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from greensmecapt.domain import EvidenceItem
 from greensmecapt.document_intelligence.semantics.intelligence.policy import (
     CompanyProfileFieldInstruction,
     DocumentTypeInstruction,
     SectorInstruction,
     UnmappedMaterialCategory,
 )
+from greensmecapt.domain import EvidenceItem
 
 
 class IntelligenceModel(BaseModel):

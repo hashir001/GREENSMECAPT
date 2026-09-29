@@ -18,9 +18,9 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     QualitativeClaimPayload,
     QualitativeInstruction,
     QualitativeValueType,
+    SectorActivityProposalPayload,
     SemanticClaimPayload,
     SemanticProviderOutput,
-    SectorActivityProposalPayload,
     UnmappedMaterialClaimPayload,
     load_company_intelligence_policy,
 )

@@ -10,12 +10,12 @@ from greensmecapt.document_intelligence.semantics.intelligence.models import (
     QualitativeInstruction,
     QualitativeValueType,
     RejectedSemanticClaim,
+    SectorActivityProposalPayload,
     SemanticClaimPayload,
     SemanticExtractionRequest,
     SemanticProviderConnection,
     SemanticProviderOutput,
     SemanticSourceSegment,
-    SectorActivityProposalPayload,
     UnmappedMaterialClaimPayload,
 )
 from greensmecapt.document_intelligence.semantics.intelligence.policy import (
