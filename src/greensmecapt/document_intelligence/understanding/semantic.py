@@ -11,6 +11,7 @@ from greensmecapt.document_intelligence.semantics import (
     SemanticMetricExtractor,
 )
 from greensmecapt.document_intelligence.semantics.intelligence import (
+    GroundedIntelligenceClaim,
     IntelligentSemanticExtractionService,
     SemanticProviderConnection,
     SemanticProviderError,
@@ -124,8 +125,8 @@ class HybridSemanticExtractor:
                 .require_intelligent_success
             ):
                 raise HybridSemanticExtractionError(
-                    "Required intelligent semantic extraction failed: "
-                    f"{error}"
+                    "Required intelligent semantic extraction "
+                    "failed."
                 ) from error
 
             return _result(
@@ -155,6 +156,11 @@ class HybridSemanticExtractor:
             intelligent_request_count=(
                 intelligent_report.request_count
             ),
+            company_policy_id=intelligent_report.company_policy_id,
+            company_policy_version=(
+                intelligent_report.company_policy_version
+            ),
+            intelligence_claims=intelligent_report.intelligence_claims,
         )
 
 
@@ -167,6 +173,9 @@ def _result(
     provider_status: IntelligentProviderStatus,
     rejected_claim_count: int = 0,
     intelligent_request_count: int = 0,
+    company_policy_id: str | None = None,
+    company_policy_version: str | None = None,
+    intelligence_claims: tuple[GroundedIntelligenceClaim, ...] = (),
     provider_error: str | None = None,
 ) -> HybridSemanticResult:
     """Build a validated combined result."""
@@ -221,6 +230,9 @@ def _result(
                 == "language_model_grounded_context_extraction"
             ),
             intelligent_request_count=intelligent_request_count,
+            company_policy_id=company_policy_id,
+            company_policy_version=company_policy_version,
+            intelligence_claims=intelligence_claims,
             rejected_intelligent_claim_count=(
                 rejected_claim_count
             ),

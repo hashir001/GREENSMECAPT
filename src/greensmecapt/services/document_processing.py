@@ -713,6 +713,27 @@ def _merge_semantic_results(
         for result in semantic_results
         for evidence_id in result.report.context_evidence_ids
     )
+    intelligence_claims = tuple(
+        {
+            claim.claim_id: claim
+            for result in semantic_results
+            for claim in result.report.intelligence_claims
+        }.values()
+    )
+    company_policy_ids = {
+        result.report.company_policy_id
+        for result in semantic_results
+        if result.report.company_policy_id is not None
+    }
+    company_policy_versions = {
+        result.report.company_policy_version
+        for result in semantic_results
+        if result.report.company_policy_version is not None
+    }
+    if len(company_policy_ids) > 1 or len(company_policy_versions) > 1:
+        raise ExtractionConsistencyError(
+            "Page batches used inconsistent company-intelligence policies."
+        )
     visual_ids = tuple(
         evidence.evidence_id
         for evidence in visual_evidence
@@ -748,6 +769,9 @@ def _merge_semantic_results(
             result.report.intelligent_request_count
             for result in semantic_results
         ),
+        company_policy_id=next(iter(company_policy_ids), None),
+        company_policy_version=next(iter(company_policy_versions), None),
+        intelligence_claims=intelligence_claims,
         visual_evidence_ids=visual_ids,
         visual_understanding=(
             VisualUnderstandingReport(

@@ -5,6 +5,12 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from greensmecapt.domain import EvidenceItem
+from greensmecapt.document_intelligence.semantics.intelligence.policy import (
+    CompanyProfileFieldInstruction,
+    DocumentTypeInstruction,
+    SectorInstruction,
+    UnmappedMaterialCategory,
+)
 
 
 class IntelligenceModel(BaseModel):
@@ -68,6 +74,12 @@ class SemanticExtractionRequest(IntelligenceModel):
         min_length=1
     )
     qualitative_claims: tuple[QualitativeInstruction, ...] = ()
+    document_types: tuple[DocumentTypeInstruction, ...] = ()
+    company_profile_fields: tuple[CompanyProfileFieldInstruction, ...] = ()
+    sectors: tuple[SectorInstruction, ...] = ()
+    activity_fact_ids: tuple[str, ...] = ()
+    unmapped_material_categories: tuple[UnmappedMaterialCategory, ...] = ()
+    maximum_unmapped_claims: int = Field(default=0, ge=0, le=50)
     segments: tuple[SemanticSourceSegment, ...] = Field(
         min_length=1
     )
@@ -102,11 +114,67 @@ class QualitativeClaimPayload(IntelligenceModel):
     scope: str | None = Field(default=None, min_length=1)
 
 
+class DocumentProfileClaimPayload(IntelligenceModel):
+    """Propose a controlled document class from an exact source quote."""
+
+    segment_id: str = Field(min_length=1)
+    document_type_id: str = Field(min_length=1)
+    source_quote: str = Field(min_length=1)
+    issuer_name: str | None = Field(default=None, min_length=1)
+    reporting_period: str | None = Field(default=None, min_length=1)
+    assurance_status: str | None = Field(default=None, min_length=1)
+
+
+class CompanyProfileClaimPayload(IntelligenceModel):
+    """Propose one controlled company fact from an exact source quote."""
+
+    segment_id: str = Field(min_length=1)
+    field_id: str = Field(min_length=1)
+    raw_value: str = Field(min_length=1)
+    source_quote: str = Field(min_length=1)
+
+
+class SectorActivityProposalPayload(IntelligenceModel):
+    """Propose one sector and supported activity facts for review."""
+
+    segment_id: str = Field(min_length=1)
+    sector_id: str = Field(min_length=1)
+    activity_fact_ids: tuple[str, ...] = ()
+    source_quote: str = Field(min_length=1)
+
+
+class UnmappedMaterialClaimPayload(IntelligenceModel):
+    """Surface important source material outside the closed metric schema."""
+
+    segment_id: str = Field(min_length=1)
+    category_id: str = Field(min_length=1)
+    suggested_label: str = Field(min_length=1)
+    source_quote: str = Field(min_length=1)
+    model_rationale: str = Field(min_length=1)
+
+
 class SemanticProviderOutput(IntelligenceModel):
     """Structured output required from every provider."""
 
     claims: tuple[SemanticClaimPayload, ...] = ()
     qualitative_claims: tuple[QualitativeClaimPayload, ...] = ()
+    document_profile_claims: tuple[DocumentProfileClaimPayload, ...] = ()
+    company_profile_claims: tuple[CompanyProfileClaimPayload, ...] = ()
+    sector_activity_proposals: tuple[SectorActivityProposalPayload, ...] = ()
+    unmapped_material_claims: tuple[UnmappedMaterialClaimPayload, ...] = ()
+
+
+class GroundedIntelligenceClaim(IntelligenceModel):
+    """Store one validated non-scoring proposal with provenance."""
+
+    claim_id: str = Field(min_length=1)
+    claim_type: str = Field(min_length=1)
+    field_id: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+    source_locator: str = Field(min_length=1)
+    source_quote: str = Field(min_length=1)
+    related_ids: tuple[str, ...] = ()
+    model_rationale: str | None = Field(default=None, min_length=1)
 
 
 class RejectedSemanticClaim(IntelligenceModel):
@@ -125,8 +193,11 @@ class IntelligentExtractionReport(IntelligenceModel):
     provider_version: str = Field(min_length=1)
     model_name: str = Field(min_length=1)
     request_count: int = Field(default=1, ge=1)
+    company_policy_id: str | None = Field(default=None, min_length=1)
+    company_policy_version: str | None = Field(default=None, min_length=1)
 
     evidence_items: tuple[EvidenceItem, ...]
+    intelligence_claims: tuple[GroundedIntelligenceClaim, ...] = ()
     rejected_claims: tuple[RejectedSemanticClaim, ...]
 
 

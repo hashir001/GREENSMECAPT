@@ -90,6 +90,7 @@ export function DocumentIntelligencePanel({
       || profile.required_capabilities.includes('visual_relevance_review'),
   ).length
   const visualDecisions = report?.visual_understanding?.decisions ?? []
+  const intelligenceClaims = report?.intelligence_claims ?? []
   const evidence = processing?.evidence_items ?? []
   const pendingReview = evidence.filter(
     (item) => item.validation_status === 'unvalidated',
@@ -304,6 +305,34 @@ export function DocumentIntelligencePanel({
             <article><span>Rejected proposals</span><strong>{report.rejected_intelligent_claim_count}</strong><p>AI suggestions blocked by grounding or bounds.</p></article>
           </div>
           {report.intelligent_provider_error && <div className="intelligence-failure"><AlertTriangle size={17} /><p>{report.intelligent_provider_error}</p></div>}
+        </section>
+      )}
+
+      {intelligenceClaims.length > 0 && (
+        <section className="intelligence-section">
+          <div className="intelligence-section__heading">
+            <div><span className="eyebrow">Grounded company understanding</span><h3>Document, company and sector proposals</h3></div>
+            <span>Policy {report?.company_policy_version ?? '—'}</span>
+          </div>
+          <div className="company-intelligence-grid">
+            {intelligenceClaims.map((claim) => (
+              <article key={claim.claim_id} className={`company-intelligence-card company-intelligence-card--${claim.claim_type}`}>
+                <div>
+                  <span>{humanize(claim.claim_type)}</span>
+                  <StatusPill
+                    label={claim.claim_type === 'company_profile' || claim.claim_type === 'document_profile' ? 'grounded' : 'proposal'}
+                    tone={claim.claim_type === 'unmapped_material' ? 'warning' : 'neutral'}
+                  />
+                </div>
+                <strong>{humanize(claim.field_id)}: {humanize(claim.value)}</strong>
+                {claim.related_ids.length > 0 && <p>Activities: {claim.related_ids.map(humanize).join(', ')}</p>}
+                <blockquote>“{claim.source_quote}”</blockquote>
+                <small>{claim.source_locator}</small>
+                {claim.model_rationale && <p>{claim.model_rationale}</p>}
+              </article>
+            ))}
+          </div>
+          <p className="company-intelligence-note">Sector/activity and unmapped findings remain outside scoring until confirmed or promoted into a governed catalogue.</p>
         </section>
       )}
 

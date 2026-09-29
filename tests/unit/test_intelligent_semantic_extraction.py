@@ -12,12 +12,17 @@ from greensmecapt.document_intelligence.semantics import (
     load_metric_catalog,
 )
 from greensmecapt.document_intelligence.semantics.intelligence import (
+    CompanyProfileClaimPayload,
+    DocumentProfileClaimPayload,
     IntelligentSemanticExtractionService,
     QualitativeClaimPayload,
     QualitativeInstruction,
     QualitativeValueType,
     SemanticClaimPayload,
     SemanticProviderOutput,
+    SectorActivityProposalPayload,
+    UnmappedMaterialClaimPayload,
+    load_company_intelligence_policy,
 )
 from greensmecapt.document_intelligence.semantics.intelligence.service import (
     _raw_unit_occurs_in_value,
@@ -29,6 +34,9 @@ from greensmecapt.domain import (
 
 CATALOG_PATH = Path(
     "config/metric_catalog.development.json"
+)
+COMPANY_POLICY_PATH = Path(
+    "config/company_intelligence.development.json"
 )
 
 
@@ -43,9 +51,17 @@ class FakeProvider:
         self,
         claims: tuple[SemanticClaimPayload, ...],
         qualitative_claims: tuple[QualitativeClaimPayload, ...] = (),
+        document_profile_claims: tuple[DocumentProfileClaimPayload, ...] = (),
+        company_profile_claims: tuple[CompanyProfileClaimPayload, ...] = (),
+        sector_activity_proposals: tuple[SectorActivityProposalPayload, ...] = (),
+        unmapped_material_claims: tuple[UnmappedMaterialClaimPayload, ...] = (),
     ) -> None:
         self._claims = claims
         self._qualitative_claims = qualitative_claims
+        self._document_profile_claims = document_profile_claims
+        self._company_profile_claims = company_profile_claims
+        self._sector_activity_proposals = sector_activity_proposals
+        self._unmapped_material_claims = unmapped_material_claims
         self.requests = []
 
     def extract(self, request):
@@ -58,6 +74,10 @@ class FakeProvider:
         return SemanticProviderOutput(
             claims=self._claims,
             qualitative_claims=self._qualitative_claims,
+            document_profile_claims=self._document_profile_claims,
+            company_profile_claims=self._company_profile_claims,
+            sector_activity_proposals=self._sector_activity_proposals,
+            unmapped_material_claims=self._unmapped_material_claims,
         )
 
 
@@ -123,7 +143,6 @@ def _extract(*claims):
     )
 
 
-
 def test_ground_currency_scale_words_around_number() -> None:
     assert _raw_unit_occurs_in_value(
         raw_value="AED 3.20 million",
@@ -133,6 +152,7 @@ def test_ground_currency_scale_words_around_number() -> None:
         raw_value="AED 3.20 million",
         raw_unit="AED billion",
     )
+
 
 def test_convert_grounded_claim_to_evidence() -> None:
     """A fully grounded claim should become evidence."""
@@ -200,15 +220,15 @@ def test_reject_unconfigured_indicator() -> None:
     )
 
 
-def test_reject_unit_absent_from_source_quote() -> None:
-    """The model cannot attach a unit absent from its source quote."""
+def test_reject_unit_absent_from_raw_value() -> None:
+    """The model cannot attach a unit absent from its value."""
 
     report = _extract(
         _claim(raw_unit="%")
     )
 
     assert report.evidence_items == ()
-    assert "does not occur in the source quote" in (
+    assert "does not occur in the raw value" in (
         report.rejected_claims[0].reason
     )
 
@@ -338,6 +358,104 @@ def test_partition_long_documents_into_bounded_requests() -> None:
     assert report.request_count == 2
     assert len(provider.requests) == 2
     assert all(len(request.segments) == 1 for request in provider.requests)
+
+
+def test_ground_company_document_sector_and_unmapped_context() -> None:
+    text = (
+        "AsterLoop Industries LLC publishes its 2025 Sustainability Report. "
+        "The company manufactures packaging in Abu Dhabi and holds ISO 14001 "
+        "certification. Its pilot also reports a biodiversity score of 17 "
+        "points."
+    )
+    extracted = ExtractedDocument(
+        document_id="doc_llm_001",
+        pages=(
+            ExtractedPage(
+                page_number=1,
+                text=text,
+                text_source=TextSource.OCR,
+            ),
+        ),
+    )
+    provider = FakeProvider(
+        (),
+        document_profile_claims=(
+            DocumentProfileClaimPayload(
+                segment_id="page_1_text",
+                document_type_id="sustainability_or_esg_report",
+                source_quote=(
+                    "AsterLoop Industries LLC publishes its 2025 "
+                    "Sustainability Report."
+                ),
+                issuer_name="AsterLoop Industries LLC",
+                reporting_period="2025",
+            ),
+        ),
+        company_profile_claims=(
+            CompanyProfileClaimPayload(
+                segment_id="page_1_text",
+                field_id="legal_name",
+                raw_value="AsterLoop Industries LLC",
+                source_quote=(
+                    "AsterLoop Industries LLC publishes its 2025 "
+                    "Sustainability Report."
+                ),
+            ),
+        ),
+        sector_activity_proposals=(
+            SectorActivityProposalPayload(
+                segment_id="page_1_text",
+                sector_id="manufacturing_and_processing",
+                activity_fact_ids=("manufactures_or_processes",),
+                source_quote="The company manufactures packaging in Abu Dhabi",
+            ),
+        ),
+        unmapped_material_claims=(
+            UnmappedMaterialClaimPayload(
+                segment_id="page_1_text",
+                category_id="environmental_metric",
+                suggested_label="Biodiversity score",
+                source_quote="biodiversity score of 17 points",
+                model_rationale=(
+                    "This is a numeric environmental measure outside the "
+                    "approved catalogue."
+                ),
+            ),
+        ),
+    )
+    service = IntelligentSemanticExtractionService(
+        provider,
+        company_policy=load_company_intelligence_policy(COMPANY_POLICY_PATH),
+        qualitative_instructions=(
+            QualitativeInstruction(
+                claim_id="activity_fact:manufactures_or_processes",
+                name="manufactures or processes",
+                question="Does the company manufacture physical products?",
+                value_type=QualitativeValueType.BOOLEAN,
+            ),
+        ),
+    )
+
+    report = service.extract(
+        document=_document(),
+        extracted_document=extracted,
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert report.rejected_claims == ()
+    assert report.company_policy_version == "1.0.0"
+    assert {claim.claim_type for claim in report.intelligence_claims} == {
+        "document_profile",
+        "company_profile",
+        "sector_activity_proposal",
+        "unmapped_material",
+    }
+    sector = next(
+        claim
+        for claim in report.intelligence_claims
+        if claim.claim_type == "sector_activity_proposal"
+    )
+    assert sector.related_ids == ("manufactures_or_processes",)
 
 
 def test_provider_connection_check_uses_real_schema_contract() -> None:

@@ -693,6 +693,16 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
 .batch-card--failed { background: #fff4f1; border-color: #eed3cd; }
 
 .intelligence-section__heading--routes { align-items: center; }
+.company-intelligence-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
+.company-intelligence-card { padding: 15px; border: 1px solid #dfe9e3; border-radius: 14px; background: #fbfdfb; display: grid; gap: 8px; }
+.company-intelligence-card > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.company-intelligence-card > div > span { color: var(--jade); font-size: 8px; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
+.company-intelligence-card strong { color: var(--ink); font-size: 11px; text-transform: capitalize; }
+.company-intelligence-card p,.company-intelligence-card small { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.company-intelligence-card blockquote { margin: 0; padding: 9px 11px; border-left: 2px solid #a8d3bd; background: #f2f8f4; color: #496057; font-size: 9px; line-height: 1.5; }
+.company-intelligence-card--unmapped_material { border-color: #e6d6a8; background: #fffdf7; }
+.company-intelligence-card--unmapped_material blockquote { border-left-color: var(--gold); background: #fff9e9; }
+.company-intelligence-note { margin: 12px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .route-filters { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .route-filters button { padding: 6px 9px; color: #76887e; background: #f2f6f3; border: 1px solid transparent; border-radius: 8px; font-size: 7px; font-weight: 800; text-transform: capitalize; }
 .route-filters button:hover { color: var(--jade); border-color: #cfe3d8; }
@@ -748,7 +758,7 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
   .batch-grid,.page-route-grid,.diagnostic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .intelligence-section__heading--routes { align-items: flex-start; flex-direction: column; }
   .route-filters { justify-content: flex-start; }
-  .visual-decision-list { grid-template-columns: 1fr; }
+  .visual-decision-list,.company-intelligence-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {

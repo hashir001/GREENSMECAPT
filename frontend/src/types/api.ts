@@ -127,6 +127,9 @@ export type DocumentUnderstandingReport = {
   intelligent_evidence_ids: string[]
   context_evidence_ids: string[]
   intelligent_request_count: number
+  company_policy_id: string | null
+  company_policy_version: string | null
+  intelligence_claims: GroundedIntelligenceClaim[]
   visual_evidence_ids: string[]
   visual_understanding: {
     document_id: string
@@ -136,6 +139,21 @@ export type DocumentUnderstandingReport = {
   intelligent_provider_status: 'disabled' | 'succeeded' | 'failed'
   intelligent_provider_error: string | null
   evidence_ids: string[]
+}
+
+export type GroundedIntelligenceClaim = {
+  claim_id: string
+  claim_type:
+    | 'document_profile'
+    | 'company_profile'
+    | 'sector_activity_proposal'
+    | 'unmapped_material'
+  field_id: string
+  value: string
+  source_locator: string
+  source_quote: string
+  related_ids: string[]
+  model_rationale: string | null
 }
 
 export type EvidenceCluster = {

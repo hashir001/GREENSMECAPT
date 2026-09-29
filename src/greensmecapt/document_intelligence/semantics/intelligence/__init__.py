@@ -1,6 +1,9 @@
 """Grounded intelligent semantic extraction."""
 
 from greensmecapt.document_intelligence.semantics.intelligence.models import (
+    CompanyProfileClaimPayload,
+    DocumentProfileClaimPayload,
+    GroundedIntelligenceClaim,
     IntelligentExtractionReport,
     MetricInstruction,
     QualitativeClaimPayload,
@@ -12,6 +15,13 @@ from greensmecapt.document_intelligence.semantics.intelligence.models import (
     SemanticProviderConnection,
     SemanticProviderOutput,
     SemanticSourceSegment,
+    SectorActivityProposalPayload,
+    UnmappedMaterialClaimPayload,
+)
+from greensmecapt.document_intelligence.semantics.intelligence.policy import (
+    CompanyIntelligencePolicy,
+    CompanyIntelligencePolicyError,
+    load_company_intelligence_policy,
 )
 from greensmecapt.document_intelligence.semantics.intelligence.provider import (
     OpenAICompatibleProviderConfiguration,
@@ -22,12 +32,13 @@ from greensmecapt.document_intelligence.semantics.intelligence.provider import (
 from greensmecapt.document_intelligence.semantics.intelligence.service import (
     IntelligentSemanticExtractionService,
 )
-from greensmecapt.document_intelligence.semantics.intelligence.vertex_gemini import (
-    VertexGeminiProviderConfiguration,
-    VertexGeminiSemanticProvider,
-)
 
 __all__ = [
+    "CompanyIntelligencePolicy",
+    "CompanyIntelligencePolicyError",
+    "CompanyProfileClaimPayload",
+    "DocumentProfileClaimPayload",
+    "GroundedIntelligenceClaim",
     "IntelligentExtractionReport",
     "IntelligentSemanticExtractionService",
     "MetricInstruction",
@@ -44,6 +55,7 @@ __all__ = [
     "SemanticProviderConnection",
     "SemanticProviderOutput",
     "SemanticSourceSegment",
-    "VertexGeminiProviderConfiguration",
-    "VertexGeminiSemanticProvider",
+    "SectorActivityProposalPayload",
+    "UnmappedMaterialClaimPayload",
+    "load_company_intelligence_policy",
 ]

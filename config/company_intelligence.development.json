@@ -1,0 +1,49 @@
+{
+  "policy_id": "greensmecapt_company_document_intelligence",
+  "version": "1.0.0",
+  "status": "development",
+  "document_types": [
+    {"document_type_id": "sustainability_or_esg_report", "title": "Sustainability or ESG report", "definition": "A report focused on environmental, social, governance or sustainability performance."},
+    {"document_type_id": "financial_statement", "title": "Financial statement", "definition": "Financial accounts, statements, management accounts or audited financial reporting."},
+    {"document_type_id": "utility_or_resource_record", "title": "Utility or resource record", "definition": "A bill, meter record or supplier statement for electricity, fuel, water, waste or materials."},
+    {"document_type_id": "funding_application_or_business_plan", "title": "Funding application or business plan", "definition": "A financing request, investment memorandum, business plan or proposed use-of-funds document."},
+    {"document_type_id": "certification_permit_or_compliance_record", "title": "Certification, permit or compliance record", "definition": "A licence, certification, permit, inspection or compliance record."},
+    {"document_type_id": "contract_invoice_or_quotation", "title": "Contract, invoice or quotation", "definition": "A customer or supplier contract, purchase record, invoice, proposal or quotation."},
+    {"document_type_id": "operational_or_technical_record", "title": "Operational or technical record", "definition": "An operating log, technical calculation, production record, project report or engineering record."},
+    {"document_type_id": "other", "title": "Other", "definition": "A relevant SME document that does not fit another controlled class."}
+  ],
+  "company_profile_fields": [
+    {"field_id": "legal_name", "title": "Legal company name", "description": "The registered or explicitly stated legal company name."},
+    {"field_id": "trade_name", "title": "Trading name", "description": "A brand or trading name explicitly associated with the company."},
+    {"field_id": "registration_or_licence_identifier", "title": "Registration or licence identifier", "description": "An explicitly stated company registration or trade-licence identifier."},
+    {"field_id": "headquarters_or_operating_location", "title": "Location", "description": "A stated headquarters, emirate, city, country or operating location."},
+    {"field_id": "founding_year", "title": "Founding year", "description": "The year the company states it was founded or incorporated."},
+    {"field_id": "employee_count", "title": "Employee count", "description": "A stated number or bounded range of employees."},
+    {"field_id": "products_and_services", "title": "Products and services", "description": "The company's explicitly described products, services or customer offering."},
+    {"field_id": "operating_footprint", "title": "Operating footprint", "description": "Explicit facilities, fleet, farms, sites, cloud operations or geographic operating reach."},
+    {"field_id": "business_stage", "title": "Business stage", "description": "An explicitly stated pre-revenue, early-stage, growth, mature or comparable business stage."},
+    {"field_id": "certification_or_permit", "title": "Certification or permit", "description": "An explicitly named certification, licence, permit or accreditation."},
+    {"field_id": "green_value_proposition", "title": "Green value proposition", "description": "The explicitly stated environmental function or benefit of the company's product, service or transition project."}
+  ],
+  "sectors": [
+    {"sector_id": "manufacturing_and_processing", "title": "Manufacturing and processing", "definition": "Production, fabrication or physical processing of goods or materials."},
+    {"sector_id": "energy_and_clean_technology", "title": "Energy and clean technology", "definition": "Energy generation, efficiency, storage, clean technology or energy services."},
+    {"sector_id": "waste_and_circular_economy", "title": "Waste and circular economy", "definition": "Waste management, repair, reuse, recycling, recovery or circular services."},
+    {"sector_id": "construction_and_buildings", "title": "Construction and buildings", "definition": "Construction, retrofit, property, building operation or building services."},
+    {"sector_id": "transport_and_logistics", "title": "Transport and logistics", "definition": "Fleet, mobility, delivery, freight, transport or logistics activity."},
+    {"sector_id": "agriculture_food_and_land", "title": "Agriculture, food and land", "definition": "Agriculture, food production or processing, forestry, landscaping or land management."},
+    {"sector_id": "retail_and_hospitality", "title": "Retail and hospitality", "definition": "Retail, restaurant, accommodation or hospitality operations."},
+    {"sector_id": "digital_and_professional_services", "title": "Digital and professional services", "definition": "Software, cloud, data, consulting or other primarily professional services."},
+    {"sector_id": "environmental_products_and_services", "title": "Environmental products and services", "definition": "Products or services whose intended function is reducing environmental impact."},
+    {"sector_id": "other", "title": "Other", "definition": "A sector not represented by another controlled category."}
+  ],
+  "unmapped_material_categories": [
+    {"category_id": "environmental_metric", "title": "Unmapped environmental metric", "definition": "A material environmental measurement or target outside the approved metric catalogue."},
+    {"category_id": "financial_or_investment_fact", "title": "Unmapped financial or investment fact", "definition": "A material financial or investment fact outside the approved metric catalogue."},
+    {"category_id": "readiness_or_capability", "title": "Readiness or capability", "definition": "Material evidence about leadership, workforce, technology, implementation or organizational readiness."},
+    {"category_id": "compliance_or_certification", "title": "Compliance or certification", "definition": "A material regulatory, certification, permit or compliance fact not otherwise captured."},
+    {"category_id": "risk_or_contradiction", "title": "Risk or contradiction", "definition": "A material caveat, dependency, inconsistency or risk requiring human review."},
+    {"category_id": "other_material_context", "title": "Other material context", "definition": "Other source-grounded information that could materially affect assessment or investor interpretation."}
+  ],
+  "maximum_unmapped_claims_per_document": 10
+}

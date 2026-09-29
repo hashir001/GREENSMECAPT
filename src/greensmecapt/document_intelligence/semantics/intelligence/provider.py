@@ -185,7 +185,7 @@ class OpenAICompatibleSemanticProvider:
     """Use schema-constrained chat completion endpoints."""
 
     provider_name = "openai_compatible"
-    provider_version = "1.0.0"
+    provider_version = "1.1.0"
 
     def __init__(
         self,
@@ -285,8 +285,8 @@ class OpenAICompatibleSemanticProvider:
 
 
 _SYSTEM_PROMPT = """
-You extract environmental, financial, investment and governed context claims
-from supplied document segments.
+You extract environmental metrics and governed context claims from supplied
+document segments.
 
 Rules:
 1. Use only the supplied segments, allowed metrics and qualitative_claims.
@@ -294,9 +294,7 @@ Rules:
 3. Copy source_quote exactly from one segment.
 4. Copy raw_value exactly as written.
 5. raw_number is the number explicitly represented by raw_value.
-6. raw_unit is the unit explicitly written in the same source quote,
-   including a nearby table header or scale label that clearly governs
-   the number.
+6. raw_unit is the unit explicitly written beside the number.
 7. Use the exact segment_id and indicator_id supplied.
 8. Return no claim when the metric, value, or unit is uncertain.
 9. Do not convert units. The application performs conversion.
@@ -321,7 +319,21 @@ separate allowed forecast or savings indicator when one is supplied.
 19. Currency scale words such as thousand or million belong to raw_unit and
 raw_value; never silently multiply raw_number.
 20. Never turn a qualitative statement into a numeric metric or score.
-21. Return only the required JSON structure.
+21. document_profile_claims, company_profile_claims and
+sector_activity_proposals are proposals, not final company master data. Use
+only supplied controlled IDs and an exact supporting quote.
+22. A company-profile raw_value must occur exactly within source_quote. Do not
+infer employee counts, dates, locations, licences, products or company names.
+23. Sector and activity proposals may interpret an exact quote, but must use
+only supplied sector and activity IDs. Return no proposal when the evidence is
+too general to support it.
+24. unmapped_material_claims are a review-only safety net. Use them only for
+material information that fits no allowed metric or governed qualitative
+claim. Never restate an already captured claim, and never exceed
+maximum_unmapped_claims.
+25. model_rationale may explain why an unmapped quote may matter, but must not
+present the information as verified, scoreable or approved.
+26. Return only the required JSON structure.
 """.strip()
 
 

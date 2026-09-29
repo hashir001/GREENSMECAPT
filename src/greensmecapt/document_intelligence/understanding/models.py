@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from greensmecapt.document_intelligence.orchestration import (
     DocumentProcessingManifest,
 )
+from greensmecapt.document_intelligence.semantics.intelligence.models import (
+    GroundedIntelligenceClaim,
+)
 from greensmecapt.document_intelligence.reconciliation import (
     EvidenceReconciliationReport,
 )
@@ -60,6 +63,9 @@ class DocumentUnderstandingReport(UnderstandingModel):
     intelligent_evidence_ids: tuple[str, ...] = ()
     context_evidence_ids: tuple[str, ...] = ()
     intelligent_request_count: int = Field(default=0, ge=0)
+    company_policy_id: str | None = Field(default=None, min_length=1)
+    company_policy_version: str | None = Field(default=None, min_length=1)
+    intelligence_claims: tuple[GroundedIntelligenceClaim, ...] = ()
     visual_evidence_ids: tuple[str, ...] = ()
     visual_understanding: VisualUnderstandingReport | None = None
     rejected_intelligent_claim_count: int = Field(

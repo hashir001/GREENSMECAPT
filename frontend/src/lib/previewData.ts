@@ -359,6 +359,9 @@ function previewReport(
     intelligent_evidence_ids: [],
     context_evidence_ids: [],
     intelligent_request_count: 0,
+    company_policy_id: 'greensmecapt_company_document_intelligence',
+    company_policy_version: '1.0.0',
+    intelligence_claims: [],
     visual_evidence_ids: [],
     visual_understanding: decisions.length
       ? { document_id: document.document_id, decisions }
