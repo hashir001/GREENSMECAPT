@@ -67,7 +67,7 @@ until governance promotes it into a later catalogue/policy version.
 - Additional Document AI processors are introduced only after measured gains on
   representative documents.
 
-## Implementation-paper traceability
+Provider-specific structured-output schemas expose the same governed contract and remain covered by contract tests, so switching providers cannot silently change the meaning of extracted evidence.\n\n## Implementation-paper traceability
 
 The implementation study can report and evaluate the following independently:
 
