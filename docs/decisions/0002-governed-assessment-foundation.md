@@ -75,6 +75,9 @@ Approved assessment revisions persist the exact evidence policy with the other
 policy snapshots. This makes a historical result reproducible when later
 catalogue or policy versions change.
 
+Automated contract tests enforce these separation and cross-policy rules on
+every repository build.
+
 ## Implementation-paper traceability
 
 The implementation study can report coverage and accuracy separately for each
