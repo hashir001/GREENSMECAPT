@@ -10,11 +10,11 @@ from sqlalchemy import UniqueConstraint
 from sqlmodel import Field as SQLField
 from sqlmodel import Session, SQLModel, select
 
+from greensmecapt.assessment.evidence_strength import EvidenceStrengthPolicy
 from greensmecapt.assessment.financial import (
     FinancialAssessmentPolicy,
     FinancialObservation,
 )
-from greensmecapt.assessment.evidence_strength import EvidenceStrengthPolicy
 from greensmecapt.assessment.fuzzy_dematel import DematelSpecification
 from greensmecapt.assessment.normalization import NormalizationPolicy
 from greensmecapt.assessment.observations import CriterionResponse
