@@ -234,6 +234,17 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
       required_attributes: ['source_locator', 'validation_status'], notes: 'Traceable, reviewed evidence is required.',
     })),
     bands: ['strong', 'adequate', 'limited', 'insufficient', 'conflicting'],
+    band_rules: [
+      ['conflicting', 'conflict', 'Accepted evidence contains unresolved conflicts.'],
+      ['insufficient', 'no_confirmed_sources', 'No confirmed source supports this dimension.'],
+      ['limited', 'missing_attributes_or_weak_only', 'Material context is missing or support is weak-only.'],
+      ['adequate', 'complete_internal_support', 'Complete confirmed internal records support this dimension.'],
+      ['strong', 'complete_independent_support', 'Complete independent support is present.'],
+    ].map(([band, condition, description]) => ({
+      band: band as 'strong' | 'adequate' | 'limited' | 'insufficient' | 'conflicting',
+      condition: condition as 'conflict' | 'no_confirmed_sources' | 'missing_attributes_or_weak_only' | 'complete_internal_support' | 'complete_independent_support',
+      description,
+    })),
   },
 }
 
@@ -685,8 +696,13 @@ function buildPreviewAssessment(request: CohortAssessmentRequest): AssessmentRun
               title: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.title ?? item.metric_id,
               group: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.group ?? 'business_health',
               importance: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.importance ?? 'supporting',
+              role: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.role ?? 'source_input',
+              direction: previewAssessmentConfiguration.financial_policy.metrics.find((metric) => metric.metric_id === item.metric_id)?.direction ?? 'context_only',
               state: item.state, value: item.value ?? null, unit: item.unit ?? null,
+              origin: item.state === 'reported' ? 'reported' as const : 'unknown' as const,
               reporting_period: item.reporting_period ?? null, issues: [],
+              calculation_method: null, calculation_formula: null,
+              calculation_input_metric_ids: [],
             })),
             derived_indicators: [],
           },
@@ -702,6 +718,15 @@ function buildPreviewAssessment(request: CohortAssessmentRequest): AssessmentRun
             metric_catalog_id: previewAssessmentConfiguration.metric_catalog.catalog_id,
             metric_catalog_version: previewAssessmentConfiguration.metric_catalog.version,
             metrics: [],
+          },
+          evidence_strength: {
+            policy_id: 'greensmecapt_evidence_strength', policy_version: '1.0.0',
+            calibration_status: 'requires_evidence_calibration', performance_separation: true,
+            dimensions: ['environmental_performance', 'financial_health', 'investment_case', 'readiness_context'].map((dimension_id) => ({
+              dimension_id: dimension_id as 'environmental_performance' | 'financial_health' | 'investment_case' | 'readiness_context',
+              band: 'insufficient' as const, sources: [], missing_attributes: [], issues: [],
+              rationale: 'No confirmed source currently supports this assessment dimension.',
+            })),
           },
         }
       }),

@@ -100,6 +100,7 @@ export function AssessmentResultPage() {
           {run.result.preparations?.map((preparation) => {
             const financial = preparation.financial_assessment
             const readiness = preparation.readiness_profile
+            const evidenceStrength = preparation.evidence_strength
             const constraints = readiness.factors.filter((factor) => factor.state === 'constraining_evidence' || factor.state === 'mixed_evidence')
             const contextual = preparation.performance_context.metrics
             const readyMetrics = contextual.filter((metric) => metric.state === 'ready').length
@@ -112,6 +113,11 @@ export function AssessmentResultPage() {
                 {!financial.metrics.some((metric) => metric.state === 'reported') && <span>No reviewed financial values reported.</span>}
               </div>
               <div className="dimension-result-detail">
+                <strong>Calculated financial indicators</strong>
+                {financial.derived_indicators.map((indicator) => <span key={indicator.indicator_id}>{humanize(indicator.indicator_id)}: {indicator.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} {indicator.unit.replaceAll('_', ' ')}<small>{indicator.formula} · {indicator.source_ids.length} source{indicator.source_ids.length === 1 ? '' : 's'}</small></span>)}
+                {!financial.derived_indicators.length && <span>Required source inputs are not yet complete.</span>}
+              </div>
+              <div className="dimension-result-detail">
                 <strong>Readiness interpretation</strong>
                 {constraints.map((factor) => <span key={factor.factor_id}>{humanize(factor.factor_id)} · {humanize(factor.state)}</span>)}
                 {!constraints.length && <span>No evidenced constraint recorded; unknowns remain unknown.</span>}
@@ -121,6 +127,10 @@ export function AssessmentResultPage() {
                 <strong>Environmental measures</strong>
                 {contextual.filter((metric) => metric.measurement_value !== null).map((metric) => <span key={metric.indicator_id}>{metric.metric_name}: {metric.measurement_value?.toLocaleString()} {metric.measurement_unit} · {humanize(metric.state)}</span>)}
                 {!contextual.some((metric) => metric.measurement_value !== null) && <span>No accepted quantitative measurements.</span>}
+              </div>
+              <div className="dimension-result-detail">
+                <strong>Evidence strength</strong>
+                {evidenceStrength.dimensions.map((dimension) => <span key={dimension.dimension_id}><b>{humanize(dimension.dimension_id)} · {humanize(dimension.band)}</b><small>{dimension.rationale}{dimension.missing_attributes.length ? ` Missing: ${dimension.missing_attributes.map(humanize).join(', ')}.` : ''}</small></span>)}
               </div>
             </article>
           })}

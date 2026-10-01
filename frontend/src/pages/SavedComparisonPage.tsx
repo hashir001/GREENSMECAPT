@@ -124,6 +124,7 @@ function SavedResult({ run, selected, names }: { run: AssessmentRunRecord; selec
         const financial = preparation?.financial_assessment
         const readiness = preparation?.readiness_profile
         const context = preparation?.performance_context
+        const evidenceStrength = preparation?.evidence_strength
         const constraints = readiness?.factors.filter((item) => item.state === 'constraining_evidence' || item.state === 'mixed_evidence') ?? []
         const companyCoverage = coverage.find((item) => item.sme_id === smeId)
         return <article className="panel saved-company-card" key={smeId}>
@@ -131,6 +132,8 @@ function SavedResult({ run, selected, names }: { run: AssessmentRunRecord; selec
           <div className="saved-score-grid"><span><b>{percent(crispItem?.score)}</b>TOPSIS</span><span><b>{percent(fuzzyItem?.score)}</b>Fuzzy TOPSIS</span><span><b>{percent(preparation?.observations.coverage.coverage_ratio)}</b>Assessment coverage</span><span><b>{percent(financial?.core_coverage_ratio)}</b>Financial coverage</span></div>
           <div className="dimension-result-detail"><strong>Environmental measures</strong>{context?.metrics.filter((item) => item.measurement_value !== null).map((item) => <span key={item.indicator_id}>{item.metric_name}: {item.measurement_value?.toLocaleString()} {item.measurement_unit ?? ''} · {humanize(item.state)}</span>)}{!context?.metrics.some((item) => item.measurement_value !== null) && <span>No accepted quantitative measurements stored.</span>}</div>
           <div className="dimension-result-detail"><strong>Financial values</strong>{financial?.metrics.filter((item) => item.state === 'reported').map((item) => <span key={item.metric_id}>{item.title}: {item.value?.toLocaleString()} {item.unit?.replaceAll('_', ' ')}</span>)}{!financial?.metrics.some((item) => item.state === 'reported') && <span>No reviewed financial values stored.</span>}</div>
+          <div className="dimension-result-detail"><strong>Calculated indicators</strong>{financial?.derived_indicators.map((item) => <span key={item.indicator_id}>{humanize(item.indicator_id)}: {item.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} {item.unit.replaceAll('_', ' ')}<small>{item.formula}</small></span>)}{!financial?.derived_indicators.length && <span>Required source inputs were incomplete.</span>}</div>
+          <div className="dimension-result-detail"><strong>Evidence strength</strong>{evidenceStrength?.dimensions.map((item) => <span key={item.dimension_id}>{humanize(item.dimension_id)} · <b>{humanize(item.band)}</b><small>{item.rationale}</small></span>)}{!evidenceStrength && <span>No evidence-strength snapshot stored for this legacy run.</span>}</div>
           <div className="dimension-result-detail"><strong>Context and evidence</strong><span>{preparation?.observations.coverage.document_supported_count ?? 0} document-supported observations</span><span>{constraints.length} readiness constraints recorded</span><span>{companyCoverage?.excluded_criterion_ids.length ?? 0} criteria excluded from this comparison</span></div>
         </article>
       })}

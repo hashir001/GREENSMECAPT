@@ -59,5 +59,32 @@
       "notes": "Readiness evidence supports causal interpretation and is not an environmental performance score."
     }
   ],
-  "bands": ["strong", "adequate", "limited", "insufficient", "conflicting"]
+  "bands": ["strong", "adequate", "limited", "insufficient", "conflicting"],
+  "band_rules": [
+    {
+      "band": "conflicting",
+      "condition": "conflict",
+      "description": "Accepted evidence contains unresolved conflicting values, periods or scopes."
+    },
+    {
+      "band": "insufficient",
+      "condition": "no_confirmed_sources",
+      "description": "No confirmed source currently supports this assessment dimension."
+    },
+    {
+      "band": "limited",
+      "condition": "missing_attributes_or_weak_only",
+      "description": "Evidence is confirmed but material context is missing, or support is limited to self-declared or model-inferred information."
+    },
+    {
+      "band": "adequate",
+      "condition": "complete_internal_support",
+      "description": "Required context is present and confirmed internal records support the assessment."
+    },
+    {
+      "band": "strong",
+      "condition": "complete_independent_support",
+      "description": "Required context is present and at least one audited, regulatory or third-party transactional source supports the assessment."
+    }
+  ]
 }

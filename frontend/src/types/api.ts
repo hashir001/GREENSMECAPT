@@ -391,6 +391,11 @@ export type EvidenceStrengthPolicy = {
     notes: string
   }>
   bands: Array<'strong' | 'adequate' | 'limited' | 'insufficient' | 'conflicting'>
+  band_rules: Array<{
+    band: 'strong' | 'adequate' | 'limited' | 'insufficient' | 'conflicting'
+    condition: 'conflict' | 'no_confirmed_sources' | 'missing_attributes_or_weak_only' | 'complete_internal_support' | 'complete_independent_support'
+    description: string
+  }>
 }
 
 export type FinancialObservation = {
@@ -575,16 +580,27 @@ export type AssessmentRunRecord = AssessmentRunSummary & {
           title: string
           group: string
           importance: string
+          role: 'source_input' | 'derived_indicator' | 'investment_input'
+          direction: 'benefit' | 'cost' | 'context_only'
           state: string
+          origin: 'unknown' | 'reported' | 'extracted' | 'calculated' | 'reported_and_calculated'
           value: number | null
           unit: string | null
           reporting_period: string | null
           issues: string[]
+          calculation_method: string | null
+          calculation_formula: string | null
+          calculation_input_metric_ids: string[]
         }>
         derived_indicators: Array<{
           indicator_id: string
           value: number
           unit: string
+          source_metric_ids: string[]
+          source_ids: string[]
+          calculation_method: string
+          formula: string
+          input_values: Record<string, number>
           interpretation: string
         }>
       }
@@ -611,6 +627,25 @@ export type AssessmentRunRecord = AssessmentRunSummary & {
           intensity_unit: string | null
           missing_requirements: string[]
           issues: string[]
+        }>
+      }
+      evidence_strength: {
+        policy_id: string
+        policy_version: string
+        calibration_status: string
+        performance_separation: true
+        dimensions: Array<{
+          dimension_id: 'environmental_performance' | 'financial_health' | 'investment_case' | 'readiness_context'
+          band: 'strong' | 'adequate' | 'limited' | 'insufficient' | 'conflicting'
+          sources: Array<{
+            source_id: string
+            source_class: string
+            confirmed: boolean
+            classification_basis: string
+          }>
+          missing_attributes: string[]
+          issues: string[]
+          rationale: string
         }>
       }
     }>

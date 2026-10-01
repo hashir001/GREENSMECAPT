@@ -78,7 +78,9 @@ function SMEFinancialWorkspace() {
       setDocuments(record.documents)
       setSubmission(saved)
       const byMetric = new Map(saved?.observations.map((item) => [item.metric_id, item]))
-      setDrafts(Object.fromEntries(configuration.metrics.map((metric) => {
+      setDrafts(Object.fromEntries(configuration.metrics
+        .filter((metric) => metric.role !== 'derived_indicator')
+        .map((metric) => {
         const item = byMetric.get(metric.metric_id)
         return [metric.metric_id, item ? {
           state: item.state,
@@ -89,7 +91,7 @@ function SMEFinancialWorkspace() {
           sourceId: item.source_ids[0] ?? '',
           narrative: item.narrative ?? '',
         } : blankDraft(metric.allowed_units[0])]
-      })))
+        })))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Financial workspace could not be loaded.')
     } finally {
@@ -109,7 +111,9 @@ function SMEFinancialWorkspace() {
   function observations(): FinancialObservation[] {
     if (!policy || !company) return []
     const timestamp = Date.now()
-    return policy.metrics.map((metric) => {
+    return policy.metrics
+      .filter((metric) => metric.role !== 'derived_indicator')
+      .map((metric) => {
       const field = drafts[metric.metric_id] ?? blankDraft(metric.allowed_units[0])
       const reported = field.state === 'reported'
       return {
@@ -123,20 +127,23 @@ function SMEFinancialWorkspace() {
         source_ids: reported && field.sourceId ? [field.sourceId] : [],
         ...(field.narrative ? { narrative: field.narrative } : {}),
       }
-    })
+      })
   }
 
   async function save(submitAfter: boolean) {
     if (!company) return
-    const incomplete = policy?.metrics.find((metric) => {
+    const incomplete = policy?.metrics
+      .filter((metric) => metric.role !== 'derived_indicator')
+      .find((metric) => {
       const field = drafts[metric.metric_id]
       return field?.state === 'reported' && (
         field.value === ''
         || !field.unit
         || !field.sourceId
         || (metric.requires_reporting_period && !field.period.trim())
+        || (metric.requires_comparison_basis && !field.basis.trim())
       )
-    })
+      })
     if (incomplete) {
       setError(`Complete the value, unit, period and evidence source for ${incomplete.title}.`)
       return
@@ -173,7 +180,7 @@ function SMEFinancialWorkspace() {
         <div>
           <span className="eyebrow">SME financial workspace</span>
           <h1>Financial & investment information</h1>
-          <p>Provide traceable business-health and funding-request facts. These are not folded into the Green Score.</p>
+          <p>Provide traceable statement and funding-request inputs. The system calculates financial indicators transparently; none are folded into the Green Score.</p>
         </div>
         {submission && <StatusPill label={submission.status.replaceAll('_', ' ')} tone={statusTone(submission.status)} />}
       </section>
@@ -183,18 +190,13 @@ function SMEFinancialWorkspace() {
       {notice && <div className="form-success financial-notice">{notice}</div>}
 
       <section className="financial-grid">
-        {policy?.metrics.map((metric) => {
+        {policy?.metrics.filter((metric) => metric.role !== 'derived_indicator').map((metric) => {
           const field = drafts[metric.metric_id] ?? blankDraft(metric.allowed_units[0])
           const reported = field.state === 'reported'
           return (
             <article className="panel financial-metric" key={metric.metric_id}>
               <header><div><span className="eyebrow">{metric.group.replaceAll('_', ' ')} · {metric.role.replaceAll('_', ' ')}</span><h2>{metric.title}</h2></div><StatusPill label={metric.importance} tone={metric.importance === 'core' ? 'warning' : 'neutral'} /></header>
               <p>{metric.description}</p>
-              {metric.role === 'derived_indicator' && (
-                <div className="methodology-note">
-                  <p>Calculated from: {metric.input_metric_ids.map((item) => item.replaceAll('_', ' ')).join(' + ')}. A directly reported value still requires traceable evidence.</p>
-                </div>
-              )}
               <label className="builder-field">Availability<select disabled={!editable} value={field.state} onChange={(event) => update(metric.metric_id, { state: event.target.value as FinancialObservation['state'] })}>{unresolvedStates.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
               {reported && <div className="financial-value-grid">
                 <label className="builder-field">Value<input disabled={!editable} required type="number" step="any" value={field.value} onChange={(event) => update(metric.metric_id, { value: event.target.value })} /></label>
@@ -202,7 +204,8 @@ function SMEFinancialWorkspace() {
                 <label className="builder-field">Reporting period<input disabled={!editable} required={metric.requires_reporting_period} placeholder="FY 2025" value={field.period} onChange={(event) => update(metric.metric_id, { period: event.target.value })} /></label>
                 <label className="builder-field">Evidence source<select disabled={!editable} required value={field.sourceId} onChange={(event) => update(metric.metric_id, { sourceId: event.target.value })}><option value="">Select uploaded document</option>{documents.map((document) => <option value={document.document_id} key={document.document_id}>{document.file_name}</option>)}</select></label>
               </div>}
-              <label className="builder-field">Context or basis<textarea disabled={!editable} value={field.narrative} onChange={(event) => update(metric.metric_id, { narrative: event.target.value })} /></label>
+              {metric.requires_comparison_basis && <label className="builder-field">Comparison basis<input disabled={!editable} required={reported} placeholder="FY2025 compared with FY2024" value={field.basis} onChange={(event) => update(metric.metric_id, { basis: event.target.value })} /></label>}
+              <label className="builder-field">Context or notes<textarea disabled={!editable} value={field.narrative} onChange={(event) => update(metric.metric_id, { narrative: event.target.value })} /></label>
             </article>
           )
         })}

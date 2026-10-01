@@ -47,6 +47,11 @@ and its source metrics. This preserves the difference between reported facts
 and calculations such as ROA, revenue growth, current ratio, debt-to-assets,
 requested financing share and simple payback.
 
+The calculation engine retains the formula, input metric identifiers, input
+values and source identifiers for every derived result. If a directly reported
+indicator disagrees with the value calculated from its supplied inputs, the
+indicator becomes `needs_review`; the system does not silently choose one.
+
 Final weights, decision thresholds and benchmark interpretations remain
 unresolved until approved calibration is supplied. The system must not convert
 an uncalibrated financial ratio into a fabricated aggregate score.
@@ -58,6 +63,14 @@ type and must retain its locator, validation state, unit or currency, period,
 scope and actual-versus-forecast status where applicable. Conflicting evidence
 is an explicit outcome, not an average. Model-inferred evidence requires human
 acceptance before it can support a governed assessment.
+
+Development evidence-strength bands use qualitative, versioned rules rather
+than a numeric score: unresolved conflicts are `conflicting`; no confirmed
+support is `insufficient`; missing context or weak-only support is `limited`;
+complete internal support is `adequate`; and complete audited, regulatory or
+third-party support is `strong`. Each output retains its source classification,
+classification basis, missing attributes, issues and rule rationale. These
+bands remain an evidence overlay and never modify environmental performance.
 
 ## Configuration integrity
 

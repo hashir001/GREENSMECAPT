@@ -3,7 +3,11 @@
 from pathlib import Path
 
 from greensmecapt.assessment.evidence_strength import (
+    EvidenceDimensionInput,
+    EvidenceSourceClass,
+    EvidenceSourceClassification,
     EvidenceStrengthBand,
+    assess_evidence_strength,
     load_evidence_strength_policy,
 )
 from greensmecapt.assessment.financial import (
@@ -113,3 +117,69 @@ def test_evidence_strength_is_separate_and_missing_is_not_zero() -> None:
         "investment_case",
         "readiness_context",
     }
+
+
+def test_evidence_strength_rules_preserve_source_provenance() -> None:
+    policy = load_evidence_strength_policy(
+        CONFIG_ROOT / "evidence_strength.development.json"
+    )
+    dimensions = (
+        EvidenceDimensionInput(
+            dimension_id="environmental_performance",
+            source_ids=("utility_bill",),
+        ),
+        EvidenceDimensionInput(
+            dimension_id="financial_health",
+            source_ids=("management_accounts",),
+        ),
+        EvidenceDimensionInput(
+            dimension_id="investment_case",
+            source_ids=("funding_request",),
+        ),
+        EvidenceDimensionInput(
+            dimension_id="readiness_context",
+            conflicting=True,
+        ),
+    )
+    classifications = {
+        "utility_bill": EvidenceSourceClassification(
+            source_id="utility_bill",
+            source_class=EvidenceSourceClass.THIRD_PARTY_TRANSACTIONAL,
+            confirmed=True,
+            classification_basis="document_type:utility_bill",
+        ),
+        "management_accounts": EvidenceSourceClassification(
+            source_id="management_accounts",
+            source_class=EvidenceSourceClass.INTERNALLY_GENERATED,
+            confirmed=True,
+            classification_basis="document_type:financial_statement",
+        ),
+        "funding_request": EvidenceSourceClassification(
+            source_id="funding_request",
+            source_class=EvidenceSourceClass.SELF_DECLARED,
+            confirmed=True,
+            classification_basis="document_type:funding_request",
+        ),
+    }
+
+    result = assess_evidence_strength(
+        policy=policy,
+        dimension_inputs=dimensions,
+        source_classifications=classifications,
+    )
+    bands = {item.dimension_id: item.band for item in result.dimensions}
+
+    assert bands == {
+        "environmental_performance": EvidenceStrengthBand.STRONG,
+        "financial_health": EvidenceStrengthBand.ADEQUATE,
+        "investment_case": EvidenceStrengthBand.LIMITED,
+        "readiness_context": EvidenceStrengthBand.CONFLICTING,
+    }
+    environmental = next(
+        item
+        for item in result.dimensions
+        if item.dimension_id == "environmental_performance"
+    )
+    assert environmental.sources[0].classification_basis == (
+        "document_type:utility_bill"
+    )

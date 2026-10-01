@@ -193,6 +193,8 @@ def test_compare_smes_through_api(tmp_path: Path) -> None:
     assert len(preparation["readiness_profile"]["factors"]) == 7
     assert preparation["readiness_profile"]["causal_results_available"] is False
     assert preparation["performance_context"]["metric_catalog_version"] == "2.0.0"
+    assert preparation["evidence_strength"]["performance_separation"] is True
+    assert len(preparation["evidence_strength"]["dimensions"]) == 4
 
 
 def test_retrieve_persisted_assessment_run(tmp_path: Path) -> None:
