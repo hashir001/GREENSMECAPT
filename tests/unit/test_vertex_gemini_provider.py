@@ -45,6 +45,10 @@ class _Models:
                     }
                 ],
                 "qualitative_claims": [],
+                "document_profile_claims": [],
+                "company_profile_claims": [],
+                "sector_activity_proposals": [],
+                "unmapped_material_claims": [],
             }
         )
 
@@ -93,6 +97,8 @@ def test_vertex_provider_returns_validated_structured_output() -> None:
     assert config["thinking_config"] == {"thinking_budget": 0}
     assert config["response_mime_type"] == "application/json"
     assert isinstance(config["response_schema"], dict)
+    assert "company_profile_claims" in config["response_schema"]["properties"]
+    assert "unmapped_material_claims" in config["response_schema"]["required"]
     assert "additionalProperties" not in str(config["response_schema"])
 
 

@@ -32,6 +32,10 @@ from greensmecapt.document_intelligence.semantics.intelligence.provider import (
 from greensmecapt.document_intelligence.semantics.intelligence.service import (
     IntelligentSemanticExtractionService,
 )
+from greensmecapt.document_intelligence.semantics.intelligence.vertex_gemini import (
+    VertexGeminiProviderConfiguration,
+    VertexGeminiSemanticProvider,
+)
 
 __all__ = [
     "CompanyIntelligencePolicy",
@@ -48,14 +52,16 @@ __all__ = [
     "QualitativeInstruction",
     "QualitativeValueType",
     "RejectedSemanticClaim",
+    "SectorActivityProposalPayload",
     "SemanticClaimPayload",
     "SemanticExtractionProvider",
     "SemanticExtractionRequest",
-    "SemanticProviderError",
     "SemanticProviderConnection",
+    "SemanticProviderError",
     "SemanticProviderOutput",
     "SemanticSourceSegment",
-    "SectorActivityProposalPayload",
     "UnmappedMaterialClaimPayload",
+    "VertexGeminiProviderConfiguration",
+    "VertexGeminiSemanticProvider",
     "load_company_intelligence_policy",
 ]

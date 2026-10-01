@@ -88,8 +88,102 @@ _VERTEX_OUTPUT_SCHEMA = {
                 ],
             },
         },
+        "document_profile_claims": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_id": {"type": "STRING"},
+                    "document_type_id": {"type": "STRING"},
+                    "source_quote": {"type": "STRING"},
+                    "issuer_name": {"type": "STRING", "nullable": True},
+                    "reporting_period": {
+                        "type": "STRING",
+                        "nullable": True,
+                    },
+                    "assurance_status": {
+                        "type": "STRING",
+                        "nullable": True,
+                    },
+                },
+                "required": [
+                    "segment_id",
+                    "document_type_id",
+                    "source_quote",
+                    "issuer_name",
+                    "reporting_period",
+                    "assurance_status",
+                ],
+            },
+        },
+        "company_profile_claims": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_id": {"type": "STRING"},
+                    "field_id": {"type": "STRING"},
+                    "raw_value": {"type": "STRING"},
+                    "source_quote": {"type": "STRING"},
+                },
+                "required": [
+                    "segment_id",
+                    "field_id",
+                    "raw_value",
+                    "source_quote",
+                ],
+            },
+        },
+        "sector_activity_proposals": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_id": {"type": "STRING"},
+                    "sector_id": {"type": "STRING"},
+                    "activity_fact_ids": {
+                        "type": "ARRAY",
+                        "items": {"type": "STRING"},
+                    },
+                    "source_quote": {"type": "STRING"},
+                },
+                "required": [
+                    "segment_id",
+                    "sector_id",
+                    "activity_fact_ids",
+                    "source_quote",
+                ],
+            },
+        },
+        "unmapped_material_claims": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_id": {"type": "STRING"},
+                    "category_id": {"type": "STRING"},
+                    "suggested_label": {"type": "STRING"},
+                    "source_quote": {"type": "STRING"},
+                    "model_rationale": {"type": "STRING"},
+                },
+                "required": [
+                    "segment_id",
+                    "category_id",
+                    "suggested_label",
+                    "source_quote",
+                    "model_rationale",
+                ],
+            },
+        },
     },
-    "required": ["claims", "qualitative_claims"],
+    "required": [
+        "claims",
+        "qualitative_claims",
+        "document_profile_claims",
+        "company_profile_claims",
+        "sector_activity_proposals",
+        "unmapped_material_claims",
+    ],
 }
 
 
@@ -125,7 +219,7 @@ class VertexGeminiSemanticProvider:
     """Use Vertex Gemini structured output with the existing grounded contract."""
 
     provider_name = "vertex_gemini"
-    provider_version = "1.1.0"
+    provider_version = "1.2.0"
 
     def __init__(
         self,

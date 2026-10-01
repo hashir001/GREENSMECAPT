@@ -1,5 +1,6 @@
 """Ground intelligent semantic claims in document evidence."""
 
+import logging
 import re
 from hashlib import sha256
 from math import isclose
@@ -41,6 +42,8 @@ from greensmecapt.document_intelligence.semantics.models import (
     UnitRule,
 )
 from greensmecapt.domain import EvidenceItem, SourceDocument
+
+_LOGGER = logging.getLogger("uvicorn.error")
 
 _WRITTEN_NUMBER_PATTERN = re.compile(
     r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?(?![\w.])"
@@ -147,30 +150,51 @@ class IntelligentSemanticExtractionService:
         }
         document_type_ids = {
             item.document_type_id
-            for item in self._company_policy.document_types
-        } if self._company_policy is not None else set()
+            for item in (
+                self._company_policy.document_types
+                if self._company_policy
+                else ()
+            )
+        }
         company_field_ids = {
             item.field_id
-            for item in self._company_policy.company_profile_fields
-        } if self._company_policy is not None else set()
-        sector_ids = {
-            item.sector_id for item in self._company_policy.sectors
-        } if self._company_policy is not None else set()
-        activity_fact_ids = {
-            instruction.claim_id.removeprefix("activity_fact:")
-            for instruction in self._qualitative_instructions
-            if instruction.claim_id.startswith("activity_fact:")
+            for item in (
+                self._company_policy.company_profile_fields
+                if self._company_policy
+                else ()
+            )
         }
+        sector_ids = {
+            item.sector_id
+            for item in (
+                self._company_policy.sectors
+                if self._company_policy
+                else ()
+            )
+        }
+        activity_fact_ids = set(request.activity_fact_ids)
         unmapped_category_ids = {
             item.category_id
-            for item in self._company_policy.unmapped_material_categories
-        } if self._company_policy is not None else set()
+            for item in (
+                self._company_policy.unmapped_material_categories
+                if self._company_policy
+                else ()
+            )
+        }
 
         evidence_items: list[EvidenceItem] = []
         intelligence_claims: list[GroundedIntelligenceClaim] = []
         rejected_claims: list[RejectedSemanticClaim] = []
 
         claim_index = 0
+
+        _LOGGER.info(
+            "Semantic extraction started for document %s using %s/%s in %s request(s).",
+            document.document_id,
+            self._provider.provider_name,
+            self._provider.model_name,
+            len(requests),
+        )
 
         for bounded_request in requests:
             provider_output = self._provider.extract(bounded_request)
@@ -199,75 +223,6 @@ class IntelligentSemanticExtractionService:
                 )
                 claim_index += 1
 
-            for claim in provider_output.document_profile_claims:
-                result = _ground_document_profile_claim(
-                    claim=claim,
-                    document=document,
-                    segments=segments,
-                    allowed_document_types=document_type_ids,
-                    model_name=self._provider.model_name,
-                )
-                claim_index = _append_intelligence_result(
-                    result=result,
-                    claim_index=claim_index,
-                    field_id=f"document_profile:{claim.document_type_id}",
-                    segment_id=claim.segment_id,
-                    intelligence_claims=intelligence_claims,
-                    rejected_claims=rejected_claims,
-                )
-
-            for claim in provider_output.company_profile_claims:
-                result = _ground_company_profile_claim(
-                    claim=claim,
-                    document=document,
-                    segments=segments,
-                    allowed_field_ids=company_field_ids,
-                    model_name=self._provider.model_name,
-                )
-                claim_index = _append_intelligence_result(
-                    result=result,
-                    claim_index=claim_index,
-                    field_id=f"company_profile:{claim.field_id}",
-                    segment_id=claim.segment_id,
-                    intelligence_claims=intelligence_claims,
-                    rejected_claims=rejected_claims,
-                )
-
-            for claim in provider_output.sector_activity_proposals:
-                result = _ground_sector_activity_proposal(
-                    claim=claim,
-                    document=document,
-                    segments=segments,
-                    allowed_sector_ids=sector_ids,
-                    allowed_activity_fact_ids=activity_fact_ids,
-                    model_name=self._provider.model_name,
-                )
-                claim_index = _append_intelligence_result(
-                    result=result,
-                    claim_index=claim_index,
-                    field_id=f"sector:{claim.sector_id}",
-                    segment_id=claim.segment_id,
-                    intelligence_claims=intelligence_claims,
-                    rejected_claims=rejected_claims,
-                )
-
-            for claim in provider_output.unmapped_material_claims:
-                result = _ground_unmapped_material_claim(
-                    claim=claim,
-                    document=document,
-                    segments=segments,
-                    allowed_category_ids=unmapped_category_ids,
-                    model_name=self._provider.model_name,
-                )
-                claim_index = _append_intelligence_result(
-                    result=result,
-                    claim_index=claim_index,
-                    field_id=f"unmapped:{claim.category_id}",
-                    segment_id=claim.segment_id,
-                    intelligence_claims=intelligence_claims,
-                    rejected_claims=rejected_claims,
-                )
-
             for claim in provider_output.qualitative_claims:
                 result = _ground_qualitative_claim(
                     claim=claim,
@@ -288,20 +243,99 @@ class IntelligentSemanticExtractionService:
                 )
                 claim_index += 1
 
+            for claim in provider_output.document_profile_claims:
+                result = _ground_document_profile_claim(
+                    claim=claim,
+                    document=document,
+                    segments=segments,
+                    allowed_ids=document_type_ids,
+                )
+                _append_intelligence_result(
+                    result=result,
+                    claim_index=claim_index,
+                    indicator_id=f"document_profile:{claim.document_type_id}",
+                    segment_id=claim.segment_id,
+                    intelligence_claims=intelligence_claims,
+                    rejected_claims=rejected_claims,
+                )
+                claim_index += 1
+
+            for claim in provider_output.company_profile_claims:
+                result = _ground_company_profile_claim(
+                    claim=claim,
+                    document=document,
+                    segments=segments,
+                    allowed_ids=company_field_ids,
+                )
+                _append_intelligence_result(
+                    result=result,
+                    claim_index=claim_index,
+                    indicator_id=f"company_profile:{claim.field_id}",
+                    segment_id=claim.segment_id,
+                    intelligence_claims=intelligence_claims,
+                    rejected_claims=rejected_claims,
+                )
+                claim_index += 1
+
+            for claim in provider_output.sector_activity_proposals:
+                result = _ground_sector_activity_proposal(
+                    claim=claim,
+                    document=document,
+                    segments=segments,
+                    allowed_sector_ids=sector_ids,
+                    allowed_activity_fact_ids=activity_fact_ids,
+                )
+                _append_intelligence_result(
+                    result=result,
+                    claim_index=claim_index,
+                    indicator_id=f"sector_activity:{claim.sector_id}",
+                    segment_id=claim.segment_id,
+                    intelligence_claims=intelligence_claims,
+                    rejected_claims=rejected_claims,
+                )
+                claim_index += 1
+
+            for claim in provider_output.unmapped_material_claims:
+                result = _ground_unmapped_material_claim(
+                    claim=claim,
+                    document=document,
+                    segments=segments,
+                    allowed_ids=unmapped_category_ids,
+                )
+                _append_intelligence_result(
+                    result=result,
+                    claim_index=claim_index,
+                    indicator_id=f"unmapped_material:{claim.category_id}",
+                    segment_id=claim.segment_id,
+                    intelligence_claims=intelligence_claims,
+                    rejected_claims=rejected_claims,
+                )
+                claim_index += 1
+
         unique_evidence = {
             item.evidence_id: item for item in evidence_items
         }
-        unique_intelligence = {
-            item.claim_id: item for item in intelligence_claims
-        }
-        maximum_unmapped = (
-            self._company_policy.maximum_unmapped_claims_per_document
-            if self._company_policy is not None
-            else 0
+        unique_intelligence = tuple(
+            {
+                claim.claim_id: claim
+                for claim in intelligence_claims
+            }.values()
         )
-        governed_intelligence = _limit_unmapped_claims(
-            tuple(unique_intelligence.values()),
-            maximum=maximum_unmapped,
+        limited_intelligence = _limit_unmapped_claims(
+            unique_intelligence,
+            maximum=(
+                self._company_policy.maximum_unmapped_claims_per_document
+                if self._company_policy
+                else 0
+            ),
+        )
+
+        _LOGGER.info(
+            "Semantic extraction completed for document %s: %s evidence item(s), "
+            "%s rejected claim(s).",
+            document.document_id,
+            len(unique_evidence),
+            len(rejected_claims),
         )
 
         return IntelligentExtractionReport(
@@ -312,17 +346,13 @@ class IntelligentSemanticExtractionService:
             model_name=self._provider.model_name,
             request_count=len(requests),
             company_policy_id=(
-                self._company_policy.policy_id
-                if self._company_policy is not None
-                else None
+                self._company_policy.policy_id if self._company_policy else None
             ),
             company_policy_version=(
-                self._company_policy.version
-                if self._company_policy is not None
-                else None
+                self._company_policy.version if self._company_policy else None
             ),
             evidence_items=tuple(unique_evidence.values()),
-            intelligence_claims=governed_intelligence,
+            intelligence_claims=limited_intelligence,
             rejected_claims=tuple(rejected_claims),
         )
 
@@ -385,7 +415,8 @@ def _build_request(
         ),
         maximum_unmapped_claims=(
             company_policy.maximum_unmapped_claims_per_document
-            if company_policy else 0
+            if company_policy
+            else 0
         ),
         segments=segments,
     )
@@ -457,18 +488,37 @@ def _page_segments(
         page.tables,
         start=1,
     ):
+        matrix = table.as_matrix()
+        header_text = " || ".join(
+            " | ".join(
+                value.strip()
+                for value in matrix[index]
+                if value.strip()
+            )
+            for index in table.header_row_indices
+            if 0 <= index < len(matrix)
+        )
+
         for row_index, row in enumerate(
-            table.as_matrix(),
+            matrix,
             start=1,
         ):
-            text = " | ".join(
+            row_text = " | ".join(
                 value.strip()
                 for value in row
                 if value.strip()
             )
 
-            if not text:
+            if not row_text:
                 continue
+
+            zero_based_row = row_index - 1
+            text = (
+                f"{header_text} || {row_text}"
+                if header_text
+                and zero_based_row not in table.header_row_indices
+                else row_text
+            )
 
             segments.append(
                 SemanticSourceSegment(
@@ -539,11 +589,11 @@ def _ground_claim(
         )
 
     if not _raw_unit_occurs_in_value(
-        raw_value=claim.raw_value,
+        raw_value=claim.source_quote,
         raw_unit=claim.raw_unit,
     ):
         return (
-            "The raw unit does not occur in the raw value."
+            "The raw unit does not occur in the source quote."
         )
 
     if (
@@ -746,42 +796,37 @@ def _ground_document_profile_claim(
     claim: DocumentProfileClaimPayload,
     document: SourceDocument,
     segments: dict[str, SemanticSourceSegment],
-    allowed_document_types: set[str],
-    model_name: str,
-) -> tuple[GroundedIntelligenceClaim, ...] | str:
-    """Ground a controlled document classification and its stated metadata."""
+    allowed_ids: set[str],
+) -> GroundedIntelligenceClaim | str:
+    """Ground a controlled document-type proposal."""
 
     segment = segments.get(claim.segment_id)
     if segment is None:
         return "The claim references an unknown source segment."
-    if claim.document_type_id not in allowed_document_types:
+    if claim.document_type_id not in allowed_ids:
         return "The claim references an unconfigured document type."
     if not _contains_text(segment.text, claim.source_quote):
         return "The source quote does not occur in the referenced segment."
 
-    values = [("document_type", claim.document_type_id)]
-    for field_id, value in (
-        ("issuer_name", claim.issuer_name),
-        ("reporting_period", claim.reporting_period),
-        ("assurance_status", claim.assurance_status),
+    optional_values = (
+        claim.issuer_name,
+        claim.reporting_period,
+        claim.assurance_status,
+    )
+    if any(
+        value is not None and not _contains_text(claim.source_quote, value)
+        for value in optional_values
     ):
-        if value is None:
-            continue
-        if not _contains_text(claim.source_quote, value):
-            return f"The {field_id.replace('_', ' ')} is not grounded in the quote."
-        values.append((field_id, value))
+        return "Document-profile detail does not occur in the source quote."
 
-    return tuple(
-        _intelligence_claim(
-            document=document,
-            segment=segment,
-            claim_type="document_profile",
-            field_id=field_id,
-            value=value,
-            source_quote=claim.source_quote,
-            model_name=model_name,
-        )
-        for field_id, value in values
+    return _intelligence_claim(
+        document=document,
+        segment=segment,
+        segment_id=claim.segment_id,
+        claim_type="document_profile",
+        field_id="document_type",
+        value=claim.document_type_id,
+        source_quote=claim.source_quote,
     )
 
 
@@ -790,31 +835,28 @@ def _ground_company_profile_claim(
     claim: CompanyProfileClaimPayload,
     document: SourceDocument,
     segments: dict[str, SemanticSourceSegment],
-    allowed_field_ids: set[str],
-    model_name: str,
-) -> tuple[GroundedIntelligenceClaim, ...] | str:
-    """Ground one configured company-profile field."""
+    allowed_ids: set[str],
+) -> GroundedIntelligenceClaim | str:
+    """Ground a company fact without promoting it to master data."""
 
     segment = segments.get(claim.segment_id)
     if segment is None:
         return "The claim references an unknown source segment."
-    if claim.field_id not in allowed_field_ids:
+    if claim.field_id not in allowed_ids:
         return "The claim references an unconfigured company-profile field."
     if not _contains_text(segment.text, claim.source_quote):
         return "The source quote does not occur in the referenced segment."
     if not _contains_text(claim.source_quote, claim.raw_value):
         return "The company-profile value does not occur in the source quote."
 
-    return (
-        _intelligence_claim(
-            document=document,
-            segment=segment,
-            claim_type="company_profile",
-            field_id=claim.field_id,
-            value=claim.raw_value,
-            source_quote=claim.source_quote,
-            model_name=model_name,
-        ),
+    return _intelligence_claim(
+        document=document,
+        segment=segment,
+        segment_id=claim.segment_id,
+        claim_type="company_profile",
+        field_id=claim.field_id,
+        value=claim.raw_value,
+        source_quote=claim.source_quote,
     )
 
 
@@ -825,34 +867,31 @@ def _ground_sector_activity_proposal(
     segments: dict[str, SemanticSourceSegment],
     allowed_sector_ids: set[str],
     allowed_activity_fact_ids: set[str],
-    model_name: str,
-) -> tuple[GroundedIntelligenceClaim, ...] | str:
-    """Ground a reviewable sector/activity proposal without making it final."""
+) -> GroundedIntelligenceClaim | str:
+    """Ground a sector interpretation against controlled vocabularies."""
 
     segment = segments.get(claim.segment_id)
     if segment is None:
         return "The claim references an unknown source segment."
     if claim.sector_id not in allowed_sector_ids:
-        return "The proposal references an unconfigured sector."
-    unknown_activities = set(claim.activity_fact_ids) - allowed_activity_fact_ids
-    if unknown_activities:
-        return "The proposal references an unconfigured activity fact."
-    if len(claim.activity_fact_ids) != len(set(claim.activity_fact_ids)):
-        return "The proposal contains duplicate activity facts."
+        return "The claim references an unconfigured sector."
+    if any(
+        activity_id not in allowed_activity_fact_ids
+        for activity_id in claim.activity_fact_ids
+    ):
+        return "The claim references an unconfigured activity fact."
     if not _contains_text(segment.text, claim.source_quote):
         return "The source quote does not occur in the referenced segment."
 
-    return (
-        _intelligence_claim(
-            document=document,
-            segment=segment,
-            claim_type="sector_activity_proposal",
-            field_id="sector",
-            value=claim.sector_id,
-            source_quote=claim.source_quote,
-            related_ids=claim.activity_fact_ids,
-            model_name=model_name,
-        ),
+    return _intelligence_claim(
+        document=document,
+        segment=segment,
+        segment_id=claim.segment_id,
+        claim_type="sector_activity_proposal",
+        field_id="sector",
+        value=claim.sector_id,
+        source_quote=claim.source_quote,
+        related_ids=claim.activity_fact_ids,
     )
 
 
@@ -861,30 +900,27 @@ def _ground_unmapped_material_claim(
     claim: UnmappedMaterialClaimPayload,
     document: SourceDocument,
     segments: dict[str, SemanticSourceSegment],
-    allowed_category_ids: set[str],
-    model_name: str,
-) -> tuple[GroundedIntelligenceClaim, ...] | str:
-    """Ground a capped discovery that remains outside scoring."""
+    allowed_ids: set[str],
+) -> GroundedIntelligenceClaim | str:
+    """Ground review-only material outside the assessment schema."""
 
     segment = segments.get(claim.segment_id)
     if segment is None:
         return "The claim references an unknown source segment."
-    if claim.category_id not in allowed_category_ids:
-        return "The discovery references an unconfigured material category."
+    if claim.category_id not in allowed_ids:
+        return "The claim references an unconfigured unmapped category."
     if not _contains_text(segment.text, claim.source_quote):
         return "The source quote does not occur in the referenced segment."
 
-    return (
-        _intelligence_claim(
-            document=document,
-            segment=segment,
-            claim_type="unmapped_material",
-            field_id=claim.category_id,
-            value=claim.suggested_label,
-            source_quote=claim.source_quote,
-            model_rationale=claim.model_rationale,
-            model_name=model_name,
-        ),
+    return _intelligence_claim(
+        document=document,
+        segment=segment,
+        segment_id=claim.segment_id,
+        claim_type="unmapped_material",
+        field_id=claim.category_id,
+        value=claim.suggested_label,
+        source_quote=claim.source_quote,
+        model_rationale=claim.model_rationale,
     )
 
 
@@ -892,20 +928,20 @@ def _intelligence_claim(
     *,
     document: SourceDocument,
     segment: SemanticSourceSegment,
+    segment_id: str,
     claim_type: str,
     field_id: str,
     value: str,
     source_quote: str,
-    model_name: str,
     related_ids: tuple[str, ...] = (),
     model_rationale: str | None = None,
 ) -> GroundedIntelligenceClaim:
-    """Build a stable, source-linked, explicitly non-scoring claim."""
+    """Build a stable, traceable non-scoring intelligence claim."""
 
     fingerprint = sha256(
         (
-            f"{document.document_id}:{segment.segment_id}:{claim_type}:"
-            f"{field_id}:{value}:{source_quote}:{related_ids}:{model_name}"
+            f"{document.document_id}:{segment_id}:{claim_type}:"
+            f"{field_id}:{value}:{source_quote}:{related_ids}"
         ).encode()
     ).hexdigest()[:20]
     return GroundedIntelligenceClaim(
@@ -922,27 +958,27 @@ def _intelligence_claim(
 
 def _append_intelligence_result(
     *,
-    result: tuple[GroundedIntelligenceClaim, ...] | str,
+    result: GroundedIntelligenceClaim | str,
     claim_index: int,
-    field_id: str,
+    indicator_id: str,
     segment_id: str,
     intelligence_claims: list[GroundedIntelligenceClaim],
     rejected_claims: list[RejectedSemanticClaim],
-) -> int:
-    """Collect grounded context or record a precise rejection."""
+) -> None:
+    """Collect a grounded intelligence proposal or rejection."""
 
-    if isinstance(result, str):
-        rejected_claims.append(
-            RejectedSemanticClaim(
-                claim_index=claim_index,
-                indicator_id=field_id,
-                segment_id=segment_id,
-                reason=result,
-            )
+    if isinstance(result, GroundedIntelligenceClaim):
+        intelligence_claims.append(result)
+        return
+
+    rejected_claims.append(
+        RejectedSemanticClaim(
+            claim_index=claim_index,
+            indicator_id=indicator_id,
+            segment_id=segment_id,
+            reason=result,
         )
-    else:
-        intelligence_claims.extend(result)
-    return claim_index + 1
+    )
 
 
 def _limit_unmapped_claims(
@@ -950,11 +986,17 @@ def _limit_unmapped_claims(
     *,
     maximum: int,
 ) -> tuple[GroundedIntelligenceClaim, ...]:
-    """Bound open-world discoveries while retaining governed profile claims."""
+    """Apply the document-level safety cap without dropping governed claims."""
 
-    governed = tuple(item for item in claims if item.claim_type != "unmapped_material")
-    unmapped = tuple(item for item in claims if item.claim_type == "unmapped_material")
-    return (*governed, *unmapped[:maximum])
+    unmapped_count = 0
+    result: list[GroundedIntelligenceClaim] = []
+    for claim in claims:
+        if claim.claim_type == "unmapped_material":
+            if unmapped_count >= maximum:
+                continue
+            unmapped_count += 1
+        result.append(claim)
+    return tuple(result)
 
 
 def _append_result(
