@@ -47,6 +47,18 @@ class CriterionPolicy(ProfileModel):
     criterion_id: NonBlank
     title: NonBlank
     output: Literal["green", "financial", "context"]
+    dimension: Literal[
+        "environmental_performance",
+        "financial_health",
+        "investment_case",
+        "readiness_context",
+    ]
+    scoring_role: Literal[
+        "performance_criterion",
+        "separate_financial_assessment",
+        "non_scoring_context",
+    ]
+    requires_evidence_confirmation: StrictBool = True
     requirement: Requirement
     module_ids: tuple[NonBlank, ...] = ()
     indicator_ids: tuple[NonBlank, ...] = ()
@@ -117,6 +129,18 @@ class CriterionDecision(ProfileModel):
     criterion_id: NonBlank
     title: NonBlank
     output: Literal["green", "financial", "context"]
+    dimension: Literal[
+        "environmental_performance",
+        "financial_health",
+        "investment_case",
+        "readiness_context",
+    ]
+    scoring_role: Literal[
+        "performance_criterion",
+        "separate_financial_assessment",
+        "non_scoring_context",
+    ]
+    requires_evidence_confirmation: bool
     requirement: Requirement
     indicator_ids: tuple[str, ...] = ()
     rule_status: Applicability

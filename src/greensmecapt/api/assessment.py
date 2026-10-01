@@ -12,6 +12,7 @@ from greensmecapt.assessment.cohort import (
     CohortConfiguration,
 )
 from greensmecapt.assessment.electre_iii import ElectreIIIError
+from greensmecapt.assessment.evidence_strength import EvidenceStrengthPolicy
 from greensmecapt.assessment.financial import (
     FinancialAssessmentPolicy,
     FinancialObservation,
@@ -125,6 +126,7 @@ class AssessmentConfigurationResponse(BaseModel):
     financial_policy: FinancialAssessmentPolicy
     readiness_specification: DematelSpecification
     metric_catalog: MetricCatalog
+    evidence_strength_policy: EvidenceStrengthPolicy
 
 
 class ProfilePublicationRequest(BaseModel):
@@ -181,6 +183,7 @@ def build_assessment_router(
             financial_policy=workflow.financial_policy,
             readiness_specification=workflow.readiness_specification,
             metric_catalog=workflow.metric_catalog,
+            evidence_strength_policy=workflow.evidence_strength_policy,
         )
 
     @router.post(
@@ -275,6 +278,7 @@ def build_assessment_router(
                 financial_policy=workflow.financial_policy,
                 readiness_specification=workflow.readiness_specification,
                 metric_catalog=workflow.metric_catalog,
+                evidence_strength_policy=workflow.evidence_strength_policy,
                 financial_observations=financial_observations,
                 readiness_observations=submission.readiness_observations,
                 metric_contexts=submission.metric_contexts,

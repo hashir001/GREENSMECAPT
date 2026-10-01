@@ -6,7 +6,11 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from greensmecapt.document_intelligence.semantics import MetricCatalog
+from greensmecapt.document_intelligence.semantics import (
+    MetricCatalog,
+    MetricDimension,
+    MetricValueNature,
+)
 from greensmecapt.domain import EvidenceItem, EvidenceValidationStatus
 
 NonBlank = Annotated[str, Field(min_length=1)]
@@ -128,7 +132,8 @@ def build_performance_context_profile(
                 context_by_metric.get(metric.indicator_id),
             )
             for metric in catalog.metrics
-            if metric.criterion_id not in {"financial_health", "investment_case"}
+            if metric.dimension is MetricDimension.ENVIRONMENTAL_PERFORMANCE
+            and metric.value_nature is not MetricValueNature.ACTIVITY_DENOMINATOR
         ),
     )
 

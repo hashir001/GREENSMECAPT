@@ -49,6 +49,33 @@ class MetricAssessmentUse(StrEnum):
     EVIDENCE_ONLY = "evidence_only"
 
 
+class MetricDimension(StrEnum):
+    """Identify the assessment layer a metric belongs to."""
+
+    ENVIRONMENTAL_PERFORMANCE = "environmental_performance"
+    FINANCIAL_HEALTH = "financial_health"
+    INVESTMENT_CASE = "investment_case"
+
+
+class MetricValueNature(StrEnum):
+    """Distinguish actual, point-in-time, ratio and forecast values."""
+
+    ACTUAL_FLOW = "actual_flow"
+    POINT_IN_TIME = "point_in_time"
+    RATIO = "ratio"
+    FORECAST = "forecast"
+    REPORTED_OR_DERIVED = "reported_or_derived"
+    ACTIVITY_DENOMINATOR = "activity_denominator"
+
+
+class MetricDirection(StrEnum):
+    """Describe preference without assigning a weight or threshold."""
+
+    BENEFIT = "benefit"
+    COST = "cost"
+    CONTEXT_ONLY = "context_only"
+
+
 class MetricDefinition(SemanticModel):
     """Describe one assessment metric and its language variants."""
 
@@ -57,6 +84,9 @@ class MetricDefinition(SemanticModel):
     name: str = Field(min_length=1)
     aliases: tuple[str, ...] = Field(min_length=1)
     units: tuple[UnitRule, ...] = Field(min_length=1)
+    dimension: MetricDimension
+    value_nature: MetricValueNature
+    direction: MetricDirection
     assessment_use: MetricAssessmentUse = MetricAssessmentUse.EVIDENCE_ONLY
     comparison_requirements: tuple[str, ...] = ()
 
@@ -116,6 +146,24 @@ class MetricDefinition(SemanticModel):
             raise ValueError(
                 "Context-dependent metrics must declare comparison "
                 "requirements."
+            )
+
+        if (
+            self.value_nature is MetricValueNature.FORECAST
+            and self.assessment_use is not MetricAssessmentUse.EVIDENCE_ONLY
+        ):
+            raise ValueError(
+                "Forecast metrics must remain evidence-only until a governed "
+                "investment assessment interprets them."
+            )
+
+        if (
+            self.value_nature is MetricValueNature.ACTIVITY_DENOMINATOR
+            and self.direction is not MetricDirection.CONTEXT_ONLY
+        ):
+            raise ValueError(
+                "Activity denominators provide context and cannot carry a "
+                "performance direction."
             )
 
         if (

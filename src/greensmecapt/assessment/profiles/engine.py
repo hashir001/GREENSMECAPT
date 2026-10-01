@@ -137,6 +137,11 @@ def build_profile(
         decisions.append(CriterionDecision(
             criterion_id=criterion.criterion_id, title=criterion.title,
             output=criterion.output, requirement=criterion.requirement,
+            dimension=criterion.dimension,
+            scoring_role=criterion.scoring_role,
+            requires_evidence_confirmation=(
+                criterion.requires_evidence_confirmation
+            ),
             indicator_ids=criterion.indicator_ids,
             rule_status=rule_status, status=status, reason=reason,
             missing_facts=missing, matched_facts=matched, override=override,

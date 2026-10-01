@@ -35,6 +35,31 @@ class FinancialMetricImportance(StrEnum):
     SUPPORTING = "supporting"
 
 
+class FinancialMetricRole(StrEnum):
+    """Separate statement inputs, derived indicators and project inputs."""
+
+    SOURCE_INPUT = "source_input"
+    DERIVED_INDICATOR = "derived_indicator"
+    INVESTMENT_INPUT = "investment_input"
+
+
+class FinancialMetricDirection(StrEnum):
+    """Record preference without imposing an uncalibrated threshold."""
+
+    BENEFIT = "benefit"
+    COST = "cost"
+    CONTEXT_ONLY = "context_only"
+
+
+class FinancialCalculationMethod(StrEnum):
+    """Name the transparent calculation intended for a derived indicator."""
+
+    RATIO = "ratio"
+    RATIO_PERCENTAGE = "ratio_percentage"
+    GROWTH_PERCENTAGE = "growth_percentage"
+    SIMPLE_PAYBACK_YEARS = "simple_payback_years"
+
+
 class FinancialObservationState(StrEnum):
     REPORTED = "reported"
     UNKNOWN = "unknown"
@@ -54,9 +79,28 @@ class FinancialMetricDefinition(FinancialModel):
     title: NonBlank
     group: FinancialMetricGroup
     importance: FinancialMetricImportance
+    role: FinancialMetricRole
+    direction: FinancialMetricDirection
     allowed_units: tuple[NonBlank, ...] = Field(min_length=1)
     requires_reporting_period: bool = False
+    requires_comparison_basis: bool = False
+    calculation_method: FinancialCalculationMethod | None = None
+    input_metric_ids: tuple[NonBlank, ...] = ()
     description: NonBlank
+
+    @model_validator(mode="after")
+    def validate_calculation_contract(self) -> Self:
+        if self.role is FinancialMetricRole.DERIVED_INDICATOR:
+            if self.calculation_method is None or len(self.input_metric_ids) < 2:
+                raise ValueError(
+                    "A derived financial indicator requires a calculation "
+                    "method and at least two input metrics."
+                )
+        elif self.calculation_method is not None or self.input_metric_ids:
+            raise ValueError(
+                "Only derived financial indicators may declare calculations."
+            )
+        return self
 
 
 class FinancialAssessmentPolicy(FinancialModel):
@@ -74,6 +118,16 @@ class FinancialAssessmentPolicy(FinancialModel):
         metric_ids = [item.metric_id for item in self.metrics]
         if len(metric_ids) != len(set(metric_ids)):
             raise ValueError("Financial metric IDs must be unique.")
+        known = set(metric_ids)
+        for metric in self.metrics:
+            unknown = set(metric.input_metric_ids) - known
+            if unknown:
+                raise ValueError(
+                    f"Financial calculation references unknown metrics: "
+                    f"{sorted(unknown)}"
+                )
+            if metric.metric_id in metric.input_metric_ids:
+                raise ValueError("A financial metric cannot depend on itself.")
         return self
 
 
@@ -306,7 +360,7 @@ def _validate_reported(
         issues.append("The reported unit is not allowed for this metric.")
     if definition.requires_reporting_period and not observation.reporting_period:
         issues.append("This metric requires a reporting period.")
-    if definition.metric_id == "revenue_growth_percentage" and not observation.comparison_basis:
+    if definition.requires_comparison_basis and not observation.comparison_basis:
         issues.append("Revenue growth requires an explicit comparison basis.")
     return tuple(issues)
 

@@ -1,582 +1,272 @@
 {
-  "catalog_id": "greensmecapt_environmental_metrics",
-  "version": "1.3.0",
+  "catalog_id": "greensmecapt_assessment_metrics",
+  "version": "2.0.0",
   "metrics": [
     {
-      "indicator_id": "renewable_energy_percentage",
-      "criterion_id": "renewable_energy",
-      "name": "Renewable energy share",
-      "aliases": [
-        "renewable energy contribution",
-        "renewable sources",
-        "renewable energy share",
-        "renewable electricity share",
-        "electricity from renewable sources",
-        "energy from renewable sources"
-      ],
-      "units": [
-        {
-          "canonical_unit": "percent",
-          "aliases": [
-            "%",
-            "percent",
-            "percentage"
-          ],
-          "multiplier": 1
-        }
-      ],
-      "minimum": 0,
-      "maximum": 100,
-      "assessment_use": "direct_ratio",
-      "comparison_requirements": [
-        "reporting_period",
-        "operational_scope"
-      ]
+      "indicator_id": "renewable_energy_percentage", "criterion_id": "renewable_energy", "name": "Renewable energy share",
+      "aliases": ["renewable energy contribution", "renewable energy share", "renewable electricity share", "electricity from renewable sources", "electricity came from renewable sources", "energy came from renewable sources"],
+      "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
+      "dimension": "environmental_performance", "value_nature": "ratio", "direction": "benefit", "minimum": 0, "maximum": 100,
+      "assessment_use": "direct_ratio", "comparison_requirements": ["reporting_period", "operational_scope"]
     },
     {
-      "indicator_id": "electricity_consumption_kwh",
-      "criterion_id": "energy_efficiency",
-      "name": "Electricity consumption",
-      "aliases": [
-        "electricity consumption",
-        "electricity used",
-        "electric power consumption",
-        "total electricity use",
-        "purchased electricity",
-        "grid electricity",
-        "grid draw",
-        "electrical demand served"
-      ],
-      "units": [
-        {
-          "canonical_unit": "kwh",
-          "aliases": [
-            "kwh",
-            "kilowatt hour",
-            "kilowatt hours"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "kwh",
-          "aliases": [
-            "mwh",
-            "megawatt hour",
-            "megawatt hours"
-          ],
-          "multiplier": 1000
-        },
-        {
-          "canonical_unit": "kwh",
-          "aliases": [
-            "gwh",
-            "gigawatt hour",
-            "gigawatt hours"
-          ],
-          "multiplier": 1000000
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "requires_comparison_context",
-      "comparison_requirements": [
-        "reporting_period",
-        "operational_scope",
-        "denominator_or_activity_level",
-        "baseline_trend_or_sector_benchmark"
-      ]
+      "indicator_id": "electricity_consumption_kwh", "criterion_id": "energy_efficiency", "name": "Electricity consumption",
+      "aliases": ["electricity consumption", "electricity used", "electric power consumption", "total electricity use"],
+      "units": [{"canonical_unit": "kwh", "aliases": ["kwh", "kilowatt hour", "kilowatt hours"], "multiplier": 1}, {"canonical_unit": "kwh", "aliases": ["mwh", "megawatt hour", "megawatt hours"], "multiplier": 1000}, {"canonical_unit": "kwh", "aliases": ["gwh", "gigawatt hour", "gigawatt hours"], "multiplier": 1000000}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "operational_scope", "denominator_or_activity_level", "baseline_trend_or_sector_benchmark"]
     },
     {
-      "indicator_id": "water_consumption_m3",
-      "criterion_id": "water_management",
-      "name": "Water consumption",
-      "aliases": [
-        "water consumption",
-        "water used",
-        "total water use",
-        "water withdrawal",
-        "municipal intake",
-        "freshwater intake",
-        "municipal water entering site"
-      ],
-      "units": [
-        {
-          "canonical_unit": "m3",
-          "aliases": [
-            "m3",
-            "m³",
-            "cubic meter",
-            "cubic meters",
-            "cubic metre",
-            "cubic metres"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "m3",
-          "aliases": [
-            "l",
-            "liter",
-            "liters",
-            "litre",
-            "litres"
-          ],
-          "multiplier": 0.001
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "requires_comparison_context",
-      "comparison_requirements": [
-        "reporting_period",
-        "operational_scope",
-        "denominator_or_activity_level",
-        "sector_applicability_and_baseline_or_benchmark"
-      ]
+      "indicator_id": "fuel_energy_consumption_kwh", "criterion_id": "direct_operational_emissions", "name": "Fuel energy consumption",
+      "aliases": ["fuel energy consumption", "energy from fuel", "fuel consumed in energy terms", "combustion energy use"],
+      "units": [{"canonical_unit": "kwh", "aliases": ["kwh", "kilowatt hour", "kilowatt hours"], "multiplier": 1}, {"canonical_unit": "kwh", "aliases": ["mwh", "megawatt hour", "megawatt hours"], "multiplier": 1000}, {"canonical_unit": "kwh", "aliases": ["gj", "gigajoule", "gigajoules"], "multiplier": 277.7777778}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "operational_scope", "denominator_or_activity_level", "baseline_trend_or_sector_benchmark"]
     },
     {
-      "indicator_id": "total_ghg_emissions_tco2e",
-      "criterion_id": "emissions_management",
-      "name": "Total greenhouse-gas emissions",
-      "aliases": [
-        "total greenhouse gas emissions",
-        "total ghg emissions",
-        "total carbon emissions",
-        "combined scope 1 and scope 2 emissions",
-        "operational emissions total",
-        "reported operational total",
-        "emissions inventory total"
-      ],
-      "units": [
-        {
-          "canonical_unit": "tco2e",
-          "aliases": [
-            "tco2e",
-            "t co2e",
-            "tonnes co2e",
-            "tons co2e",
-            "metric tonnes co2e"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "tco2e",
-          "aliases": [
-            "kgco2e",
-            "kg co2e",
-            "kilograms co2e"
-          ],
-          "multiplier": 0.001
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "requires_comparison_context",
-      "comparison_requirements": [
-        "reporting_period",
-        "emissions_scope",
-        "organisational_boundary",
-        "denominator_baseline_or_benchmark"
-      ]
+      "indicator_id": "scope_1_ghg_emissions_tco2e", "criterion_id": "emissions_management", "name": "Scope 1 greenhouse-gas emissions",
+      "aliases": ["scope 1 greenhouse gas emissions", "scope 1 ghg emissions", "direct greenhouse gas emissions", "direct ghg emissions"],
+      "units": [{"canonical_unit": "tco2e", "aliases": ["tco2e", "t co2e", "tonnes co2e", "metric tonnes co2e"], "multiplier": 1}, {"canonical_unit": "tco2e", "aliases": ["kgco2e", "kg co2e", "kilograms co2e"], "multiplier": 0.001}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "emissions_scope", "organisational_boundary", "denominator_baseline_or_benchmark"]
     },
     {
-      "indicator_id": "waste_diversion_percentage",
-      "criterion_id": "waste_management",
-      "name": "Waste diverted from disposal",
-      "aliases": [
-        "waste diversion rate",
-        "waste diverted from landfill",
-        "waste recycled or reused",
-        "waste recovery rate"
-      ],
-      "units": [
-        {
-          "canonical_unit": "percent",
-          "aliases": [
-            "%",
-            "percent",
-            "percentage"
-          ],
-          "multiplier": 1
-        }
-      ],
-      "minimum": 0,
-      "maximum": 100,
-      "assessment_use": "requires_comparison_context",
-      "comparison_requirements": [
-        "reporting_period",
-        "waste_boundary",
-        "denominator_definition",
-        "material_scope_and_baseline_or_benchmark"
-      ]
+      "indicator_id": "scope_2_ghg_emissions_tco2e", "criterion_id": "emissions_management", "name": "Scope 2 greenhouse-gas emissions",
+      "aliases": ["scope 2 greenhouse gas emissions", "scope 2 ghg emissions", "purchased electricity emissions", "indirect energy emissions"],
+      "units": [{"canonical_unit": "tco2e", "aliases": ["tco2e", "t co2e", "tonnes co2e", "metric tonnes co2e"], "multiplier": 1}, {"canonical_unit": "tco2e", "aliases": ["kgco2e", "kg co2e", "kilograms co2e"], "multiplier": 0.001}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "emissions_scope", "organisational_boundary", "denominator_baseline_or_benchmark"]
     },
     {
-      "indicator_id": "total_waste_generated_kg",
-      "criterion_id": "waste_management",
-      "name": "Total waste generated",
-      "aliases": [
-        "total waste generated",
-        "waste generated",
-        "total waste",
-        "all measured waste streams",
-        "total recorded waste movement"
-      ],
-      "units": [
-        {
-          "canonical_unit": "kg",
-          "aliases": [
-            "kg",
-            "kilogram",
-            "kilograms"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "kg",
-          "aliases": [
-            "tonne",
-            "tonnes",
-            "metric ton",
-            "metric tons"
-          ],
-          "multiplier": 1000
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "requires_comparison_context",
-      "comparison_requirements": [
-        "reporting_period",
-        "waste_boundary",
-        "denominator_or_activity_level",
-        "material_scope_and_baseline_or_benchmark"
-      ]
+      "indicator_id": "total_ghg_emissions_tco2e", "criterion_id": "emissions_management", "name": "Total greenhouse-gas emissions",
+      "aliases": ["total greenhouse gas emissions", "total ghg emissions", "total carbon emissions", "combined scope 1 and scope 2 emissions"],
+      "units": [{"canonical_unit": "tco2e", "aliases": ["tco2e", "t co2e", "tonnes co2e", "metric tonnes co2e"], "multiplier": 1}, {"canonical_unit": "tco2e", "aliases": ["kgco2e", "kg co2e", "kilograms co2e"], "multiplier": 0.001}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "emissions_scope", "organisational_boundary", "denominator_baseline_or_benchmark"]
     },
     {
-      "indicator_id": "expected_annual_electricity_savings_kwh",
-      "criterion_id": "investment_case",
-      "name": "Expected annual electricity savings",
-      "aliases": [
-        "expected annual electricity savings",
-        "electricity reduction",
-        "less grid draw",
-        "reduction in grid electricity"
-      ],
-      "units": [
-        {
-          "canonical_unit": "kwh_per_year",
-          "aliases": [
-            "kwh",
-            "kilowatt hours"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "kwh_per_year",
-          "aliases": [
-            "mwh",
-            "megawatt hours"
-          ],
-          "multiplier": 1000
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "evidence_only",
-      "comparison_requirements": [
-        "forecast_basis"
-      ]
+      "indicator_id": "water_withdrawal_m3", "criterion_id": "water_management", "name": "Water withdrawal",
+      "aliases": ["water withdrawal", "water withdrawn", "total water withdrawal", "water abstracted"],
+      "units": [{"canonical_unit": "m3", "aliases": ["m3", "m³", "cubic meter", "cubic meters", "cubic metre", "cubic metres"], "multiplier": 1}, {"canonical_unit": "m3", "aliases": ["l", "liter", "liters", "litre", "litres"], "multiplier": 0.001}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "operational_scope", "denominator_or_activity_level", "sector_applicability_and_baseline_or_benchmark"]
     },
     {
-      "indicator_id": "expected_annual_water_savings_m3",
-      "criterion_id": "investment_case",
-      "name": "Expected annual water savings",
-      "aliases": [
-        "expected annual water savings",
-        "water reduction",
-        "less intake",
-        "reduction in water intake"
-      ],
-      "units": [
-        {
-          "canonical_unit": "m3_per_year",
-          "aliases": [
-            "m3",
-            "m³",
-            "cubic metres",
-            "cubic meters"
-          ],
-          "multiplier": 1
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "evidence_only",
-      "comparison_requirements": [
-        "forecast_basis"
-      ]
+      "indicator_id": "water_consumption_m3", "criterion_id": "water_management", "name": "Water consumption",
+      "aliases": ["water consumption", "water consumed", "total water use", "net water consumption"],
+      "units": [{"canonical_unit": "m3", "aliases": ["m3", "m³", "cubic meter", "cubic meters", "cubic metre", "cubic metres"], "multiplier": 1}, {"canonical_unit": "m3", "aliases": ["l", "liter", "liters", "litre", "litres"], "multiplier": 0.001}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "operational_scope", "denominator_or_activity_level", "sector_applicability_and_baseline_or_benchmark"]
     },
     {
-      "indicator_id": "roa_percentage",
-      "criterion_id": "financial_health",
-      "name": "Return on assets",
-      "aliases": [
-        "return on assets",
-        "roa"
-      ],
-      "units": [
-        {
-          "canonical_unit": "percent",
-          "aliases": [
-            "%",
-            "percent",
-            "percentage"
-          ],
-          "multiplier": 1
-        }
-      ],
-      "minimum": null,
-      "maximum": null,
-      "assessment_use": "evidence_only",
-      "comparison_requirements": [
-        "reporting_period"
-      ]
+      "indicator_id": "water_recycled_percentage", "criterion_id": "water_management", "name": "Water recycled or reused",
+      "aliases": ["water recycled percentage", "water reuse rate", "recycled water share", "water reused percentage"],
+      "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
+      "dimension": "environmental_performance", "value_nature": "ratio", "direction": "benefit", "minimum": 0, "maximum": 100,
+      "assessment_use": "direct_ratio", "comparison_requirements": ["reporting_period", "operational_scope", "denominator_definition"]
     },
     {
-      "indicator_id": "revenue_growth_percentage",
-      "criterion_id": "financial_health",
-      "name": "Revenue growth",
-      "aliases": [
-        "revenue growth",
-        "year over year revenue growth",
-        "sales growth"
-      ],
-      "units": [
-        {
-          "canonical_unit": "percent",
-          "aliases": [
-            "%",
-            "percent",
-            "percentage"
-          ],
-          "multiplier": 1
-        }
-      ],
-      "minimum": null,
-      "maximum": null,
-      "assessment_use": "evidence_only",
-      "comparison_requirements": [
-        "reporting_period",
-        "comparison_basis"
-      ]
+      "indicator_id": "total_waste_generated_kg", "criterion_id": "waste_management", "name": "Total waste generated",
+      "aliases": ["total waste generated", "waste generated", "total operational waste"],
+      "units": [{"canonical_unit": "kg", "aliases": ["kg", "kilogram", "kilograms"], "multiplier": 1}, {"canonical_unit": "kg", "aliases": ["tonne", "tonnes", "metric ton", "metric tons"], "multiplier": 1000}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "waste_boundary", "denominator_or_activity_level", "material_scope_and_baseline_or_benchmark"]
     },
     {
-      "indicator_id": "current_ratio",
-      "criterion_id": "financial_health",
-      "name": "Current ratio",
-      "aliases": [
-        "current ratio",
-        "liquidity ratio"
-      ],
-      "units": [
-        {
-          "canonical_unit": "ratio",
-          "aliases": [
-            "ratio",
-            "times",
-            "x"
-          ],
-          "multiplier": 1
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "evidence_only",
-      "comparison_requirements": [
-        "reporting_period"
-      ]
+      "indicator_id": "hazardous_waste_generated_kg", "criterion_id": "waste_management", "name": "Hazardous waste generated",
+      "aliases": ["hazardous waste generated", "hazardous waste volume", "hazardous waste total"],
+      "units": [{"canonical_unit": "kg", "aliases": ["kg", "kilogram", "kilograms"], "multiplier": 1}, {"canonical_unit": "kg", "aliases": ["tonne", "tonnes", "metric ton", "metric tons"], "multiplier": 1000}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "waste_boundary", "denominator_or_activity_level", "hazardous_material_scope_and_baseline_or_benchmark"]
     },
     {
-      "indicator_id": "operating_cash_flow",
-      "criterion_id": "financial_health",
-      "name": "Operating cash flow",
-      "aliases": [
-        "operating cash flow",
-        "cash flow from operations",
-        "net operating cash flow",
-        "net cash from day-to-day trading",
-        "cash from day-to-day trading"
-      ],
-      "units": [
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed",
-            "dirham",
-            "dirhams"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed thousand",
-            "aed thousands",
-            "aed 000",
-            "thousand aed"
-          ],
-          "multiplier": 1000
-        },
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed million",
-            "million aed"
-          ],
-          "multiplier": 1000000
-        }
-      ],
-      "minimum": null,
-      "maximum": null,
-      "assessment_use": "evidence_only",
-      "comparison_requirements": [
-        "reporting_period"
-      ]
+      "indicator_id": "waste_diversion_percentage", "criterion_id": "waste_management", "name": "Waste diverted from disposal",
+      "aliases": ["waste diversion rate", "waste diverted from landfill", "waste recovery rate", "waste recycled or reused percentage"],
+      "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
+      "dimension": "environmental_performance", "value_nature": "ratio", "direction": "benefit", "minimum": 0, "maximum": 100,
+      "assessment_use": "direct_ratio", "comparison_requirements": ["reporting_period", "waste_boundary", "denominator_definition", "material_scope"]
     },
     {
-      "indicator_id": "debt_to_assets_percentage",
-      "criterion_id": "financial_health",
-      "name": "Debt to assets",
-      "aliases": [
-        "debt to assets",
-        "debt to asset ratio",
-        "total debt to total assets"
-      ],
-      "units": [
-        {
-          "canonical_unit": "percent",
-          "aliases": [
-            "%",
-            "percent",
-            "percentage"
-          ],
-          "multiplier": 1
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "evidence_only",
-      "comparison_requirements": [
-        "reporting_period"
-      ]
+      "indicator_id": "recovered_materials_kg", "criterion_id": "waste_management", "name": "Materials recovered, reused or recycled",
+      "aliases": ["materials recovered", "recovered materials", "materials reused", "materials recycled"],
+      "units": [{"canonical_unit": "kg", "aliases": ["kg", "kilogram", "kilograms"], "multiplier": 1}, {"canonical_unit": "kg", "aliases": ["tonne", "tonnes", "metric ton", "metric tons"], "multiplier": 1000}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "material_scope", "denominator_or_activity_level", "baseline_trend_or_sector_benchmark"]
     },
     {
-      "indicator_id": "requested_amount",
-      "criterion_id": "investment_case",
-      "name": "Requested amount",
-      "aliases": [
-        "requested amount",
-        "funding requested",
-        "finance requested",
-        "external capital sought",
-        "requested facility",
-        "seeks finance",
-        "external financing amount",
-        "external finance sought"
-      ],
-      "units": [
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed",
-            "dirham",
-            "dirhams"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed million",
-            "million aed"
-          ],
-          "multiplier": 1000000
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "evidence_only"
+      "indicator_id": "production_output_units", "criterion_id": "activity_context", "name": "Production output",
+      "aliases": ["production output", "units produced", "production volume", "products manufactured"],
+      "units": [{"canonical_unit": "units", "aliases": ["unit", "units", "items", "products"], "multiplier": 1}],
+      "dimension": "environmental_performance", "value_nature": "activity_denominator", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "operational_scope"]
     },
     {
-      "indicator_id": "project_cost",
-      "criterion_id": "investment_case",
-      "name": "Project cost",
-      "aliases": [
-        "project cost",
-        "total project cost",
-        "investment cost",
-        "total programme cost",
-        "capital programme total",
-        "programme cost",
-        "total programme"
-      ],
-      "units": [
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed",
-            "dirham",
-            "dirhams"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "aed",
-          "aliases": [
-            "aed million",
-            "million aed"
-          ],
-          "multiplier": 1000000
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "evidence_only"
+      "indicator_id": "floor_area_m2", "criterion_id": "activity_context", "name": "Operational floor area",
+      "aliases": ["operational floor area", "facility floor area", "gross floor area", "occupied floor area"],
+      "units": [{"canonical_unit": "m2", "aliases": ["m2", "m²", "square meter", "square meters", "square metre", "square metres"], "multiplier": 1}],
+      "dimension": "environmental_performance", "value_nature": "activity_denominator", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "operational_scope"]
     },
     {
-      "indicator_id": "expected_annual_savings",
-      "criterion_id": "investment_case",
-      "name": "Expected annual savings",
-      "aliases": [
-        "expected annual savings",
-        "projected annual savings",
-        "estimated annual savings",
-        "annual avoided operating spend",
-        "yearly avoided operating spend",
-        "annual benefit",
-        "forecast annual benefit"
-      ],
-      "units": [
-        {
-          "canonical_unit": "aed_per_year",
-          "aliases": [
-            "aed per year",
-            "aed annually"
-          ],
-          "multiplier": 1
-        },
-        {
-          "canonical_unit": "aed_per_year",
-          "aliases": [
-            "aed million",
-            "million aed"
-          ],
-          "multiplier": 1000000
-        }
-      ],
-      "minimum": 0,
-      "maximum": null,
-      "assessment_use": "evidence_only"
+      "indicator_id": "full_time_equivalent_employees", "criterion_id": "activity_context", "name": "Full-time equivalent employees",
+      "aliases": ["full time equivalent employees", "fte employees", "full time equivalents", "average fte"],
+      "units": [{"canonical_unit": "fte", "aliases": ["fte", "full time equivalents", "full-time equivalents"], "multiplier": 1}],
+      "dimension": "environmental_performance", "value_nature": "activity_denominator", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "organisational_boundary"]
+    },
+    {
+      "indicator_id": "avoided_ghg_emissions_tco2e", "criterion_id": "customer_environmental_effect", "name": "Achieved avoided greenhouse-gas emissions",
+      "aliases": ["avoided greenhouse gas emissions", "emissions avoided", "verified carbon avoidance", "achieved emissions savings"],
+      "units": [{"canonical_unit": "tco2e", "aliases": ["tco2e", "t co2e", "tonnes co2e", "metric tonnes co2e"], "multiplier": 1}, {"canonical_unit": "tco2e", "aliases": ["kgco2e", "kg co2e", "kilograms co2e"], "multiplier": 0.001}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "requires_comparison_context", "comparison_requirements": ["reporting_period", "calculation_boundary", "methodology_and_baseline", "customer_or_project_scope"]
+    },
+    {
+      "indicator_id": "projected_annual_energy_savings_kwh", "criterion_id": "transition_execution", "name": "Projected annual energy savings",
+      "aliases": ["projected annual energy savings", "expected yearly energy savings", "estimated annual electricity savings"],
+      "units": [{"canonical_unit": "kwh_per_year", "aliases": ["kwh per year", "kwh/year", "annual kwh"], "multiplier": 1}, {"canonical_unit": "kwh_per_year", "aliases": ["mwh per year", "mwh/year", "annual mwh"], "multiplier": 1000}],
+      "dimension": "investment_case", "value_nature": "forecast", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["forecast_horizon", "calculation_method", "baseline", "operational_scope"]
+    },
+    {
+      "indicator_id": "projected_annual_water_savings_m3", "criterion_id": "transition_execution", "name": "Projected annual water savings",
+      "aliases": ["projected annual water savings", "expected yearly water savings", "estimated annual water reduction"],
+      "units": [{"canonical_unit": "m3_per_year", "aliases": ["m3 per year", "m³ per year", "m3/year"], "multiplier": 1}, {"canonical_unit": "m3_per_year", "aliases": ["litres per year", "liters per year", "l/year"], "multiplier": 0.001}],
+      "dimension": "investment_case", "value_nature": "forecast", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["forecast_horizon", "calculation_method", "baseline", "operational_scope"]
+    },
+    {
+      "indicator_id": "projected_annual_waste_reduction_kg", "criterion_id": "transition_execution", "name": "Projected annual waste reduction",
+      "aliases": ["projected annual waste reduction", "expected yearly waste reduction", "estimated waste avoided annually"],
+      "units": [{"canonical_unit": "kg_per_year", "aliases": ["kg per year", "kg/year", "annual kg"], "multiplier": 1}, {"canonical_unit": "kg_per_year", "aliases": ["tonnes per year", "tonnes/year", "annual tonnes"], "multiplier": 1000}],
+      "dimension": "investment_case", "value_nature": "forecast", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["forecast_horizon", "calculation_method", "baseline", "material_scope"]
+    },
+    {
+      "indicator_id": "projected_annual_ghg_avoidance_tco2e", "criterion_id": "transition_execution", "name": "Projected annual greenhouse-gas avoidance",
+      "aliases": ["projected annual emissions avoidance", "expected yearly emissions savings", "estimated annual carbon reduction"],
+      "units": [{"canonical_unit": "tco2e_per_year", "aliases": ["tco2e per year", "tco2e/year", "annual tco2e"], "multiplier": 1}, {"canonical_unit": "tco2e_per_year", "aliases": ["kgco2e per year", "kg co2e/year", "annual kgco2e"], "multiplier": 0.001}],
+      "dimension": "investment_case", "value_nature": "forecast", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["forecast_horizon", "calculation_method", "baseline", "emissions_scope"]
+    },
+    {
+      "indicator_id": "revenue_current_period", "criterion_id": "financial_health", "name": "Revenue for the current reporting period",
+      "aliases": ["current year revenue", "revenue for the reporting period", "current period sales revenue", "total revenue"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "actual_flow", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "statement_basis"]
+    },
+    {
+      "indicator_id": "revenue_previous_period", "criterion_id": "financial_health", "name": "Revenue for the previous comparable period",
+      "aliases": ["previous year revenue", "prior period revenue", "comparative revenue", "prior year sales revenue"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "actual_flow", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "comparison_basis", "statement_basis"]
+    },
+    {
+      "indicator_id": "net_profit_current_period", "criterion_id": "financial_health", "name": "Net profit or loss",
+      "aliases": ["net profit", "net income", "profit after tax", "net loss"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "actual_flow", "direction": "benefit", "minimum": null, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "statement_basis"]
+    },
+    {
+      "indicator_id": "total_assets", "criterion_id": "financial_health", "name": "Total assets",
+      "aliases": ["total assets", "assets total", "total asset base"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "point_in_time", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "statement_basis"]
+    },
+    {
+      "indicator_id": "current_assets", "criterion_id": "financial_health", "name": "Current assets",
+      "aliases": ["current assets", "total current assets", "short term assets"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "point_in_time", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "statement_basis"]
+    },
+    {
+      "indicator_id": "current_liabilities", "criterion_id": "financial_health", "name": "Current liabilities",
+      "aliases": ["current liabilities", "total current liabilities", "short term liabilities"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "point_in_time", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "statement_basis"]
+    },
+    {
+      "indicator_id": "total_debt", "criterion_id": "financial_health", "name": "Total interest-bearing debt",
+      "aliases": ["total debt", "interest bearing debt", "borrowings", "loans and borrowings"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "point_in_time", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "debt_definition", "statement_basis"]
+    },
+    {
+      "indicator_id": "operating_cash_flow", "criterion_id": "financial_health", "name": "Operating cash flow",
+      "aliases": ["operating cash flow", "cash flow from operations", "net operating cash flow"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "financial_health", "value_nature": "actual_flow", "direction": "benefit", "minimum": null, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "statement_basis"]
+    },
+    {
+      "indicator_id": "roa_percentage", "criterion_id": "financial_health", "name": "Return on assets",
+      "aliases": ["return on assets", "roa percentage", "roa ratio"],
+      "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
+      "dimension": "financial_health", "value_nature": "reported_or_derived", "direction": "benefit", "minimum": null, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "calculation_basis"]
+    },
+    {
+      "indicator_id": "revenue_growth_percentage", "criterion_id": "financial_health", "name": "Revenue growth",
+      "aliases": ["revenue growth", "year over year revenue growth", "sales growth percentage"],
+      "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
+      "dimension": "financial_health", "value_nature": "reported_or_derived", "direction": "benefit", "minimum": null, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "comparison_basis", "calculation_basis"]
+    },
+    {
+      "indicator_id": "current_ratio", "criterion_id": "financial_health", "name": "Current ratio",
+      "aliases": ["current ratio", "liquidity ratio", "current assets to current liabilities"],
+      "units": [{"canonical_unit": "ratio", "aliases": ["ratio", "times", "x"], "multiplier": 1}],
+      "dimension": "financial_health", "value_nature": "reported_or_derived", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "calculation_basis"]
+    },
+    {
+      "indicator_id": "debt_to_assets_percentage", "criterion_id": "financial_health", "name": "Debt to assets",
+      "aliases": ["debt to assets", "debt to asset ratio", "total debt to total assets"],
+      "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
+      "dimension": "financial_health", "value_nature": "reported_or_derived", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "debt_definition", "calculation_basis"]
+    },
+    {
+      "indicator_id": "requested_amount", "criterion_id": "investment_case", "name": "Requested amount",
+      "aliases": ["requested amount", "funding requested", "finance requested", "loan amount requested"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "investment_case", "value_nature": "point_in_time", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["currency", "use_of_funds"]
+    },
+    {
+      "indicator_id": "project_cost", "criterion_id": "investment_case", "name": "Project cost",
+      "aliases": ["project cost", "total project cost", "investment cost", "capital expenditure required"],
+      "units": [{"canonical_unit": "aed", "aliases": ["aed", "dirham", "dirhams"], "multiplier": 1}, {"canonical_unit": "aed", "aliases": ["aed thousand", "thousand aed", "aed 000"], "multiplier": 1000}, {"canonical_unit": "aed", "aliases": ["aed million", "million aed"], "multiplier": 1000000}],
+      "dimension": "investment_case", "value_nature": "point_in_time", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["currency", "cost_scope"]
+    },
+    {
+      "indicator_id": "expected_annual_savings", "criterion_id": "investment_case", "name": "Expected annual financial savings",
+      "aliases": ["expected annual savings", "projected annual financial savings", "estimated annual cost savings"],
+      "units": [{"canonical_unit": "aed_per_year", "aliases": ["aed per year", "aed annually", "aed/year"], "multiplier": 1}, {"canonical_unit": "aed_per_year", "aliases": ["aed thousand per year", "thousand aed annually"], "multiplier": 1000}, {"canonical_unit": "aed_per_year", "aliases": ["aed million per year", "million aed annually"], "multiplier": 1000000}],
+      "dimension": "investment_case", "value_nature": "forecast", "direction": "benefit", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["forecast_horizon", "calculation_method", "assumption_basis"]
+    },
+    {
+      "indicator_id": "requested_share_of_project_cost", "criterion_id": "investment_case", "name": "Requested financing share of project cost",
+      "aliases": ["requested share of project cost", "financing share", "funding percentage of project cost"],
+      "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
+      "dimension": "investment_case", "value_nature": "reported_or_derived", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["calculation_basis"]
+    },
+    {
+      "indicator_id": "simple_payback_years", "criterion_id": "investment_case", "name": "Simple payback period",
+      "aliases": ["simple payback period", "payback period", "investment payback years"],
+      "units": [{"canonical_unit": "years", "aliases": ["year", "years", "yr", "yrs"], "multiplier": 1}],
+      "dimension": "investment_case", "value_nature": "reported_or_derived", "direction": "cost", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["calculation_basis", "savings_assumptions"]
     }
   ]
 }

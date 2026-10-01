@@ -100,6 +100,7 @@ def test_revisions_are_immutable_and_publication_is_explicit(
             financial_policy=workflow.financial_policy,
             readiness_specification=workflow.readiness_specification,
             metric_catalog=workflow.metric_catalog,
+            evidence_strength_policy=workflow.evidence_strength_policy,
             actor_id="reviewer_001",
         )
         duplicate = repository.approve(
@@ -111,6 +112,7 @@ def test_revisions_are_immutable_and_publication_is_explicit(
             financial_policy=workflow.financial_policy,
             readiness_specification=workflow.readiness_specification,
             metric_catalog=workflow.metric_catalog,
+            evidence_strength_policy=workflow.evidence_strength_policy,
             actor_id="reviewer_001",
         )
         second = repository.approve(
@@ -122,6 +124,7 @@ def test_revisions_are_immutable_and_publication_is_explicit(
             financial_policy=workflow.financial_policy,
             readiness_specification=workflow.readiness_specification,
             metric_catalog=workflow.metric_catalog,
+            evidence_strength_policy=workflow.evidence_strength_policy,
             actor_id="reviewer_001",
         )
         repository.publish(
@@ -148,6 +151,10 @@ def test_revisions_are_immutable_and_publication_is_explicit(
         == workflow.readiness_specification
     )
     assert currently_published.metric_catalog == workflow.metric_catalog
+    assert (
+        currently_published.evidence_strength_policy
+        == workflow.evidence_strength_policy
+    )
     assert (
         initially_published.context.activity_description
         == "First approved description."

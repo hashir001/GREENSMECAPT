@@ -1,77 +1,99 @@
 {
   "policy_id": "greensmecapt_financial_assessment",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "status": "development",
   "calibration_status": "requires_financial_calibration",
   "metrics": [
     {
-      "metric_id": "roa_percentage",
-      "title": "Return on assets",
-      "group": "business_health",
-      "importance": "core",
-      "allowed_units": ["percent"],
-      "requires_reporting_period": true,
-      "description": "Profitability relative to the asset base; retained separately from environmental performance."
+      "metric_id": "revenue_current_period", "title": "Current-period revenue", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "benefit", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "description": "Revenue for the current reporting period used as a statement input and comparison context."
     },
     {
-      "metric_id": "revenue_growth_percentage",
-      "title": "Revenue growth",
-      "group": "business_health",
-      "importance": "core",
-      "allowed_units": ["percent"],
-      "requires_reporting_period": true,
-      "description": "Period-over-period revenue change with an explicit comparison basis."
+      "metric_id": "revenue_previous_period", "title": "Previous-period revenue", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "context_only", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "requires_comparison_basis": true, "description": "Comparable prior-period revenue used to calculate growth."
     },
     {
-      "metric_id": "current_ratio",
-      "title": "Current ratio",
-      "group": "business_health",
-      "importance": "core",
-      "allowed_units": ["ratio"],
-      "requires_reporting_period": true,
-      "description": "Current assets relative to current liabilities."
+      "metric_id": "net_profit_current_period", "title": "Net profit or loss", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "benefit", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "description": "Current-period net result used to calculate profitability."
     },
     {
-      "metric_id": "operating_cash_flow",
-      "title": "Operating cash flow",
-      "group": "business_health",
-      "importance": "supporting",
-      "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
-      "requires_reporting_period": true,
-      "description": "Supporting liquidity evidence; no universal pass threshold is assumed."
+      "metric_id": "total_assets", "title": "Total assets", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "context_only", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "description": "Period-end asset base used in profitability and leverage calculations."
     },
     {
-      "metric_id": "debt_to_assets_percentage",
-      "title": "Debt to assets",
-      "group": "business_health",
-      "importance": "supporting",
-      "allowed_units": ["percent"],
-      "requires_reporting_period": true,
-      "description": "Supporting leverage information for investor review."
+      "metric_id": "current_assets", "title": "Current assets", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "context_only", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "description": "Period-end current assets used to calculate liquidity."
     },
     {
-      "metric_id": "requested_amount",
-      "title": "Requested amount",
-      "group": "investment_case",
-      "importance": "supporting",
-      "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
-      "description": "Capital requested by the SME."
+      "metric_id": "current_liabilities", "title": "Current liabilities", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "context_only", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "description": "Period-end current liabilities used to calculate liquidity."
     },
     {
-      "metric_id": "project_cost",
-      "title": "Project cost",
-      "group": "investment_case",
-      "importance": "supporting",
-      "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
-      "description": "Total cost of the proposed project."
+      "metric_id": "total_debt", "title": "Total interest-bearing debt", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "cost", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "description": "Interest-bearing borrowings used to calculate leverage."
     },
     {
-      "metric_id": "expected_annual_savings",
-      "title": "Expected annual savings",
-      "group": "investment_case",
-      "importance": "supporting",
-      "allowed_units": ["aed_per_year", "usd_per_year", "eur_per_year", "gbp_per_year", "pkr_per_year"],
-      "description": "Projected annual savings, retained as a projection rather than achieved performance."
+      "metric_id": "operating_cash_flow", "title": "Operating cash flow", "group": "business_health", "importance": "supporting",
+      "role": "source_input", "direction": "benefit", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "requires_reporting_period": true, "description": "Operating cash generation retained as a distinct supporting indicator."
+    },
+    {
+      "metric_id": "roa_percentage", "title": "Return on assets", "group": "business_health", "importance": "core",
+      "role": "derived_indicator", "direction": "benefit", "allowed_units": ["percent"], "requires_reporting_period": true,
+      "calculation_method": "ratio_percentage", "input_metric_ids": ["net_profit_current_period", "total_assets"],
+      "description": "Net profit divided by total assets; a reported ratio remains acceptable when its calculation basis is traceable."
+    },
+    {
+      "metric_id": "revenue_growth_percentage", "title": "Revenue growth", "group": "business_health", "importance": "core",
+      "role": "derived_indicator", "direction": "benefit", "allowed_units": ["percent"], "requires_reporting_period": true, "requires_comparison_basis": true,
+      "calculation_method": "growth_percentage", "input_metric_ids": ["revenue_current_period", "revenue_previous_period"],
+      "description": "Period-over-period revenue change calculated from comparable revenue values."
+    },
+    {
+      "metric_id": "current_ratio", "title": "Current ratio", "group": "business_health", "importance": "core",
+      "role": "derived_indicator", "direction": "benefit", "allowed_units": ["ratio"], "requires_reporting_period": true,
+      "calculation_method": "ratio", "input_metric_ids": ["current_assets", "current_liabilities"],
+      "description": "Current assets divided by current liabilities."
+    },
+    {
+      "metric_id": "debt_to_assets_percentage", "title": "Debt to assets", "group": "business_health", "importance": "supporting",
+      "role": "derived_indicator", "direction": "cost", "allowed_units": ["percent"], "requires_reporting_period": true,
+      "calculation_method": "ratio_percentage", "input_metric_ids": ["total_debt", "total_assets"],
+      "description": "Interest-bearing debt divided by total assets; no universal adverse threshold is assumed."
+    },
+    {
+      "metric_id": "requested_amount", "title": "Requested amount", "group": "investment_case", "importance": "supporting",
+      "role": "investment_input", "direction": "context_only", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "description": "Capital requested by the SME, interpreted with project cost and use of funds."
+    },
+    {
+      "metric_id": "project_cost", "title": "Project cost", "group": "investment_case", "importance": "supporting",
+      "role": "investment_input", "direction": "context_only", "allowed_units": ["aed", "usd", "eur", "gbp", "pkr"],
+      "description": "Total cost of the proposed project with an explicit cost scope."
+    },
+    {
+      "metric_id": "expected_annual_savings", "title": "Expected annual financial savings", "group": "investment_case", "importance": "supporting",
+      "role": "investment_input", "direction": "benefit", "allowed_units": ["aed_per_year", "usd_per_year", "eur_per_year", "gbp_per_year", "pkr_per_year"],
+      "description": "Projected annual savings retained as a forecast rather than achieved performance."
+    },
+    {
+      "metric_id": "requested_share_of_project_cost", "title": "Requested financing share", "group": "investment_case", "importance": "supporting",
+      "role": "derived_indicator", "direction": "context_only", "allowed_units": ["percent"],
+      "calculation_method": "ratio_percentage", "input_metric_ids": ["requested_amount", "project_cost"],
+      "description": "Requested amount divided by total project cost."
+    },
+    {
+      "metric_id": "simple_payback_years", "title": "Simple payback period", "group": "investment_case", "importance": "supporting",
+      "role": "derived_indicator", "direction": "cost", "allowed_units": ["years"],
+      "calculation_method": "simple_payback_years", "input_metric_ids": ["project_cost", "expected_annual_savings"],
+      "description": "Project cost divided by expected annual savings, with assumptions retained."
     }
   ]
 }

@@ -188,8 +188,13 @@ function SMEFinancialWorkspace() {
           const reported = field.state === 'reported'
           return (
             <article className="panel financial-metric" key={metric.metric_id}>
-              <header><div><span className="eyebrow">{metric.group.replaceAll('_', ' ')}</span><h2>{metric.title}</h2></div><StatusPill label={metric.importance} tone={metric.importance === 'core' ? 'warning' : 'neutral'} /></header>
+              <header><div><span className="eyebrow">{metric.group.replaceAll('_', ' ')} · {metric.role.replaceAll('_', ' ')}</span><h2>{metric.title}</h2></div><StatusPill label={metric.importance} tone={metric.importance === 'core' ? 'warning' : 'neutral'} /></header>
               <p>{metric.description}</p>
+              {metric.role === 'derived_indicator' && (
+                <div className="methodology-note">
+                  <p>Calculated from: {metric.input_metric_ids.map((item) => item.replaceAll('_', ' ')).join(' + ')}. A directly reported value still requires traceable evidence.</p>
+                </div>
+              )}
               <label className="builder-field">Availability<select disabled={!editable} value={field.state} onChange={(event) => update(metric.metric_id, { state: event.target.value as FinancialObservation['state'] })}>{unresolvedStates.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
               {reported && <div className="financial-value-grid">
                 <label className="builder-field">Value<input disabled={!editable} required type="number" step="any" value={field.value} onChange={(event) => update(metric.metric_id, { value: event.target.value })} /></label>

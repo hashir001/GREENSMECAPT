@@ -109,24 +109,28 @@ const factQuestions: Record<string, string> = {
   plans_operational_transition: 'Does the application include an environmental improvement project?',
 }
 
-const scoredCriteria = [
-  ['green_contribution', 'Nature and basis of green contribution', 'What environmental benefit does the activity provide, and what evidence supports it?', 'core'],
-  ['direct_operational_emissions', 'Direct operational emissions', 'How well does the company measure and manage fuel or process emissions?', 'conditional'],
-  ['purchased_energy_management', 'Purchased energy management', 'How well does the company obtain, monitor and manage electricity or cloud services?', 'conditional'],
-  ['resource_use_and_recovery', 'Material use, waste and recovery', 'How effectively are material use, waste and recovery managed?', 'conditional'],
-  ['customer_environmental_effect', 'Customer environmental effect', 'How strong and demonstrated is the environmental effect delivered to customers?', 'conditional'],
-  ['transition_execution', 'Operational transition feasibility', 'How credible are the budget, delivery plan, baseline and schedule?', 'conditional'],
-] as const
+const previewCriteria: AssessmentConfiguration['assessment_policy']['criteria'] = ([
+  ['green_contribution', 'Nature and basis of green contribution', 'core', 'green', 'environmental_performance', 'performance_criterion', []],
+  ['investment_context', 'Financial position and funding purpose', 'core', 'financial', 'financial_health', 'separate_financial_assessment', []],
+  ['direct_operational_emissions', 'Direct operational emissions assessment route', 'conditional', 'green', 'environmental_performance', 'performance_criterion', ['fuel_energy_consumption_kwh', 'scope_1_ghg_emissions_tco2e', 'total_ghg_emissions_tco2e']],
+  ['purchased_energy_management', 'Purchased energy and cloud-service management', 'conditional', 'green', 'environmental_performance', 'performance_criterion', ['renewable_energy_percentage', 'electricity_consumption_kwh', 'scope_2_ghg_emissions_tco2e']],
+  ['resource_use_and_recovery', 'Water, material use, waste and recovery', 'conditional', 'green', 'environmental_performance', 'performance_criterion', ['water_withdrawal_m3', 'water_consumption_m3', 'water_recycled_percentage', 'total_waste_generated_kg', 'hazardous_waste_generated_kg', 'waste_diversion_percentage', 'recovered_materials_kg']],
+  ['customer_environmental_effect', 'Environmental effect delivered to customers', 'conditional', 'green', 'environmental_performance', 'performance_criterion', ['avoided_ghg_emissions_tco2e']],
+  ['transition_execution', 'Feasibility of an operational transition', 'conditional', 'context', 'investment_case', 'non_scoring_context', ['projected_annual_energy_savings_kwh', 'projected_annual_water_savings_m3', 'projected_annual_waste_reduction_kg', 'projected_annual_ghg_avoidance_tco2e']],
+] as const).map(([criterion_id, title, requirement, output, dimension, scoring_role, indicator_ids]) => ({
+  criterion_id, title, requirement, output, dimension, scoring_role,
+  indicator_ids: [...indicator_ids],
+  question: `Provide reviewed information for ${title.toLowerCase()}.`,
+  requires_evidence_confirmation: true, module_ids: [],
+  when: { all_true: [], any_true: [], all_false: [] }, evidence_routes: ['reviewed_response'],
+  assessment_note: 'The backend decides applicability and preserves the response basis.',
+}))
 
 export const previewAssessmentConfiguration: AssessmentConfiguration = {
   assessment_policy: {
-    policy_id: 'greensmecapt_activity_profiles', version: '0.3.0', status: 'development',
+    policy_id: 'greensmecapt_activity_profiles', version: '1.0.0', status: 'development',
     description: 'Activity-led routing for proportionate green SME assessment.', fact_questions: factQuestions,
-    criteria: scoredCriteria.map(([criterion_id, title, question, requirement]) => ({
-      criterion_id, title, question, requirement, output: 'green', module_ids: [], indicator_ids: [],
-      when: { all_true: [], any_true: [], all_false: [] }, evidence_routes: ['reviewed_response'],
-      assessment_note: 'The backend decides applicability and preserves the response basis.',
-    })),
+    criteria: previewCriteria,
   },
   normalization_policy: {
     policy_id: 'greensmecapt_normalization', version: '0.3.0', status: 'development',
@@ -136,28 +140,37 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
       medium: { lower: 0.25, modal: 0.5, upper: 0.75 }, high: { lower: 0.5, modal: 0.75, upper: 1 },
       very_high: { lower: 0.75, modal: 1, upper: 1 },
     },
-    rules: scoredCriteria.map(([criterion_id], index) => ({
-      criterion_id, base_weight: [0.24, 0.13, 0.12, 0.16, 0.22, 0.13][index], allow_linguistic: true,
-    })),
+    rules: [
+      ['green_contribution', 0.24], ['direct_operational_emissions', 0.13],
+      ['purchased_energy_management', 0.12], ['resource_use_and_recovery', 0.16],
+      ['customer_environmental_effect', 0.22],
+    ].map(([criterion_id, base_weight]) => ({ criterion_id: String(criterion_id), base_weight: Number(base_weight), allow_linguistic: true })),
   },
   financial_policy: {
-    policy_id: 'greensmecapt_financial_assessment', version: '1.0.0', status: 'development',
+    policy_id: 'greensmecapt_financial_assessment', version: '2.0.0', status: 'development',
     calibration_status: 'requires_financial_calibration',
-    metrics: [
-      ['roa_percentage', 'Return on assets', 'business_health', 'core', ['percent'], true],
-      ['revenue_growth_percentage', 'Revenue growth', 'business_health', 'core', ['percent'], true],
-      ['current_ratio', 'Current ratio', 'business_health', 'core', ['ratio'], true],
-      ['operating_cash_flow', 'Operating cash flow', 'business_health', 'supporting', ['aed'], true],
-      ['debt_to_assets_percentage', 'Debt to assets', 'business_health', 'supporting', ['percent'], true],
-      ['requested_amount', 'Requested amount', 'investment_case', 'supporting', ['aed'], false],
-      ['project_cost', 'Project cost', 'investment_case', 'supporting', ['aed'], false],
-      ['expected_annual_savings', 'Expected annual savings', 'investment_case', 'supporting', ['aed_per_year'], false],
-    ].map(([metric_id, title, group, importance, allowed_units, requires_reporting_period]) => ({
-      metric_id: String(metric_id), title: String(title),
-      group: group as 'business_health' | 'investment_case',
-      importance: importance as 'core' | 'supporting',
-      allowed_units: allowed_units as string[],
-      requires_reporting_period: Boolean(requires_reporting_period),
+    metrics: ([
+      ['revenue_current_period', 'Current-period revenue', 'business_health', 'supporting', 'source_input', 'benefit', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, false, undefined, []],
+      ['revenue_previous_period', 'Previous-period revenue', 'business_health', 'supporting', 'source_input', 'context_only', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, true, undefined, []],
+      ['net_profit_current_period', 'Net profit or loss', 'business_health', 'supporting', 'source_input', 'benefit', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, false, undefined, []],
+      ['total_assets', 'Total assets', 'business_health', 'supporting', 'source_input', 'context_only', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, false, undefined, []],
+      ['current_assets', 'Current assets', 'business_health', 'supporting', 'source_input', 'context_only', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, false, undefined, []],
+      ['current_liabilities', 'Current liabilities', 'business_health', 'supporting', 'source_input', 'context_only', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, false, undefined, []],
+      ['total_debt', 'Total interest-bearing debt', 'business_health', 'supporting', 'source_input', 'cost', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, false, undefined, []],
+      ['operating_cash_flow', 'Operating cash flow', 'business_health', 'supporting', 'source_input', 'benefit', ['aed', 'usd', 'eur', 'gbp', 'pkr'], true, false, undefined, []],
+      ['roa_percentage', 'Return on assets', 'business_health', 'core', 'derived_indicator', 'benefit', ['percent'], true, false, 'ratio_percentage', ['net_profit_current_period', 'total_assets']],
+      ['revenue_growth_percentage', 'Revenue growth', 'business_health', 'core', 'derived_indicator', 'benefit', ['percent'], true, true, 'growth_percentage', ['revenue_current_period', 'revenue_previous_period']],
+      ['current_ratio', 'Current ratio', 'business_health', 'core', 'derived_indicator', 'benefit', ['ratio'], true, false, 'ratio', ['current_assets', 'current_liabilities']],
+      ['debt_to_assets_percentage', 'Debt to assets', 'business_health', 'supporting', 'derived_indicator', 'cost', ['percent'], true, false, 'ratio_percentage', ['total_debt', 'total_assets']],
+      ['requested_amount', 'Requested amount', 'investment_case', 'supporting', 'investment_input', 'context_only', ['aed', 'usd', 'eur', 'gbp', 'pkr'], false, false, undefined, []],
+      ['project_cost', 'Project cost', 'investment_case', 'supporting', 'investment_input', 'context_only', ['aed', 'usd', 'eur', 'gbp', 'pkr'], false, false, undefined, []],
+      ['expected_annual_savings', 'Expected annual financial savings', 'investment_case', 'supporting', 'investment_input', 'benefit', ['aed_per_year', 'usd_per_year', 'eur_per_year', 'gbp_per_year', 'pkr_per_year'], false, false, undefined, []],
+      ['requested_share_of_project_cost', 'Requested financing share', 'investment_case', 'supporting', 'derived_indicator', 'context_only', ['percent'], false, false, 'ratio_percentage', ['requested_amount', 'project_cost']],
+      ['simple_payback_years', 'Simple payback period', 'investment_case', 'supporting', 'derived_indicator', 'cost', ['years'], false, false, 'simple_payback_years', ['project_cost', 'expected_annual_savings']],
+    ] as const).map(([metric_id, title, group, importance, role, direction, allowed_units, requires_reporting_period, requires_comparison_basis, calculation_method, input_metric_ids]) => ({
+      metric_id, title, group, importance, role, direction, allowed_units: [...allowed_units],
+      requires_reporting_period, requires_comparison_basis, calculation_method,
+      input_metric_ids: [...input_metric_ids],
       description: 'Evidence-grounded financial input; no provisional threshold is applied.',
     })),
   },
@@ -179,7 +192,7 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
     ].map(([factor_id, domain_id, title]) => ({ factor_id, domain_id, title, definition: title, source_status: 'research_synthesized' })),
   },
   metric_catalog: {
-    catalog_id: 'greensmecapt_environmental_metrics', version: '1.3.0',
+    catalog_id: 'greensmecapt_assessment_metrics', version: '2.0.0',
     metrics: [
       ['renewable_energy_percentage', 'renewable_energy', 'Renewable energy share', 'direct_ratio'],
       ['electricity_consumption_kwh', 'energy_efficiency', 'Electricity consumption', 'requires_comparison_context'],
@@ -189,9 +202,38 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
       ['total_waste_generated_kg', 'waste_management', 'Total waste generated', 'requires_comparison_context'],
     ].map(([indicator_id, criterion_id, name, assessment_use]) => ({
       indicator_id, criterion_id, name,
+      dimension: 'environmental_performance',
+      value_nature: ['renewable_energy_percentage', 'waste_diversion_percentage'].includes(indicator_id)
+        ? 'ratio' as const
+        : 'actual_flow' as const,
+      direction: ['renewable_energy_percentage', 'waste_diversion_percentage'].includes(indicator_id)
+        ? 'benefit' as const
+        : 'cost' as const,
       assessment_use: assessment_use as 'direct_ratio' | 'requires_comparison_context',
       comparison_requirements: ['reporting_period', 'operational_scope'],
     })),
+  },
+  evidence_strength_policy: {
+    policy_id: 'greensmecapt_evidence_strength', version: '1.0.0', status: 'development',
+    calibration_status: 'requires_evidence_calibration', missing_information_rule: 'unknown_not_zero',
+    performance_separation: true,
+    source_classes: [
+      ['audited_or_regulatory', 'Audited or regulatory evidence'],
+      ['third_party_transactional', 'Third-party transactional evidence'],
+      ['internally_generated', 'Internally generated evidence'],
+      ['self_declared', 'Self-declared information'],
+      ['model_inferred', 'Model-inferred proposal'],
+    ].map(([source_class, title]) => ({
+      source_class: source_class as 'audited_or_regulatory' | 'third_party_transactional' | 'internally_generated' | 'self_declared' | 'model_inferred',
+      title, description: title, requires_human_acceptance: true,
+    })),
+    dimension_requirements: [
+      'environmental_performance', 'financial_health', 'investment_case', 'readiness_context',
+    ].map((dimension_id) => ({
+      dimension_id: dimension_id as 'environmental_performance' | 'financial_health' | 'investment_case' | 'readiness_context',
+      required_attributes: ['source_locator', 'validation_status'], notes: 'Traceable, reviewed evidence is required.',
+    })),
+    bands: ['strong', 'adequate', 'limited', 'insufficient', 'conflicting'],
   },
 }
 

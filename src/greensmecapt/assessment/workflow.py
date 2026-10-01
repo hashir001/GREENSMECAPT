@@ -21,6 +21,10 @@ from greensmecapt.assessment.electre_iii import (
     load_electre_configuration,
     run_electre_iii,
 )
+from greensmecapt.assessment.evidence_strength import (
+    EvidenceStrengthPolicy,
+    load_evidence_strength_policy,
+)
 from greensmecapt.assessment.financial import (
     FinancialAssessmentPolicy,
     FinancialInvestmentAssessment,
@@ -119,6 +123,94 @@ class CohortAssessmentResult(AssessmentWorkflowModel):
     calibration: MCDMCalibrationManifest | None = None
 
 
+def _validate_policy_alignment(
+    *,
+    assessment_policy: AssessmentPolicy,
+    normalization_policy: NormalizationPolicy,
+    financial_policy: FinancialAssessmentPolicy,
+    metric_catalog: MetricCatalog,
+    evidence_strength_policy: EvidenceStrengthPolicy,
+) -> None:
+    """Reject configuration sets that describe different assessment systems."""
+
+    metric_by_id = {
+        metric.indicator_id: metric for metric in metric_catalog.metrics
+    }
+    criterion_by_id = {
+        criterion.criterion_id: criterion
+        for criterion in assessment_policy.criteria
+    }
+    referenced_indicators = {
+        indicator_id
+        for criterion in assessment_policy.criteria
+        for indicator_id in criterion.indicator_ids
+    }
+    unknown_indicators = referenced_indicators - metric_by_id.keys()
+    if unknown_indicators:
+        raise AssessmentWorkflowError(
+            "Assessment criteria reference unknown metrics: "
+            f"{sorted(unknown_indicators)}"
+        )
+
+    financial_ids = {metric.metric_id for metric in financial_policy.metrics}
+    missing_financial_metrics = financial_ids - metric_by_id.keys()
+    if missing_financial_metrics:
+        raise AssessmentWorkflowError(
+            "Financial policy metrics are absent from the extraction catalogue: "
+            f"{sorted(missing_financial_metrics)}"
+        )
+    misclassified_financial = {
+        metric_id
+        for metric_id in financial_ids
+        if metric_by_id[metric_id].dimension.value
+        not in {"financial_health", "investment_case"}
+    }
+    if misclassified_financial:
+        raise AssessmentWorkflowError(
+            "Financial policy metrics have incompatible dimensions: "
+            f"{sorted(misclassified_financial)}"
+        )
+
+    unknown_normalization = {
+        rule.criterion_id
+        for rule in normalization_policy.rules
+        if rule.criterion_id not in criterion_by_id
+    }
+    if unknown_normalization:
+        raise AssessmentWorkflowError(
+            "Normalization rules reference unknown criteria: "
+            f"{sorted(unknown_normalization)}"
+        )
+    non_performance_rules = {
+        rule.criterion_id
+        for rule in normalization_policy.rules
+        if criterion_by_id[rule.criterion_id].scoring_role
+        != "performance_criterion"
+    }
+    if non_performance_rules:
+        raise AssessmentWorkflowError(
+            "Only environmental performance criteria may enter MCDM: "
+            f"{sorted(non_performance_rules)}"
+        )
+
+    governed_dimensions = {
+        requirement.dimension_id
+        for requirement in evidence_strength_policy.dimension_requirements
+    }
+    required_dimensions = {
+        "environmental_performance",
+        "financial_health",
+        "investment_case",
+        "readiness_context",
+    }
+    missing_dimensions = required_dimensions - governed_dimensions
+    if missing_dimensions:
+        raise AssessmentWorkflowError(
+            "Evidence-strength policy omits assessment dimensions: "
+            f"{sorted(missing_dimensions)}"
+        )
+
+
 class AssessmentWorkflow:
     """Prepare SME evidence and run reproducible comparison methods."""
 
@@ -130,15 +222,24 @@ class AssessmentWorkflow:
         financial_policy: FinancialAssessmentPolicy,
         readiness_specification: DematelSpecification,
         metric_catalog: MetricCatalog,
+        evidence_strength_policy: EvidenceStrengthPolicy,
         electre_configuration: ElectreIIIConfiguration,
         robustness_configuration: RobustnessConfiguration | None = None,
         calibration_manifest: MCDMCalibrationManifest | None = None,
     ) -> None:
+        _validate_policy_alignment(
+            assessment_policy=assessment_policy,
+            normalization_policy=normalization_policy,
+            financial_policy=financial_policy,
+            metric_catalog=metric_catalog,
+            evidence_strength_policy=evidence_strength_policy,
+        )
         self._assessment_policy = assessment_policy
         self._normalization_policy = normalization_policy
         self._financial_policy = financial_policy
         self._readiness_specification = readiness_specification
         self._metric_catalog = metric_catalog
+        self._evidence_strength_policy = evidence_strength_policy
         self._electre_configuration = electre_configuration
         self._robustness_configuration = (
             robustness_configuration or RobustnessConfiguration()
@@ -168,6 +269,10 @@ class AssessmentWorkflow:
     @property
     def metric_catalog(self) -> MetricCatalog:
         return self._metric_catalog
+
+    @property
+    def evidence_strength_policy(self) -> EvidenceStrengthPolicy:
+        return self._evidence_strength_policy
 
     @classmethod
     def from_environment(
@@ -216,6 +321,14 @@ class AssessmentWorkflow:
                     configured.get(
                         "GREENSMECAPT_METRIC_CATALOG",
                         "config/metric_catalog.development.json",
+                    )
+                )
+            ),
+            evidence_strength_policy=load_evidence_strength_policy(
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_EVIDENCE_STRENGTH_POLICY",
+                        "config/evidence_strength.development.json",
                     )
                 )
             ),

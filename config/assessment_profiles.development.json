@@ -1,6 +1,6 @@
 {
   "policy_id": "greensmecapt_activity_profiles",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "status": "development",
   "description": "Development routing policy separating environmental performance, SME financial health and readiness/context evidence. Activity modules route assessment topics; they are not DEMATEL driver domains and do not themselves score applicants.",
   "fact_questions": {
@@ -119,6 +119,9 @@
       "criterion_id": "green_contribution",
       "title": "Nature and basis of green contribution",
       "output": "green",
+      "dimension": "environmental_performance",
+      "scoring_role": "performance_criterion",
+      "requires_evidence_confirmation": true,
       "requirement": "core",
       "when": {},
       "question": "What environmental benefit does your activity provide, and what example or record can you share?",
@@ -135,6 +138,9 @@
       "criterion_id": "investment_context",
       "title": "Financial position and funding purpose",
       "output": "financial",
+      "dimension": "financial_health",
+      "scoring_role": "separate_financial_assessment",
+      "requires_evidence_confirmation": true,
       "requirement": "core",
       "when": {},
       "question": "Describe your current business stage, financial position and intended use of any funding.",
@@ -151,10 +157,18 @@
       "criterion_id": "direct_operational_emissions",
       "title": "Direct operational emissions assessment route",
       "output": "green",
+      "dimension": "environmental_performance",
+      "scoring_role": "performance_criterion",
+      "requires_evidence_confirmation": true,
       "requirement": "conditional",
       "module_ids": [
         "resource_operations",
         "transport"
+      ],
+      "indicator_ids": [
+        "fuel_energy_consumption_kwh",
+        "scope_1_ghg_emissions_tco2e",
+        "total_ghg_emissions_tco2e"
       ],
       "when": {
         "any_true": [
@@ -177,6 +191,9 @@
       "criterion_id": "purchased_energy_management",
       "title": "Purchased energy and cloud-service management",
       "output": "green",
+      "dimension": "environmental_performance",
+      "scoring_role": "performance_criterion",
+      "requires_evidence_confirmation": true,
       "requirement": "conditional",
       "module_ids": [
         "digital_services",
@@ -184,7 +201,9 @@
         "retail_hospitality"
       ],
       "indicator_ids": [
-        "renewable_energy_percentage"
+        "renewable_energy_percentage",
+        "electricity_consumption_kwh",
+        "scope_2_ghg_emissions_tco2e"
       ],
       "when": {
         "any_true": [
@@ -204,8 +223,11 @@
     },
     {
       "criterion_id": "resource_use_and_recovery",
-      "title": "Material use, waste and recovery",
+      "title": "Water, material use, waste and recovery",
       "output": "green",
+      "dimension": "environmental_performance",
+      "scoring_role": "performance_criterion",
+      "requires_evidence_confirmation": true,
       "requirement": "conditional",
       "module_ids": [
         "resource_operations",
@@ -213,6 +235,15 @@
         "agriculture_food",
         "buildings",
         "retail_hospitality"
+      ],
+      "indicator_ids": [
+        "water_withdrawal_m3",
+        "water_consumption_m3",
+        "water_recycled_percentage",
+        "total_waste_generated_kg",
+        "hazardous_waste_generated_kg",
+        "waste_diversion_percentage",
+        "recovered_materials_kg"
       ],
       "when": {
         "any_true": [
@@ -238,11 +269,17 @@
       "criterion_id": "customer_environmental_effect",
       "title": "Environmental effect delivered to customers",
       "output": "green",
+      "dimension": "environmental_performance",
+      "scoring_role": "performance_criterion",
+      "requires_evidence_confirmation": true,
       "requirement": "conditional",
       "module_ids": [
         "environmental_enabler",
         "clean_energy",
         "circularity"
+      ],
+      "indicator_ids": [
+        "avoided_ghg_emissions_tco2e"
       ],
       "when": {
         "any_true": [
@@ -266,9 +303,18 @@
       "criterion_id": "transition_execution",
       "title": "Feasibility of an operational transition",
       "output": "context",
+      "dimension": "investment_case",
+      "scoring_role": "non_scoring_context",
+      "requires_evidence_confirmation": true,
       "requirement": "conditional",
       "module_ids": [
         "transition"
+      ],
+      "indicator_ids": [
+        "projected_annual_energy_savings_kwh",
+        "projected_annual_water_savings_m3",
+        "projected_annual_waste_reduction_kg",
+        "projected_annual_ghg_avoidance_tco2e"
       ],
       "when": {
         "all_true": [

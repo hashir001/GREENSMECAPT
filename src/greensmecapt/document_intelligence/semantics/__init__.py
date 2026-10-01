@@ -11,6 +11,9 @@ from greensmecapt.document_intelligence.semantics.models import (
     MetricAssessmentUse,
     MetricCatalog,
     MetricDefinition,
+    MetricDimension,
+    MetricDirection,
+    MetricValueNature,
     UnitRule,
 )
 
@@ -19,6 +22,9 @@ __all__ = [
     "MetricCatalog",
     "MetricCatalogError",
     "MetricDefinition",
+    "MetricDimension",
+    "MetricDirection",
+    "MetricValueNature",
     "SemanticMetricExtractor",
     "UnitRule",
     "load_metric_catalog",

@@ -438,7 +438,11 @@ export function AssessmentBuilderPage() {
               ...(record?.evidence_items.filter((item) => item.validation_status === 'accepted').map((item) => ({ id: item.evidence_id, label: `Evidence · ${item.indicator_id}` })) ?? []),
             ]
             const observedIndicators = new Set(record?.evidence_items.filter((item) => item.validation_status === 'accepted').map((item) => item.indicator_id) ?? [])
-            const contextMetrics = configuration?.metric_catalog.metrics.filter((metric) => metric.criterion_id !== 'financial_health' && metric.criterion_id !== 'investment_case' && observedIndicators.has(metric.indicator_id)) ?? []
+            const contextMetrics = configuration?.metric_catalog.metrics.filter(
+              (metric) => metric.dimension === 'environmental_performance'
+                && metric.value_nature !== 'activity_denominator'
+                && observedIndicators.has(metric.indicator_id),
+            ) ?? []
             return (
               <section className="panel dimension-card" key={smeId}>
                 <div className="profile-card__header"><div><span className="eyebrow">Distinct assessment dimensions</span><h2>{company.legal_name}</h2></div></div>

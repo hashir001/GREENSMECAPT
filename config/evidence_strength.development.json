@@ -1,0 +1,63 @@
+{
+  "policy_id": "greensmecapt_evidence_strength",
+  "version": "1.0.0",
+  "status": "development",
+  "calibration_status": "requires_evidence_calibration",
+  "missing_information_rule": "unknown_not_zero",
+  "performance_separation": true,
+  "source_classes": [
+    {
+      "source_class": "audited_or_regulatory",
+      "title": "Audited or regulatory evidence",
+      "description": "Audited statements, regulator records, permits, certifications or formally assured reports.",
+      "requires_human_acceptance": true
+    },
+    {
+      "source_class": "third_party_transactional",
+      "title": "Third-party transactional evidence",
+      "description": "Utility bills, bank or supplier records, invoices, contracts and other independently issued operational records.",
+      "requires_human_acceptance": true
+    },
+    {
+      "source_class": "internally_generated",
+      "title": "Internally generated evidence",
+      "description": "Management accounts, meter logs, operating records, calculations and internal reports with traceable ownership.",
+      "requires_human_acceptance": true
+    },
+    {
+      "source_class": "self_declared",
+      "title": "Self-declared information",
+      "description": "Applicant responses or estimates not independently supported by a supplied record.",
+      "requires_human_acceptance": true
+    },
+    {
+      "source_class": "model_inferred",
+      "title": "Model-inferred proposal",
+      "description": "A source-grounded machine proposal that remains unconfirmed and outside assessment until accepted.",
+      "requires_human_acceptance": true
+    }
+  ],
+  "dimension_requirements": [
+    {
+      "dimension_id": "environmental_performance",
+      "required_attributes": ["source_locator", "validation_status", "unit", "reporting_period", "operational_scope", "applicability", "comparison_context_for_absolute_totals"],
+      "notes": "Absolute electricity, water, waste and emissions values require scope plus a denominator, trend, baseline or benchmark before performance comparison."
+    },
+    {
+      "dimension_id": "financial_health",
+      "required_attributes": ["source_locator", "validation_status", "currency_or_unit", "reporting_period", "statement_basis"],
+      "notes": "Reported ratios and calculated ratios must retain the statement inputs and reporting period used."
+    },
+    {
+      "dimension_id": "investment_case",
+      "required_attributes": ["source_locator", "validation_status", "currency_or_unit", "actual_or_forecast_label", "assumption_basis"],
+      "notes": "Forecast savings and environmental benefits must never be presented as achieved performance."
+    },
+    {
+      "dimension_id": "readiness_context",
+      "required_attributes": ["source_or_response", "confirmation_state", "factor_id", "narrative_basis"],
+      "notes": "Readiness evidence supports causal interpretation and is not an environmental performance score."
+    }
+  ],
+  "bands": ["strong", "adequate", "limited", "insufficient", "conflicting"]
+}

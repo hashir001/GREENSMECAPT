@@ -297,6 +297,9 @@ export type AssessmentCriterionPolicy = {
   criterion_id: string
   title: string
   output: 'green' | 'financial' | 'context'
+  dimension: 'environmental_performance' | 'financial_health' | 'investment_case' | 'readiness_context'
+  scoring_role: 'performance_criterion' | 'separate_financial_assessment' | 'non_scoring_context'
+  requires_evidence_confirmation: boolean
   requirement: 'core' | 'conditional' | 'optional' | 'informational'
   module_ids: string[]
   indicator_ids: string[]
@@ -351,6 +354,7 @@ export type AssessmentConfiguration = {
     version: string
     metrics: MetricDefinition[]
   }
+  evidence_strength_policy: EvidenceStrengthPolicy
 }
 
 export type FinancialMetricDefinition = {
@@ -358,9 +362,35 @@ export type FinancialMetricDefinition = {
   title: string
   group: 'business_health' | 'investment_case'
   importance: 'core' | 'supporting'
+  role: 'source_input' | 'derived_indicator' | 'investment_input'
+  direction: 'benefit' | 'cost' | 'context_only'
   allowed_units: string[]
   requires_reporting_period: boolean
+  requires_comparison_basis: boolean
+  calculation_method?: 'ratio' | 'ratio_percentage' | 'growth_percentage' | 'simple_payback_years'
+  input_metric_ids: string[]
   description: string
+}
+
+export type EvidenceStrengthPolicy = {
+  policy_id: string
+  version: string
+  status: string
+  calibration_status: string
+  missing_information_rule: 'unknown_not_zero'
+  performance_separation: true
+  source_classes: Array<{
+    source_class: 'audited_or_regulatory' | 'third_party_transactional' | 'internally_generated' | 'self_declared' | 'model_inferred'
+    title: string
+    description: string
+    requires_human_acceptance: boolean
+  }>
+  dimension_requirements: Array<{
+    dimension_id: 'environmental_performance' | 'financial_health' | 'investment_case' | 'readiness_context'
+    required_attributes: string[]
+    notes: string
+  }>
+  bands: Array<'strong' | 'adequate' | 'limited' | 'insufficient' | 'conflicting'>
 }
 
 export type FinancialObservation = {
@@ -427,6 +457,9 @@ export type MetricDefinition = {
   indicator_id: string
   criterion_id: string
   name: string
+  dimension: 'environmental_performance' | 'financial_health' | 'investment_case'
+  value_nature: 'actual_flow' | 'point_in_time' | 'ratio' | 'forecast' | 'reported_or_derived' | 'activity_denominator'
+  direction: 'benefit' | 'cost' | 'context_only'
   assessment_use: 'direct_ratio' | 'requires_comparison_context' | 'evidence_only'
   comparison_requirements: string[]
 }

@@ -14,6 +14,7 @@ from greensmecapt.assessment.financial import (
     FinancialAssessmentPolicy,
     FinancialObservation,
 )
+from greensmecapt.assessment.evidence_strength import EvidenceStrengthPolicy
 from greensmecapt.assessment.fuzzy_dematel import DematelSpecification
 from greensmecapt.assessment.normalization import NormalizationPolicy
 from greensmecapt.assessment.observations import CriterionResponse
@@ -95,6 +96,7 @@ class StoredAssessmentProfileRevision(BaseModel):
     financial_policy: FinancialAssessmentPolicy | None = None
     readiness_specification: DematelSpecification | None = None
     metric_catalog: MetricCatalog | None = None
+    evidence_strength_policy: EvidenceStrengthPolicy | None = None
     financial_observations: tuple[FinancialObservation, ...] = ()
     readiness_observations: tuple[ReadinessObservation, ...] = ()
     metric_contexts: tuple[MetricComparisonContext, ...] = ()
@@ -138,6 +140,7 @@ class AssessmentProfileRepository:
         financial_policy: FinancialAssessmentPolicy,
         readiness_specification: DematelSpecification,
         metric_catalog: MetricCatalog,
+        evidence_strength_policy: EvidenceStrengthPolicy,
         financial_observations: tuple[FinancialObservation, ...] = (),
         readiness_observations: tuple[ReadinessObservation, ...] = (),
         metric_contexts: tuple[MetricComparisonContext, ...] = (),
@@ -165,6 +168,7 @@ class AssessmentProfileRepository:
             financial_observations=financial_observations,
             readiness_observations=readiness_observations,
             metric_contexts=metric_contexts,
+            evidence_strength_policy=evidence_strength_policy,
         )
         fingerprint = hashlib.sha256(serialized.encode()).hexdigest()
         latest = self._latest_row(sme_id)
@@ -189,6 +193,7 @@ class AssessmentProfileRepository:
                 financial_policy=financial_policy,
                 readiness_specification=readiness_specification,
                 metric_catalog=metric_catalog,
+                evidence_strength_policy=evidence_strength_policy,
             ),
             approved_by=actor_id,
             approved_at=_utc_now(),
@@ -207,6 +212,9 @@ class AssessmentProfileRepository:
                         "approval_fingerprint": fingerprint,
                         "policy_version": assessment_policy.version,
                         "normalization_version": normalization_policy.version,
+                        "evidence_policy_version": (
+                            evidence_strength_policy.version
+                        ),
                     },
                     sort_keys=True,
                 ),
@@ -429,6 +437,7 @@ def _serialize_approval(
     financial_observations: tuple[FinancialObservation, ...],
     readiness_observations: tuple[ReadinessObservation, ...],
     metric_contexts: tuple[MetricComparisonContext, ...],
+    evidence_strength_policy: EvidenceStrengthPolicy | None,
 ) -> str:
     return json.dumps(
         {
@@ -442,6 +451,11 @@ def _serialize_approval(
             "financial_policy": financial_policy.model_dump(mode="json"),
             "readiness_specification": readiness_specification.model_dump(mode="json"),
             "metric_catalog": metric_catalog.model_dump(mode="json"),
+            "evidence_strength_policy": (
+                evidence_strength_policy.model_dump(mode="json")
+                if evidence_strength_policy is not None
+                else None
+            ),
             "financial_observations": [
                 item.model_dump(mode="json") for item in financial_observations
             ],
@@ -499,6 +513,13 @@ def _revision_from_row(
             if "metric_catalog" in supplemental
             else None
         ),
+        evidence_strength_policy=(
+            EvidenceStrengthPolicy.model_validate(
+                supplemental["evidence_strength_policy"]
+            )
+            if supplemental.get("evidence_strength_policy") is not None
+            else None
+        ),
         financial_observations=tuple(
             FinancialObservation.model_validate(item)
             for item in supplemental.get("financial_observations", ())
@@ -524,12 +545,18 @@ def _serialize_supplemental_inputs(
     financial_policy: FinancialAssessmentPolicy,
     readiness_specification: DematelSpecification,
     metric_catalog: MetricCatalog,
+    evidence_strength_policy: EvidenceStrengthPolicy | None,
 ) -> str:
     return json.dumps(
         {
             "financial_policy": financial_policy.model_dump(mode="json"),
             "readiness_specification": readiness_specification.model_dump(mode="json"),
             "metric_catalog": metric_catalog.model_dump(mode="json"),
+            "evidence_strength_policy": (
+                evidence_strength_policy.model_dump(mode="json")
+                if evidence_strength_policy is not None
+                else None
+            ),
             "financial_observations": [
                 item.model_dump(mode="json") for item in financial_observations
             ],
