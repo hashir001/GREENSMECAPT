@@ -64,6 +64,22 @@ class QualitativeInstruction(IntelligenceModel):
     criterion_id: str | None = Field(default=None, min_length=1)
 
 
+class ReadinessFactorInstruction(IntelligenceModel):
+    """Describe one research-grounded SME readiness factor."""
+
+    factor_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    definition: str = Field(min_length=1)
+
+
+class ReadinessEvidenceState(StrEnum):
+    """Classify what one exact source quote says about readiness."""
+
+    ENABLING = "enabling_evidence"
+    CONSTRAINING = "constraining_evidence"
+    MIXED = "mixed_evidence"
+
+
 class SemanticExtractionRequest(IntelligenceModel):
     """Supply allowed metrics and traceable source segments."""
 
@@ -78,6 +94,7 @@ class SemanticExtractionRequest(IntelligenceModel):
     company_profile_fields: tuple[CompanyProfileFieldInstruction, ...] = ()
     sectors: tuple[SectorInstruction, ...] = ()
     activity_fact_ids: tuple[str, ...] = ()
+    readiness_factors: tuple[ReadinessFactorInstruction, ...] = ()
     unmapped_material_categories: tuple[UnmappedMaterialCategory, ...] = ()
     maximum_unmapped_claims: int = Field(default=0, ge=0, le=50)
     segments: tuple[SemanticSourceSegment, ...] = Field(
@@ -153,6 +170,16 @@ class UnmappedMaterialClaimPayload(IntelligenceModel):
     model_rationale: str = Field(min_length=1)
 
 
+class ReadinessClaimPayload(IntelligenceModel):
+    """Propose one source-grounded SME readiness observation."""
+
+    segment_id: str = Field(min_length=1)
+    factor_id: str = Field(min_length=1)
+    state: ReadinessEvidenceState
+    source_quote: str = Field(min_length=1)
+    model_rationale: str = Field(min_length=1)
+
+
 class SemanticProviderOutput(IntelligenceModel):
     """Structured output required from every provider."""
 
@@ -161,6 +188,7 @@ class SemanticProviderOutput(IntelligenceModel):
     document_profile_claims: tuple[DocumentProfileClaimPayload, ...] = ()
     company_profile_claims: tuple[CompanyProfileClaimPayload, ...] = ()
     sector_activity_proposals: tuple[SectorActivityProposalPayload, ...] = ()
+    readiness_claims: tuple[ReadinessClaimPayload, ...] = ()
     unmapped_material_claims: tuple[UnmappedMaterialClaimPayload, ...] = ()
 
 

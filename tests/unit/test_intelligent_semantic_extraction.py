@@ -18,6 +18,9 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     QualitativeClaimPayload,
     QualitativeInstruction,
     QualitativeValueType,
+    ReadinessClaimPayload,
+    ReadinessEvidenceState,
+    ReadinessFactorInstruction,
     SectorActivityProposalPayload,
     SemanticClaimPayload,
     SemanticProviderOutput,
@@ -56,6 +59,7 @@ class FakeProvider:
         sector_activity_proposals: tuple[
             SectorActivityProposalPayload, ...
         ] = (),
+        readiness_claims: tuple[ReadinessClaimPayload, ...] = (),
         unmapped_material_claims: tuple[
             UnmappedMaterialClaimPayload, ...
         ] = (),
@@ -65,6 +69,7 @@ class FakeProvider:
         self._document_profile_claims = document_profile_claims
         self._company_profile_claims = company_profile_claims
         self._sector_activity_proposals = sector_activity_proposals
+        self._readiness_claims = readiness_claims
         self._unmapped_material_claims = unmapped_material_claims
         self.requests = []
 
@@ -81,6 +86,7 @@ class FakeProvider:
             document_profile_claims=self._document_profile_claims,
             company_profile_claims=self._company_profile_claims,
             sector_activity_proposals=self._sector_activity_proposals,
+            readiness_claims=self._readiness_claims,
             unmapped_material_claims=self._unmapped_material_claims,
         )
 
@@ -332,7 +338,7 @@ def test_reject_qualitative_quote_absent_from_source() -> None:
 
 
 def test_ground_company_document_sector_and_unmapped_context() -> None:
-    """Ground open-world context without converting it into score evidence."""
+    """Place grounded company and readiness context into human review."""
 
     quote = (
         "EcoPack LLC manufactures reusable packaging in Abu Dhabi and "
@@ -363,6 +369,15 @@ def test_ground_company_document_sector_and_unmapped_context() -> None:
                 source_quote=quote,
             ),
         ),
+        readiness_claims=(
+            ReadinessClaimPayload(
+                segment_id="page_1_text",
+                factor_id="regulation_compliance_standards_and_certifications",
+                state=ReadinessEvidenceState.ENABLING,
+                source_quote=quote,
+                model_rationale="The source explicitly names ISO certification.",
+            ),
+        ),
         unmapped_material_claims=(
             UnmappedMaterialClaimPayload(
                 segment_id="page_1_text",
@@ -384,6 +399,13 @@ def test_ground_company_document_sector_and_unmapped_context() -> None:
             ),
         ),
         company_policy=load_company_intelligence_policy(COMPANY_POLICY_PATH),
+        readiness_factors=(
+            ReadinessFactorInstruction(
+                factor_id="regulation_compliance_standards_and_certifications",
+                title="Regulation, compliance and certification",
+                definition="Ability to satisfy standards and certification requirements.",
+            ),
+        ),
     )
     extracted = ExtractedDocument(
         document_id="doc_llm_001",
@@ -402,13 +424,24 @@ def test_ground_company_document_sector_and_unmapped_context() -> None:
         catalog=load_metric_catalog(CATALOG_PATH),
     )
 
-    assert report.evidence_items == ()
+    assert len(report.evidence_items) == 5
+    assert all(
+        item.validation_status is EvidenceValidationStatus.UNVALIDATED
+        for item in report.evidence_items
+    )
+    assert any(
+        item.indicator_id
+        == "readiness_factor:regulation_compliance_standards_and_certifications"
+        and item.normalized_value == "enabling_evidence"
+        for item in report.evidence_items
+    )
     assert report.rejected_claims == ()
-    assert report.company_policy_version == "1.0.0"
+    assert report.company_policy_version == "1.1.0"
     assert [claim.claim_type for claim in report.intelligence_claims] == [
         "document_profile",
         "company_profile",
         "sector_activity_proposal",
+        "readiness_observation",
         "unmapped_material",
     ]
     assert report.intelligence_claims[2].related_ids == ("operates_facility",)

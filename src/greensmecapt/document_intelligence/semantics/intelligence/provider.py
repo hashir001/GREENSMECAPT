@@ -185,7 +185,7 @@ class OpenAICompatibleSemanticProvider:
     """Use schema-constrained chat completion endpoints."""
 
     provider_name = "openai_compatible"
-    provider_version = "1.1.0"
+    provider_version = "1.2.0"
 
     def __init__(
         self,
@@ -335,7 +335,18 @@ claim. Never restate an already captured claim, and never exceed
 maximum_unmapped_claims.
 25. model_rationale may explain why an unmapped quote may matter, but must not
 present the information as verified, scoreable or approved.
-26. Return only the required JSON structure.
+26. readiness_claims may use only supplied readiness factor IDs. Classify an
+exact quote as enabling_evidence when it demonstrates a present capability or
+support, constraining_evidence when it demonstrates a present barrier or gap,
+or mixed_evidence only when that same quote explicitly contains both.
+27. Absence of a readiness statement is not constraining or insufficient
+evidence. Return no readiness claim. Never infer readiness from sector alone.
+28. Readiness claims are observations for human review. Never generate DEMATEL
+relationships, prominence, cause/effect values, weights or Green Scores.
+29. Company and project context must remain explicit source facts. Capture a
+funding purpose, proposed project, specialization, or implementation risk only
+when the exact source supports it.
+30. Return only the required JSON structure.
 """.strip()
 
 

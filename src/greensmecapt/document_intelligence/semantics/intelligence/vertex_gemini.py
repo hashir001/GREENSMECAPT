@@ -155,6 +155,33 @@ _VERTEX_OUTPUT_SCHEMA = {
                 ],
             },
         },
+        "readiness_claims": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_id": {"type": "STRING"},
+                    "factor_id": {"type": "STRING"},
+                    "state": {
+                        "type": "STRING",
+                        "enum": [
+                            "enabling_evidence",
+                            "constraining_evidence",
+                            "mixed_evidence",
+                        ],
+                    },
+                    "source_quote": {"type": "STRING"},
+                    "model_rationale": {"type": "STRING"},
+                },
+                "required": [
+                    "segment_id",
+                    "factor_id",
+                    "state",
+                    "source_quote",
+                    "model_rationale",
+                ],
+            },
+        },
         "unmapped_material_claims": {
             "type": "ARRAY",
             "items": {
@@ -182,6 +209,7 @@ _VERTEX_OUTPUT_SCHEMA = {
         "document_profile_claims",
         "company_profile_claims",
         "sector_activity_proposals",
+        "readiness_claims",
         "unmapped_material_claims",
     ],
 }
@@ -219,7 +247,7 @@ class VertexGeminiSemanticProvider:
     """Use Vertex Gemini structured output with the existing grounded contract."""
 
     provider_name = "vertex_gemini"
-    provider_version = "1.2.0"
+    provider_version = "1.3.0"
 
     def __init__(
         self,

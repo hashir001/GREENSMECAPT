@@ -1,6 +1,6 @@
 {
   "policy_id": "greensmecapt_company_document_intelligence",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "development",
   "document_types": [
     {"document_type_id": "sustainability_or_esg_report", "title": "Sustainability or ESG report", "definition": "A report focused on environmental, social, governance or sustainability performance."},
@@ -20,10 +20,14 @@
     {"field_id": "founding_year", "title": "Founding year", "description": "The year the company states it was founded or incorporated."},
     {"field_id": "employee_count", "title": "Employee count", "description": "A stated number or bounded range of employees."},
     {"field_id": "products_and_services", "title": "Products and services", "description": "The company's explicitly described products, services or customer offering."},
+    {"field_id": "subsector_or_specialization", "title": "Subsector or specialization", "description": "An explicitly stated specialization, industry niche or primary operating activity."},
     {"field_id": "operating_footprint", "title": "Operating footprint", "description": "Explicit facilities, fleet, farms, sites, cloud operations or geographic operating reach."},
     {"field_id": "business_stage", "title": "Business stage", "description": "An explicitly stated pre-revenue, early-stage, growth, mature or comparable business stage."},
     {"field_id": "certification_or_permit", "title": "Certification or permit", "description": "An explicitly named certification, licence, permit or accreditation."},
-    {"field_id": "green_value_proposition", "title": "Green value proposition", "description": "The explicitly stated environmental function or benefit of the company's product, service or transition project."}
+    {"field_id": "green_value_proposition", "title": "Green value proposition", "description": "The explicitly stated environmental function or benefit of the company's product, service or transition project."},
+    {"field_id": "funding_purpose", "title": "Funding purpose", "description": "The explicitly stated purpose for requested financing, grant support or investment."},
+    {"field_id": "proposed_transition_project", "title": "Proposed transition project", "description": "An explicitly described environmental, operational or technology project proposed for implementation."},
+    {"field_id": "implementation_risk_or_dependency", "title": "Implementation risk or dependency", "description": "An explicitly stated delivery risk, dependency, constraint, prerequisite or implementation caveat."}
   ],
   "sectors": [
     {"sector_id": "manufacturing_and_processing", "title": "Manufacturing and processing", "definition": "Production, fabrication or physical processing of goods or materials."},

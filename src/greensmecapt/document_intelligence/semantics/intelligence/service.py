@@ -22,6 +22,8 @@ from greensmecapt.document_intelligence.semantics.intelligence.models import (
     QualitativeClaimPayload,
     QualitativeInstruction,
     QualitativeValueType,
+    ReadinessClaimPayload,
+    ReadinessFactorInstruction,
     RejectedSemanticClaim,
     SectorActivityProposalPayload,
     SemanticClaimPayload,
@@ -58,6 +60,7 @@ class IntelligentSemanticExtractionService:
         provider: SemanticExtractionProvider,
         *,
         qualitative_instructions: tuple[QualitativeInstruction, ...] = (),
+        readiness_factors: tuple[ReadinessFactorInstruction, ...] = (),
         company_policy: CompanyIntelligencePolicy | None = None,
         maximum_segments_per_request: int = 60,
         maximum_characters_per_request: int = 40_000,
@@ -69,6 +72,7 @@ class IntelligentSemanticExtractionService:
 
         self._provider = provider
         self._qualitative_instructions = qualitative_instructions
+        self._readiness_factors = readiness_factors
         self._company_policy = company_policy
         self._maximum_segments_per_request = maximum_segments_per_request
         self._maximum_characters_per_request = maximum_characters_per_request
@@ -133,6 +137,7 @@ class IntelligentSemanticExtractionService:
             extracted_document=extracted_document,
             catalog=catalog,
             qualitative_instructions=self._qualitative_instructions,
+            readiness_factors=self._readiness_factors,
             company_policy=self._company_policy,
         )
         requests = _partition_request(
@@ -173,6 +178,9 @@ class IntelligentSemanticExtractionService:
             )
         }
         activity_fact_ids = set(request.activity_fact_ids)
+        readiness_factor_ids = {
+            item.factor_id for item in request.readiness_factors
+        }
         unmapped_category_ids = {
             item.category_id
             for item in (
@@ -295,6 +303,23 @@ class IntelligentSemanticExtractionService:
                 )
                 claim_index += 1
 
+            for claim in provider_output.readiness_claims:
+                result = _ground_readiness_claim(
+                    claim=claim,
+                    document=document,
+                    segments=segments,
+                    allowed_factor_ids=readiness_factor_ids,
+                )
+                _append_intelligence_result(
+                    result=result,
+                    claim_index=claim_index,
+                    indicator_id=f"readiness_factor:{claim.factor_id}",
+                    segment_id=claim.segment_id,
+                    intelligence_claims=intelligence_claims,
+                    rejected_claims=rejected_claims,
+                )
+                claim_index += 1
+
             for claim in provider_output.unmapped_material_claims:
                 result = _ground_unmapped_material_claim(
                     claim=claim,
@@ -312,9 +337,6 @@ class IntelligentSemanticExtractionService:
                 )
                 claim_index += 1
 
-        unique_evidence = {
-            item.evidence_id: item for item in evidence_items
-        }
         unique_intelligence = tuple(
             {
                 claim.claim_id: claim
@@ -329,6 +351,19 @@ class IntelligentSemanticExtractionService:
                 else 0
             ),
         )
+        for claim in limited_intelligence:
+            evidence_items.append(
+                _intelligence_claim_to_evidence(
+                    claim=claim,
+                    document=document,
+                    provider_name=self._provider.provider_name,
+                    provider_version=self._provider.provider_version,
+                    model_name=self._provider.model_name,
+                )
+            )
+        unique_evidence = {
+            item.evidence_id: item for item in evidence_items
+        }
 
         _LOGGER.info(
             "Semantic extraction completed for document %s: %s evidence item(s), "
@@ -362,6 +397,7 @@ def _build_request(
     extracted_document: ExtractedDocument,
     catalog: MetricCatalog,
     qualitative_instructions: tuple[QualitativeInstruction, ...] = (),
+    readiness_factors: tuple[ReadinessFactorInstruction, ...] = (),
     company_policy: CompanyIntelligencePolicy | None = None,
 ) -> SemanticExtractionRequest:
     """Build a bounded request from structured document regions."""
@@ -410,6 +446,7 @@ def _build_request(
             for instruction in qualitative_instructions
             if instruction.claim_id.startswith("activity_fact:")
         ),
+        readiness_factors=readiness_factors,
         unmapped_material_categories=(
             company_policy.unmapped_material_categories if company_policy else ()
         ),
@@ -921,6 +958,68 @@ def _ground_unmapped_material_claim(
         value=claim.suggested_label,
         source_quote=claim.source_quote,
         model_rationale=claim.model_rationale,
+    )
+
+
+def _ground_readiness_claim(
+    *,
+    claim: ReadinessClaimPayload,
+    document: SourceDocument,
+    segments: dict[str, SemanticSourceSegment],
+    allowed_factor_ids: set[str],
+) -> GroundedIntelligenceClaim | str:
+    """Ground an SME readiness observation without treating it as a score."""
+
+    segment = segments.get(claim.segment_id)
+    if segment is None:
+        return "The claim references an unknown source segment."
+    if claim.factor_id not in allowed_factor_ids:
+        return "The claim references an unconfigured readiness factor."
+    if not _contains_text(segment.text, claim.source_quote):
+        return "The source quote does not occur in the referenced segment."
+    return _intelligence_claim(
+        document=document,
+        segment=segment,
+        segment_id=claim.segment_id,
+        claim_type="readiness_observation",
+        field_id=claim.factor_id,
+        value=claim.state.value,
+        source_quote=claim.source_quote,
+        model_rationale=claim.model_rationale,
+    )
+
+
+def _intelligence_claim_to_evidence(
+    *,
+    claim: GroundedIntelligenceClaim,
+    document: SourceDocument,
+    provider_name: str,
+    provider_version: str,
+    model_name: str,
+) -> EvidenceItem:
+    """Place grounded context proposals into the human-validation workflow."""
+
+    indicator_id = {
+        "company_profile": f"company_profile:{claim.field_id}",
+        "sector_activity_proposal": f"sector_activity:{claim.value}",
+        "readiness_observation": f"readiness_factor:{claim.field_id}",
+        "unmapped_material": f"unmapped_material:{claim.field_id}",
+        "document_profile": f"document_profile:{claim.value}",
+    }.get(claim.claim_type, f"context:{claim.field_id}")
+    return EvidenceItem(
+        evidence_id=f"evidence_{claim.claim_id.removeprefix('intelligence_')}",
+        sme_id=document.sme_id,
+        document_id=document.document_id,
+        indicator_id=indicator_id,
+        criterion_id=None,
+        raw_value=claim.source_quote,
+        normalized_value=claim.value,
+        unit=None,
+        source_locator=claim.source_locator,
+        source_excerpt=claim.source_quote,
+        extraction_method="language_model_grounded_context_extraction",
+        extractor_name=f"{provider_name}:{model_name}",
+        extractor_version=provider_version,
     )
 
 

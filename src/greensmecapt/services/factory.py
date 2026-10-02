@@ -4,6 +4,10 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
+from greensmecapt.assessment.fuzzy_dematel import (
+    DematelSpecification,
+    load_dematel_specification,
+)
 from greensmecapt.assessment.profiles import AssessmentPolicy, load_policy
 from greensmecapt.document_intelligence.readers import (
     ProductionReaderConfiguration,
@@ -19,6 +23,7 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     OpenAICompatibleSemanticProvider,
     QualitativeInstruction,
     QualitativeValueType,
+    ReadinessFactorInstruction,
     VertexGeminiProviderConfiguration,
     VertexGeminiSemanticProvider,
     load_company_intelligence_policy,
@@ -77,6 +82,14 @@ def build_document_processing_service(
             configured_environment.get(
                 "GREENSMECAPT_COMPANY_INTELLIGENCE_POLICY",
                 "config/company_intelligence.development.json",
+            )
+        ),
+        readiness_specification=load_dematel_specification(
+            Path(
+                configured_environment.get(
+                    "GREENSMECAPT_READINESS_SPECIFICATION",
+                    "config/dematel_specification.development.json",
+                )
             )
         ),
     )
@@ -258,6 +271,7 @@ def _intelligent_service_from_environment(
     *,
     policy: AssessmentPolicy | None = None,
     company_policy_path: Path | None = None,
+    readiness_specification: DematelSpecification | None = None,
 ) -> IntelligentSemanticExtractionService | None:
     provider_name = environment.get(
         "GREENSMECAPT_SEMANTIC_PROVIDER",
@@ -355,6 +369,11 @@ def _intelligent_service_from_environment(
             if policy is not None
             else ()
         ),
+        readiness_factors=(
+            _readiness_factor_instructions(readiness_specification)
+            if readiness_specification is not None
+            else ()
+        ),
         company_policy=(
             load_company_intelligence_policy(company_policy_path)
             if company_policy_path is not None
@@ -401,6 +420,21 @@ def _qualitative_instructions(
         for criterion in policy.criteria
     )
     return (*activity_facts, *criterion_context)
+
+
+def _readiness_factor_instructions(
+    specification: DematelSpecification,
+) -> tuple[ReadinessFactorInstruction, ...]:
+    """Expose factor definitions, never DEMATEL relationships, to Gemini."""
+
+    return tuple(
+        ReadinessFactorInstruction(
+            factor_id=factor.factor_id,
+            title=factor.title,
+            definition=factor.definition,
+        )
+        for factor in specification.factors
+    )
 
 
 def _visual_provider_from_environment(

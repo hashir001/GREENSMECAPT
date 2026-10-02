@@ -147,6 +147,7 @@ export type GroundedIntelligenceClaim = {
     | 'document_profile'
     | 'company_profile'
     | 'sector_activity_proposal'
+    | 'readiness_observation'
     | 'unmapped_material'
   field_id: string
   value: string

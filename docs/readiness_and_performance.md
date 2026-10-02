@@ -29,6 +29,17 @@ For a real applicant, the readiness model records one state per operational subd
 
 Evidence-based states require source identifiers. Missing evidence remains `unknown`; it is not converted to zero. The profile has no scalar readiness score. After expert calibration, DEMATEL influence results can explain why an observed constraint matters.
 
+Gemini receives the seven factor identifiers, titles and definitions in the
+same bounded semantic request used for metric and company-context extraction.
+It may propose only `enabling_evidence`, `constraining_evidence` or
+`mixed_evidence` from an exact source quote. Absence produces no claim and is
+later represented as `unknown`. Every proposal enters the ordinary human
+evidence-validation workflow before it can support an applicant profile.
+
+Gemini never receives authority to create DEMATEL relationships, prominence,
+cause/effect values, criterion weights or Green Scores. Those remain separate
+expert-calibrated or deterministic layers.
+
 ## 3. Environmental comparison context
 
 A raw total describes quantity, not performance. Before comparing electricity, water, emissions or waste, the system needs a reporting period, operational boundary, suitable denominator, and a baseline, trend, target or sector benchmark.
