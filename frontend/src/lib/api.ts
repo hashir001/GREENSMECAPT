@@ -1,5 +1,6 @@
 import type {
   AssessmentConfiguration,
+  AssessmentAutofill,
   AssessmentRunRecord,
   AssessmentRunSummary,
   AutomaticCohortAssessmentRequest,
@@ -883,6 +884,24 @@ export const api = {
         )
       : apiRequest<AssessmentConfiguration>(
           '/assessments/configuration',
+        )
+  ),
+
+  getAssessmentAutofill: (smeId: string) => (
+    isPreviewMode
+      ? Promise.resolve<AssessmentAutofill>({
+          sme_id: smeId,
+          activity_description: previewSMEs.find((item) => item.sme_id === smeId)?.sector ?? 'Company activity requires review.',
+          activity_description_source_ids: [],
+          facts: {},
+          fact_source_ids: {},
+          financial_observations: [],
+          metric_contexts: [],
+          sector_proposals: [],
+          gaps: [],
+        })
+      : apiRequest<AssessmentAutofill>(
+          `/assessments/autofill/${encodeURIComponent(smeId)}`,
         )
   ),
 

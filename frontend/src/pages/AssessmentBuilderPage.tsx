@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { api } from '../lib/api'
 import { isPreviewMode } from '../lib/supabase'
-import type { AssessmentConfiguration, CohortAssessmentRequest, SME, StructuredInvestmentRecord } from '../types/api'
+import type { AssessmentAutofill, AssessmentConfiguration, CohortAssessmentRequest, SME, StructuredInvestmentRecord } from '../types/api'
 
 type FinancialDraft = { state: string; value: string; unit: string; period: string; basis: string; sourceId: string }
 type ReadinessDraft = { state: string; sourceId: string; narrative: string }
@@ -29,94 +29,12 @@ function slug(value: string) {
 }
 
 function suggestedFacts(
-  company: SME | undefined,
+  _company: SME | undefined,
   factIds: string[],
 ): Record<string, boolean | null> {
-  const facts = Object.fromEntries(
-    factIds.map((factId) => [factId, false]),
+  return Object.fromEntries(
+    factIds.map((factId) => [factId, null]),
   ) as Record<string, boolean | null>
-
-  if (!company) return facts
-
-  const description = `${company.legal_name} ${company.sector}`.toLowerCase()
-  const includesAny = (...terms: string[]) => (
-    terms.some((term) => description.includes(term))
-  )
-
-  facts.manufactures_or_processes = includesAny(
-    'manufactur',
-    'packag',
-    'processing',
-    'industrial',
-    'production',
-  )
-  facts.operates_facility = includesAny(
-    'manufactur',
-    'packag',
-    'solar',
-    'energy',
-    'industrial',
-    'production',
-    'retail',
-    'hospitality',
-  )
-  facts.handles_materials_or_waste = includesAny(
-    'manufactur',
-    'packag',
-    'recycl',
-    'circular',
-    'waste',
-    'material',
-    'production',
-  )
-  facts.provides_clean_energy = includesAny(
-    'solar',
-    'renewable',
-    'clean energy',
-  )
-  facts.provides_circular_services = includesAny(
-    'recycl',
-    'circular',
-    'reuse',
-    'repair',
-    'recovery',
-  )
-  facts.works_on_buildings = includesAny(
-    'construction',
-    'building',
-    'retrofit',
-    'rooftop',
-  )
-  facts.works_in_agriculture_food_land = includesAny(
-    'agriculture',
-    'farming',
-    'food',
-    'land',
-  )
-  facts.provides_digital_services = includesAny(
-    'software',
-    'digital',
-    'technology',
-    'consulting',
-  )
-  facts.offers_environmental_solution = includesAny(
-    'sustainable',
-    'green',
-    'solar',
-    'renewable',
-    'clean energy',
-    'environment',
-    'recycl',
-    'circular',
-  )
-  facts.operates_retail_or_hospitality = includesAny(
-    'retail',
-    'restaurant',
-    'hospitality',
-    'hotel',
-  )
-
-  return facts
 }
 
 export function AssessmentBuilderPage() {
@@ -127,6 +45,7 @@ export function AssessmentBuilderPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [records, setRecords] = useState<Record<string, StructuredInvestmentRecord>>({})
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  const [autofill, setAutofill] = useState<Record<string, AssessmentAutofill>>({})
   const [cohortName, setCohortName] = useState('Green SME comparison')
   const [minimumSharedCriteria, setMinimumSharedCriteria] = useState(2)
   const [step, setStep] = useState(1)
@@ -201,6 +120,42 @@ export function AssessmentBuilderPage() {
     if (!records[smeId]) {
       void api.getSMERecord(smeId).then((record) => setRecords((current) => ({ ...current, [smeId]: record }))).catch(() => undefined)
     }
+    if (!autofill[smeId]) {
+      void api.getAssessmentAutofill(smeId).then((result) => {
+        setAutofill((current) => ({ ...current, [smeId]: result }))
+        updateDraft(smeId, (current) => ({
+          ...current,
+          activityDescription: result.activity_description || current.activityDescription,
+          facts: { ...current.facts, ...result.facts },
+          financial: {
+            ...current.financial,
+            ...Object.fromEntries(result.financial_observations.map((item) => [item.metric_id, {
+              state: item.state,
+              value: item.value === undefined ? '' : String(item.value),
+              unit: item.unit ?? '',
+              period: item.reporting_period ?? '',
+              basis: item.comparison_basis ?? '',
+              sourceId: item.source_ids[0] ?? '',
+            }])),
+          },
+          metricContexts: {
+            ...current.metricContexts,
+            ...Object.fromEntries(result.metric_contexts.map((item) => [item.indicator_id, {
+              period: item.reporting_period ?? '',
+              scope: item.operational_scope ?? '',
+              denominator: item.denominator_value === undefined ? '' : String(item.denominator_value),
+              denominatorUnit: item.denominator_unit ?? '',
+              baseline: item.baseline_value === undefined ? '' : String(item.baseline_value),
+              benchmark: item.benchmark_value === undefined ? '' : String(item.benchmark_value),
+              target: item.target_value === undefined ? '' : String(item.target_value),
+              referenceUnit: item.reference_unit ?? '',
+              sourceId: item.source_ids[0] ?? '',
+              narrative: item.narrative ?? '',
+            }])),
+          },
+        }))
+      }).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Accepted evidence could not be loaded.'))
+    }
   }
 
   function loadPresentationExample() {
@@ -239,7 +194,7 @@ export function AssessmentBuilderPage() {
     if (step === 4) {
       for (const smeId of selected) {
         const draft = draftFor(smeId)
-        for (const metric of configuration?.financial_policy.metrics ?? []) {
+        for (const metric of configuration?.financial_policy.metrics.filter((item) => item.role !== 'derived_indicator') ?? []) {
           const item = draft.financial[metric.metric_id]
           if (item?.state === 'reported' && (!Number.isFinite(Number(item.value)) || !item.sourceId || (metric.requires_reporting_period && !item.period))) return `Complete the value, source and required period for ${metric.title}.`
         }
@@ -289,7 +244,7 @@ export function AssessmentBuilderPage() {
             linguistic_value: draft.ratings[criterion.criterion_id],
             submitted_by: user?.id ?? 'reviewer_preview',
           })),
-          financial_observations: configuration.financial_policy.metrics.map((metric) => {
+          financial_observations: configuration.financial_policy.metrics.filter((metric) => metric.role !== 'derived_indicator').map((metric) => {
             const item = draft.financial[metric.metric_id] ?? { state: 'unknown', value: '', unit: metric.allowed_units[0] ?? '', period: '', basis: '', sourceId: '' }
             return {
               observation_id: `financial_${smeId}_${metric.metric_id}_${timestamp}`,
@@ -370,17 +325,20 @@ export function AssessmentBuilderPage() {
           <div className="methodology-note">
             <Info size={18} />
             <p>
-              Activity answers are prefilled from the registered company
-              profile for internal review. Adjust any suggestion that does
-              not describe the company accurately.
+              Accepted document evidence prefills activity answers. Anything
+              not supported remains unclear for the reviewer; sector labels
+              never create yes/no answers by themselves.
             </p>
           </div>
           {selected.map((smeId) => {
             const company = companies.find((item) => item.sme_id === smeId)!
             const draft = draftFor(smeId)
+            const prefill = autofill[smeId]
             return (
               <section className="panel profile-card" key={smeId}>
                 <div className="profile-card__header"><div><span className="eyebrow">Activity profile</span><h2>{company.legal_name}</h2></div><span>{company.sector}</span></div>
+                {prefill && <div className="methodology-note"><Info size={16} /><p>Accepted evidence prefilled {Object.keys(prefill.facts).length} activity answers and {prefill.activity_description_source_ids.length ? 'the activity description' : 'the registered-sector fallback'}. Review before continuing.</p></div>}
+                {prefill?.sector_proposals.length ? <div className="methodology-note"><Info size={16} /><p>Document evidence suggests: {prefill.sector_proposals.map((item) => item.sector_id.replaceAll('_', ' ')).join(', ')}. This remains a proposal and does not silently replace the registered sector.</p></div> : null}
                 <label className="builder-field">What does this company actually do?<textarea value={draft.activityDescription} onChange={(event) => updateDraft(smeId, (current) => ({ ...current, activityDescription: event.target.value }))} /></label>
                 <div className="fact-grid">
                   {Object.entries(configuration?.assessment_policy.fact_questions ?? {}).map(([factId, question]) => (
@@ -433,6 +391,7 @@ export function AssessmentBuilderPage() {
             const company = companies.find((item) => item.sme_id === smeId)!
             const draft = draftFor(smeId)
             const record = records[smeId]
+            const prefill = autofill[smeId]
             const sources = [
               ...(record?.documents.map((document) => ({ id: document.document_id, label: `Document · ${document.file_name}` })) ?? []),
               ...(record?.evidence_items.filter((item) => item.validation_status === 'accepted').map((item) => ({ id: item.evidence_id, label: `Evidence · ${item.indicator_id}` })) ?? []),
@@ -446,11 +405,12 @@ export function AssessmentBuilderPage() {
             return (
               <section className="panel dimension-card" key={smeId}>
                 <div className="profile-card__header"><div><span className="eyebrow">Distinct assessment dimensions</span><h2>{company.legal_name}</h2></div></div>
+                {prefill && <div className="methodology-note"><Info size={16} /><p>Accepted evidence prefilled {prefill.financial_observations.length} financial values and {prefill.metric_contexts.length} environmental contexts. {prefill.gaps.length ? `${prefill.gaps.length} conflict(s) still require review.` : 'No accepted-evidence conflicts were found.'}</p></div>}
 
                 <div className="dimension-section">
                   <div><h3>Financial & investment assessment</h3><p>Core ratios establish coverage. Supporting transaction values remain visible without fabricated pass/fail thresholds.</p></div>
                   <div className="dimension-list">
-                    {configuration?.financial_policy.metrics.map((metric) => {
+                    {configuration?.financial_policy.metrics.filter((metric) => metric.role !== 'derived_indicator').map((metric) => {
                       const item = draft.financial[metric.metric_id] ?? { state: 'unknown', value: '', unit: metric.allowed_units[0] ?? '', period: '', basis: '', sourceId: '' }
                       return <article key={metric.metric_id}>
                         <div><strong>{metric.title}</strong><span>{metric.importance} · {metric.group.replaceAll('_', ' ')}</span><small>{metric.description}</small></div>
@@ -462,7 +422,7 @@ export function AssessmentBuilderPage() {
                             <input type="number" step="any" value={item.value} placeholder="Value" onChange={(event) => updateFinancial(smeId, metric.metric_id, { value: event.target.value })} />
                             <select value={item.unit || metric.allowed_units[0]} onChange={(event) => updateFinancial(smeId, metric.metric_id, { unit: event.target.value })}>{metric.allowed_units.map((unit) => <option key={unit} value={unit}>{unit.replaceAll('_', ' ')}</option>)}</select>
                             {metric.requires_reporting_period && <input value={item.period} placeholder="Reporting period" onChange={(event) => updateFinancial(smeId, metric.metric_id, { period: event.target.value })} />}
-                            {metric.metric_id === 'revenue_growth_percentage' && <input value={item.basis} placeholder="Comparison basis, e.g. FY2025 vs FY2024" onChange={(event) => updateFinancial(smeId, metric.metric_id, { basis: event.target.value })} />}
+                            {metric.requires_comparison_basis && <input value={item.basis} placeholder="Comparison basis, e.g. FY2025 vs FY2024" onChange={(event) => updateFinancial(smeId, metric.metric_id, { basis: event.target.value })} />}
                             <select value={item.sourceId} onChange={(event) => updateFinancial(smeId, metric.metric_id, { sourceId: event.target.value })}><option value="">Select source</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select>
                           </>}
                         </div>
@@ -506,6 +466,7 @@ export function AssessmentBuilderPage() {
                           <input value={item.denominatorUnit} placeholder="Denominator unit" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { denominatorUnit: event.target.value })} />
                           <input type="number" step="any" value={item.baseline} placeholder="Baseline (optional)" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { baseline: event.target.value })} />
                           <input type="number" step="any" value={item.benchmark} placeholder="Benchmark (optional)" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { benchmark: event.target.value })} />
+                          <input type="number" step="any" value={item.target} placeholder="Target (optional)" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { target: event.target.value })} />
                           <input value={item.referenceUnit} placeholder="Reference unit" onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { referenceUnit: event.target.value })} />
                           <select value={item.sourceId} onChange={(event) => updateMetricContext(smeId, metric.indicator_id, { sourceId: event.target.value })}><option value="">Select context source</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select>
                         </div>

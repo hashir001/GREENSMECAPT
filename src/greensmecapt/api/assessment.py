@@ -7,6 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
+from greensmecapt.assessment.autofill import (
+    AssessmentAutofillResponse,
+    build_assessment_autofill,
+)
 from greensmecapt.assessment.cohort import (
     CohortComparisonError,
     CohortConfiguration,
@@ -184,6 +188,31 @@ def build_assessment_router(
             readiness_specification=workflow.readiness_specification,
             metric_catalog=workflow.metric_catalog,
             evidence_strength_policy=workflow.evidence_strength_policy,
+        )
+
+    @router.get(
+        "/autofill/{sme_id}",
+        response_model=AssessmentAutofillResponse,
+    )
+    def get_assessment_autofill(
+        sme_id: str,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[AuthPrincipal, Depends(assessment_dependency)],
+    ) -> AssessmentAutofillResponse:
+        """Prefill editable assessment inputs from accepted evidence only."""
+
+        del principal
+        try:
+            record = GreenSMERepository(session).get_record(sme_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        return build_assessment_autofill(
+            record=record,
+            financial_policy=workflow.financial_policy,
+            metric_catalog=workflow.metric_catalog,
         )
 
     @router.post(

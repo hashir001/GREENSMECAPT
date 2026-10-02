@@ -357,6 +357,32 @@ export type AssessmentConfiguration = {
   evidence_strength_policy: EvidenceStrengthPolicy
 }
 
+export type AssessmentAutofill = {
+  sme_id: string
+  activity_description: string
+  activity_description_source_ids: string[]
+  facts: Record<string, boolean>
+  fact_source_ids: Record<string, string[]>
+  financial_observations: FinancialObservation[]
+  metric_contexts: Array<{
+    context_id: string
+    sme_id: string
+    indicator_id: string
+    reporting_period?: string
+    operational_scope?: string
+    denominator_value?: number
+    denominator_unit?: string
+    baseline_value?: number
+    benchmark_value?: number
+    target_value?: number
+    reference_unit?: string
+    source_ids: string[]
+    narrative?: string
+  }>
+  sector_proposals: Array<{ sector_id: string; source_ids: string[] }>
+  gaps: Array<{ code: string; field_id: string; message: string; source_ids: string[] }>
+}
+
 export type FinancialMetricDefinition = {
   metric_id: string
   title: string
