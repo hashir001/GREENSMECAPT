@@ -4,13 +4,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { usePermissions } from '../auth/usePermissions'
 import { EvidenceReviewPanel } from '../components/EvidenceReviewPanel'
 import { api } from '../lib/api'
-import type { EvidenceItem, SME } from '../types/api'
+import type { DocumentProcessingStatus, EvidenceItem, SME, SourceDocument } from '../types/api'
 
 export function EvidenceReviewPage() {
   const { canValidateEvidence } = usePermissions()
   const [companies, setCompanies] = useState<SME[]>([])
   const [evidence, setEvidence] = useState<EvidenceItem[]>([])
-  const [documentNames, setDocumentNames] = useState<Record<string, string>>({})
+  const [documents, setDocuments] = useState<SourceDocument[]>([])
+  const [processingStatuses, setProcessingStatuses] = useState<Record<string, DocumentProcessingStatus>>({})
+  const [conflictEvidenceIds, setConflictEvidenceIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -20,10 +22,13 @@ export function EvidenceReviewPage() {
         setCompanies(nextCompanies)
         const records = await Promise.all(nextCompanies.map((company) => api.getSMERecord(company.sme_id)))
         setEvidence(records.flatMap((record) => record.evidence_items))
-        setDocumentNames(Object.fromEntries(
-          records.flatMap((record) => record.documents)
-            .map((document) => [document.document_id, document.file_name]),
-        ))
+        const nextDocuments = records.flatMap((record) => record.documents)
+        setDocuments(nextDocuments)
+        const snapshots = await Promise.all(nextDocuments.map(async (document) => (
+          api.getDocumentProcessing(document.sme_id, document.document_id).catch(() => null)
+        )))
+        setProcessingStatuses(Object.fromEntries(snapshots.filter((item) => item !== null).map((item) => [item.state.document_id, item.state.status])))
+        setConflictEvidenceIds(new Set(snapshots.flatMap((item) => item?.reconciliation?.clusters.filter((cluster) => cluster.status === 'conflict' || cluster.status === 'context_required').flatMap((cluster) => cluster.evidence_ids) ?? [])))
       })
       .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Evidence could not be loaded.'))
       .finally(() => setLoading(false))
@@ -40,6 +45,12 @@ export function EvidenceReviewPage() {
   async function validateEvidence(evidenceId: string, status: 'accepted' | 'rejected', reason?: string) {
     const updated = await api.validateEvidence(evidenceId, status, reason)
     setEvidence((current) => current.map((item) => item.evidence_id === updated.evidence_id ? updated : item))
+  }
+
+  async function validateEvidenceBulk(evidenceIds: string[], status: 'accepted' | 'rejected', reason?: string) {
+    const updated = await api.validateEvidenceBulk(evidenceIds, status, reason)
+    const byId = new Map(updated.map((item) => [item.evidence_id, item]))
+    setEvidence((current) => current.map((item) => byId.get(item.evidence_id) ?? item))
   }
 
   return (
@@ -62,7 +73,7 @@ export function EvidenceReviewPage() {
 
       {error && <div className="error-banner">{error}</div>}
       {loading ? <div className="skeleton evidence-page-skeleton" /> : (
-        <EvidenceReviewPanel evidenceItems={evidence} canValidate={canValidateEvidence} companyNames={companyNames} documentNames={documentNames} onValidate={validateEvidence} />
+        <EvidenceReviewPanel evidenceItems={evidence} canValidate={canValidateEvidence} conflictEvidenceIds={conflictEvidenceIds} companyNames={companyNames} documents={documents} processingStatuses={processingStatuses} onValidate={validateEvidence} onValidateMany={validateEvidenceBulk} />
       )}
     </>
   )

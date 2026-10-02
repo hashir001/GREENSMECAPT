@@ -1262,6 +1262,54 @@ class GreenSMERepository:
 
         return _evidence_from_row(row)
 
+    def set_evidence_validations(
+        self,
+        *,
+        evidence_ids: Sequence[str],
+        status: EvidenceValidationStatus,
+        actor_id: str,
+        reason: str | None = None,
+    ) -> tuple[EvidenceItem, ...]:
+        """Update a bounded evidence selection in one transaction."""
+
+        rows: list[EvidenceRow] = []
+        now = datetime.now(UTC)
+        for evidence_id in evidence_ids:
+            row = self._session.get(EvidenceRow, evidence_id)
+            if row is None:
+                raise PersistenceNotFoundError(
+                    f"Evidence {evidence_id!r} was not found."
+                )
+            previous_status = row.validation_status
+            row.validation_status = status.value
+            row.updated_at = now
+            rows.append(row)
+            self._session.add(row)
+            self._session.add(
+                AuditEventRow(
+                    sme_id=row.sme_id,
+                    entity_type="evidence",
+                    entity_id=row.evidence_id,
+                    action="validation_status_changed",
+                    actor_id=actor_id,
+                    reason=reason,
+                    previous_value_json=json.dumps(
+                        {"validation_status": previous_status}
+                    ),
+                    new_value_json=json.dumps(
+                        {"validation_status": status.value}
+                    ),
+                )
+            )
+        try:
+            self._session.commit()
+            for row in rows:
+                self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+        return tuple(_evidence_from_row(row) for row in rows)
+
     def list_audit_events(
         self,
         *,

@@ -122,6 +122,29 @@ class EvidenceValidationRequest(BaseModel):
     )
 
 
+class BulkEvidenceValidationRequest(BaseModel):
+    """Apply one traceable decision to a bounded evidence selection."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    evidence_ids: tuple[str, ...] = Field(min_length=1, max_length=500)
+    status: EvidenceValidationStatus
+    reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def validate_bulk_decision(self) -> Self:
+        if len(self.evidence_ids) != len(set(self.evidence_ids)):
+            raise ValueError("Bulk evidence IDs must be unique.")
+        if self.status is EvidenceValidationStatus.UNVALIDATED:
+            raise ValueError("Bulk review must accept or reject evidence.")
+        if self.status is EvidenceValidationStatus.REJECTED and not self.reason:
+            raise ValueError("Bulk rejection requires a reason.")
+        return self
+
+
 class ApplicationTransitionRequest(BaseModel):
     """Request one revision-checked SME application transition."""
 
@@ -1549,6 +1572,40 @@ def create_app(
 
             return GreenSMERepository(session).set_evidence_validation(
                 evidence_id=evidence_id,
+                status=request.status,
+                actor_id=principal.user_id,
+                reason=request.reason,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+
+    @app.patch(
+        "/evidence/validation/bulk",
+        response_model=tuple[EvidenceItem, ...],
+    )
+    def validate_evidence_bulk(
+        request: BulkEvidenceValidationRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_permission(ApplicationPermission.VALIDATE_EVIDENCE)),
+        ],
+    ) -> tuple[EvidenceItem, ...]:
+        """Save one atomic review decision across selected evidence items."""
+
+        repository = GreenSMERepository(session)
+        try:
+            evidence_items = tuple(
+                repository.get_evidence(evidence_id)
+                for evidence_id in request.evidence_ids
+            )
+            for evidence in evidence_items:
+                _require_sme_access(principal, evidence.sme_id)
+            return repository.set_evidence_validations(
+                evidence_ids=request.evidence_ids,
                 status=request.status,
                 actor_id=principal.user_id,
                 reason=request.reason,

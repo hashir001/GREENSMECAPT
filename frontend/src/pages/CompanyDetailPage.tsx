@@ -172,20 +172,11 @@ export function CompanyDetailPage() {
     return () => window.clearTimeout(timer)
   }, [jobs, load, smeId])
 
-  const reconciliation = Object.values(processing)
-    .map((result) => result.reconciliation)
-    .find((report) => report !== null)
-
   const conflictEvidenceIds = useMemo(() => new Set(
-    reconciliation?.clusters
-      .filter((cluster) => cluster.status === 'conflict')
-      .flatMap((cluster) => cluster.evidence_ids) ?? [],
-  ), [reconciliation])
-  const contextRequiredEvidenceIds = useMemo(() => new Set(
-    reconciliation?.clusters
-      .filter((cluster) => cluster.status === 'context_required')
-      .flatMap((cluster) => cluster.evidence_ids) ?? [],
-  ), [reconciliation])
+    Object.values(processing).flatMap((result) => result.reconciliation?.clusters
+      .filter((cluster) => cluster.status === 'conflict' || cluster.status === 'context_required')
+      .flatMap((cluster) => cluster.evidence_ids) ?? []),
+  ), [processing])
 
   const completedDocuments = Object.values(processing)
     .filter((result) => result.state.status === 'completed').length
@@ -268,6 +259,15 @@ export function CompanyDetailPage() {
   async function validateEvidence(evidenceId: string, status: 'accepted' | 'rejected', reason?: string) {
     await api.validateEvidence(evidenceId, status, reason)
     await load()
+  }
+
+  async function validateEvidenceBulk(evidenceIds: string[], status: 'accepted' | 'rejected', reason?: string) {
+    const updated = await api.validateEvidenceBulk(evidenceIds, status, reason)
+    const byId = new Map(updated.map((item) => [item.evidence_id, item]))
+    setRecord((current) => current ? {
+      ...current,
+      evidence_items: current.evidence_items.map((item) => byId.get(item.evidence_id) ?? item),
+    } : current)
   }
 
   async function uploadCompleted(result?: DocumentProcessingResult) {
@@ -479,16 +479,14 @@ export function CompanyDetailPage() {
 
       {error && <div className="error-banner"><span>{error}</span><button type="button" onClick={() => void load()}><RefreshCw size={13} /> Retry</button></div>}
 
-      {(conflictEvidenceIds.size > 0 || contextRequiredEvidenceIds.size > 0 || pendingEvidence > 0) && (
+      {(conflictEvidenceIds.size > 0 || pendingEvidence > 0) && (
         <div className="insight-banner">
           <span className="insight-banner__icon"><AlertTriangle size={20} /></span>
           <div>
-            <strong>{conflictEvidenceIds.size > 0 ? 'This record contains conflicting evidence' : contextRequiredEvidenceIds.size > 0 ? 'Some evidence needs period or scope context' : 'Evidence is ready for validation'}</strong>
+            <strong>{conflictEvidenceIds.size > 0 ? 'This record needs reviewer attention' : 'Evidence is ready for validation'}</strong>
             <p>{conflictEvidenceIds.size > 0
-              ? `${conflictEvidenceIds.size} evidence item${conflictEvidenceIds.size === 1 ? '' : 's'} contain different values for the same captured context. The system never auto-averages them.`
-              : contextRequiredEvidenceIds.size > 0
-                ? `${contextRequiredEvidenceIds.size} evidence item${contextRequiredEvidenceIds.size === 1 ? '' : 's'} cannot yet be compared because their period or scope is missing.`
-                : `${pendingEvidence} extracted item${pendingEvidence === 1 ? ' is' : 's are'} waiting for a reviewer decision.`}</p>
+              ? `${conflictEvidenceIds.size} evidence item${conflictEvidenceIds.size === 1 ? '' : 's'} belong to conflicting or unclear contexts. Reviewers must resolve them explicitly; the system never auto-averages them.`
+              : `${pendingEvidence} extracted item${pendingEvidence === 1 ? ' is' : 's are'} waiting for a reviewer decision.`}</p>
           </div>
           <span className="insight-banner__stat">{completedDocuments}/{record.documents.length}<small>processed</small></span>
         </div>
@@ -514,14 +512,10 @@ export function CompanyDetailPage() {
         evidenceItems={record.evidence_items}
         canValidate={permissions.canValidateEvidence}
         conflictEvidenceIds={conflictEvidenceIds}
-        contextRequiredEvidenceIds={contextRequiredEvidenceIds}
-        documentNames={Object.fromEntries(
-          record.documents.map((document) => [
-            document.document_id,
-            document.file_name,
-          ]),
-        )}
+        documents={record.documents}
+        processingStatuses={Object.fromEntries(Object.entries(processing).map(([documentId, result]) => [documentId, result.state.status]))}
         onValidate={validateEvidence}
+        onValidateMany={validateEvidenceBulk}
       />
     </>
   )

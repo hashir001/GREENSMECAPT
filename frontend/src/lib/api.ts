@@ -875,6 +875,29 @@ export const api = {
         )
   ),
 
+  validateEvidenceBulk: async (
+    evidenceIds: string[],
+    status: 'accepted' | 'rejected',
+    reason?: string,
+  ) => {
+    if (isPreviewMode) {
+      return Promise.all(
+        evidenceIds.map((evidenceId) => validatePreviewEvidence(evidenceId, status)),
+      )
+    }
+    return apiRequest<EvidenceItem[]>(
+      '/evidence/validation/bulk',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          evidence_ids: evidenceIds,
+          status,
+          reason: reason || null,
+        }),
+      },
+    )
+  },
+
   getAssessmentConfiguration: () => (
     isPreviewMode
       ? Promise.resolve(
