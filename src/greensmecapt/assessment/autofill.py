@@ -51,6 +51,10 @@ class AssessmentAutofillResponse(AutofillModel):
     sme_id: NonBlank
     activity_description: NonBlank
     activity_description_source_ids: tuple[NonBlank, ...] = ()
+    stage: str | None = None
+    stage_source_ids: tuple[NonBlank, ...] = ()
+    funding_purpose: str | None = None
+    funding_purpose_source_ids: tuple[NonBlank, ...] = ()
     facts: dict[str, bool] = Field(default_factory=dict)
     fact_source_ids: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     financial_observations: tuple[FinancialObservation, ...] = ()
@@ -93,7 +97,13 @@ def build_assessment_autofill(
         else:
             gaps.append(_conflict_gap(fact_id, source_ids, "activity fact"))
 
-    description, description_sources = _activity_description(record, grouped)
+    description, description_sources = _activity_description(record, grouped, gaps)
+    stage, stage_sources = _single_text_claim(
+        grouped, "business_stage", "business stage", gaps
+    )
+    funding_purpose, funding_sources = _single_text_claim(
+        grouped, "funding_purpose", "funding purpose", gaps
+    )
     financial = _financial_observations(
         record.sme.sme_id, grouped, financial_policy, gaps
     )
@@ -111,6 +121,10 @@ def build_assessment_autofill(
         sme_id=record.sme.sme_id,
         activity_description=description,
         activity_description_source_ids=description_sources,
+        stage=stage,
+        stage_source_ids=stage_sources,
+        funding_purpose=funding_purpose,
+        funding_purpose_source_ids=funding_sources,
         facts=facts,
         fact_source_ids=fact_sources,
         financial_observations=financial,
@@ -128,6 +142,7 @@ def build_assessment_autofill(
 def _activity_description(
     record: StructuredInvestmentRecord,
     grouped: dict[str, list[EvidenceItem]],
+    gaps: list[AutofillGap],
 ) -> tuple[str, tuple[str, ...]]:
     claims: list[EvidenceItem] = []
     for field_id in ("products_and_services", "green_value_proposition"):
@@ -135,12 +150,33 @@ def _activity_description(
         values = {str(item.normalized_value).strip() for item in items}
         if len(values) == 1:
             claims.append(items[0])
+        elif len(values) > 1:
+            gaps.append(
+                _conflict_gap(field_id, _source_ids(items), "company context")
+            )
     if claims:
         return " ".join(str(item.normalized_value).strip() for item in claims), _source_ids(claims)
     return (
         f"{record.sme.legal_name} operates in {record.sme.sector}.",
         (),
     )
+
+
+def _single_text_claim(
+    grouped: dict[str, list[EvidenceItem]],
+    field_id: str,
+    label: str,
+    gaps: list[AutofillGap],
+) -> tuple[str | None, tuple[str, ...]]:
+    items = grouped.get(f"company_profile:{field_id}", [])
+    if not items:
+        return None, ()
+    values = {str(item.normalized_value).strip() for item in items}
+    sources = _source_ids(items)
+    if len(values) != 1:
+        gaps.append(_conflict_gap(field_id, sources, "company context"))
+        return None, sources
+    return next(iter(values)), sources
 
 
 def _financial_observations(
@@ -240,7 +276,12 @@ def _is_number(value: object) -> bool:
 def _conflict_gap(
     field_id: str,
     source_ids: tuple[str, ...],
-    label: Literal["activity fact", "financial value", "measurement context"],
+    label: Literal[
+        "activity fact",
+        "financial value",
+        "measurement context",
+        "company context",
+    ],
 ) -> AutofillGap:
     return AutofillGap(
         code="conflicting_accepted_evidence",

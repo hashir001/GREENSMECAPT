@@ -144,23 +144,22 @@ def build_observations(
                 criterion_id
             ].append(evidence)
 
+    evidence_by_id = {item.evidence_id: item for item in evidence_items}
     observations = tuple(
-        _build_one(
-            decision,
-            responses_by_criterion.get(
-                decision.criterion_id,
-                (),
+        _attach_response_support(
+            _build_one(
+                decision,
+                responses_by_criterion.get(decision.criterion_id, ()),
+                evidence_by_criterion.get(decision.criterion_id, ()),
+                (
+                    numeric_scoring_scales.get(decision.criterion_id)
+                    if numeric_scoring_scales is not None
+                    else None
+                ),
+                numeric_scoring_scales is not None,
             ),
-            evidence_by_criterion.get(
-                decision.criterion_id,
-                (),
-            ),
-            (
-                numeric_scoring_scales.get(decision.criterion_id)
-                if numeric_scoring_scales is not None
-                else None
-            ),
-            numeric_scoring_scales is not None,
+            responses_by_criterion.get(decision.criterion_id, ()),
+            evidence_by_id,
         )
         for decision in profile.decisions
     )
@@ -608,6 +607,27 @@ def _build_one(
             "No usable response or accepted evidence "
             "is available."
         ),
+    )
+
+
+def _attach_response_support(
+    observation: CriterionObservation,
+    responses: Sequence[CriterionResponse],
+    evidence_by_id: dict[str, EvidenceItem],
+) -> CriterionObservation:
+    """Trace cited accepted evidence without treating narrative as a score."""
+
+    cited = {
+        evidence_id
+        for response in responses
+        for evidence_id in response.supporting_evidence_ids
+        if evidence_by_id[evidence_id].validation_status
+        is EvidenceValidationStatus.ACCEPTED
+    }
+    if not cited:
+        return observation
+    return observation.model_copy(
+        update={"evidence_ids": tuple(sorted({*observation.evidence_ids, *cited}))}
     )
 
 

@@ -318,11 +318,18 @@ def build_assessment_router(
 
         try:
             record = repository.get_record(submission.context.sme_id)
+            approved_financial = FinancialSubmissionRepository(
+                session
+            ).approved_observations(submission.context.sme_id)
             return workflow.prepare(
                 record=record,
                 context=submission.context,
                 responses=submission.responses,
-                financial_observations=submission.financial_observations,
+                financial_observations=(
+                    approved_financial
+                    if approved_financial
+                    else submission.financial_observations
+                ),
                 readiness_observations=submission.readiness_observations,
                 metric_contexts=submission.metric_contexts,
             )
@@ -366,6 +373,23 @@ def build_assessment_router(
                     "assessment profile can be approved."
                 )
             record = GreenSMERepository(session).get_record(sme_id)
+            autofill = build_assessment_autofill(
+                record=record,
+                financial_policy=workflow.financial_policy,
+                metric_catalog=workflow.metric_catalog,
+                readiness_specification=workflow.readiness_specification,
+            )
+            conflicts = tuple(
+                gap for gap in autofill.gaps
+                if gap.code == "conflicting_accepted_evidence"
+            )
+            if conflicts:
+                raise ValueError(
+                    "Conflicting accepted evidence must be resolved before "
+                    "approval: "
+                    + ", ".join(sorted({gap.field_id for gap in conflicts}))
+                    + "."
+                )
             approved_financial = FinancialSubmissionRepository(
                 session
             ).approved_observations(sme_id)
@@ -390,6 +414,20 @@ def build_assessment_router(
                     "The Green Score must be final before the assessment "
                     "profile can be approved. Resolve applicability and every "
                     "applicable environmental criterion first."
+                )
+            unsupported = tuple(
+                item.criterion_id
+                for item in prepared.green_score.criteria
+                if item.applicability.value == "applicable"
+                and item.resolved
+                and not item.evidence_ids
+            )
+            if unsupported:
+                raise ValueError(
+                    "Every applicable Green Score criterion requires accepted "
+                    "source evidence before approval: "
+                    + ", ".join(unsupported)
+                    + "."
                 )
             revision = AssessmentProfileRepository(session).approve(
                 context=submission.context,

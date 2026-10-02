@@ -365,6 +365,10 @@ export type AssessmentAutofill = {
   sme_id: string
   activity_description: string
   activity_description_source_ids: string[]
+  stage: string | null
+  stage_source_ids: string[]
+  funding_purpose: string | null
+  funding_purpose_source_ids: string[]
   facts: Record<string, boolean>
   fact_source_ids: Record<string, string[]>
   financial_observations: FinancialObservation[]
@@ -601,6 +605,14 @@ export type PreparedAssessment = {
     score: number | null
     coverage_ratio: number
     issues: string[]
+    criteria: Array<{
+      criterion_id: string
+      title: string
+      applicability: 'applicable' | 'not_applicable' | 'uncertain'
+      resolved: boolean
+      evidence_ids: string[]
+      issues: string[]
+    }>
   } | null
   financial_assessment: {
     status: string
