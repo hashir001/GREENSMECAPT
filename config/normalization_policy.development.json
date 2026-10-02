@@ -1,8 +1,11 @@
 {
   "policy_id": "greensmecapt_normalization",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "status": "development",
   "weight_source": "model_informed_performance_weights_independent_of_dematel_pending_expert_calibration",
+  "green_score_method": "weighted_centroid",
+  "applicability_weight_rule": "renormalize_applicable",
+  "incomplete_score_rule": "withhold_below_minimum_otherwise_provisional",
   "minimum_coverage_ratio": 0.6,
   "default_linguistic_scale": {
     "very_low": {

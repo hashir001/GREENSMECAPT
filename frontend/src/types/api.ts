@@ -324,6 +324,9 @@ export type AssessmentConfiguration = {
     version: string
     status: string
     weight_source: string
+    green_score_method: 'weighted_centroid'
+    applicability_weight_rule: 'renormalize_applicable'
+    incomplete_score_rule: 'withhold_below_minimum_otherwise_provisional'
     minimum_coverage_ratio: number
     default_linguistic_scale: Record<string, {
       lower: number
@@ -605,6 +608,36 @@ export type AssessmentRunRecord = AssessmentRunSummary & {
         coverage_ratio: number
         issues: Array<{ criterion_id: string; code: string; message: string }>
       }
+      green_score?: {
+        sme_id: string
+        status: 'final' | 'provisional' | 'blocked'
+        score: number | null
+        coverage_ratio: number
+        resolved_weight: number
+        method: 'weighted_centroid'
+        scale_min: number
+        scale_max: number
+        normalization_policy_id: string
+        normalization_policy_version: string
+        weight_source: string
+        criteria: Array<{
+          criterion_id: string
+          title: string
+          applicability: 'applicable' | 'not_applicable' | 'uncertain'
+          resolved: boolean
+          normalized_score: number | null
+          base_weight: number
+          applicable_weight: number
+          scoring_weight: number
+          weighted_contribution: number | null
+          source_status: string | null
+          response_ids: string[]
+          evidence_ids: string[]
+          source_indicator_ids: string[]
+          issues: string[]
+        }>
+        issues: string[]
+      } | null
       financial_assessment: {
         status: string
         core_coverage_ratio: number

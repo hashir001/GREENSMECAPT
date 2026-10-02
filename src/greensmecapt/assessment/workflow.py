@@ -49,6 +49,10 @@ from greensmecapt.assessment.fuzzy_topsis import (
     FuzzyTopsisResult,
     run_fuzzy_topsis,
 )
+from greensmecapt.assessment.green_score import (
+    GreenScoreResult,
+    calculate_green_score,
+)
 from greensmecapt.assessment.normalization import (
     NormalizationPolicy,
     NormalizedAssessmentInputs,
@@ -119,6 +123,7 @@ class PreparedAssessment(AssessmentWorkflowModel):
     profile: AssessmentProfile
     observations: ObservationSet
     normalized_inputs: NormalizedAssessmentInputs
+    green_score: GreenScoreResult | None = None
     financial_assessment: FinancialInvestmentAssessment
     readiness_profile: SMEReadinessProfile
     performance_context: EnvironmentalPerformanceContextProfile
@@ -409,11 +414,21 @@ class AssessmentWorkflow:
             profile,
             responses=responses,
             evidence_items=record.evidence_items,
+            numeric_scoring_scales={
+                rule.criterion_id: rule.numeric_scale
+                for rule in self._normalization_policy.rules
+                if rule.numeric_scale is not None
+            },
         )
         normalized = normalize_observations(
             profile,
             observations,
             self._normalization_policy,
+        )
+        green_score = calculate_green_score(
+            profile=profile,
+            normalized=normalized,
+            policy=self._normalization_policy,
         )
         readiness_observations = merge_readiness_observations(
             supplied=tuple(readiness_observations),
@@ -475,6 +490,7 @@ class AssessmentWorkflow:
             profile=profile,
             observations=observations,
             normalized_inputs=normalized,
+            green_score=green_score,
             financial_assessment=financial,
             readiness_profile=readiness,
             performance_context=performance_context,

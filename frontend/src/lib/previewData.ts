@@ -133,8 +133,11 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
     criteria: previewCriteria,
   },
   normalization_policy: {
-    policy_id: 'greensmecapt_normalization', version: '0.3.0', status: 'development',
+    policy_id: 'greensmecapt_normalization', version: '0.4.0', status: 'development',
     weight_source: 'model_informed_development_weights_pending_expert_calibration', minimum_coverage_ratio: 0.6,
+    green_score_method: 'weighted_centroid',
+    applicability_weight_rule: 'renormalize_applicable',
+    incomplete_score_rule: 'withhold_below_minimum_otherwise_provisional',
     default_linguistic_scale: {
       very_low: { lower: 0, modal: 0, upper: 0.25 }, low: { lower: 0, modal: 0.25, upper: 0.5 },
       medium: { lower: 0.25, modal: 0.5, upper: 0.75 }, high: { lower: 0.5, modal: 0.75, upper: 1 },

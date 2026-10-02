@@ -101,6 +101,78 @@ def test_prepare_traceable_assessment() -> None:
     assert prepared.normalized_inputs.criteria[0].response_ids == (
         "response_sme_001",
     )
+    assert prepared.green_score is not None
+    assert prepared.green_score.status == "final"
+    assert prepared.green_score.score == 75.0
+    assert prepared.green_score.coverage_ratio == 1.0
+
+
+def test_raw_electricity_remains_context_and_does_not_override_rating() -> None:
+    sme_id = "sme_energy"
+    evidence = EvidenceItem(
+        evidence_id="evidence_electricity",
+        sme_id=sme_id,
+        document_id="document_bill",
+        indicator_id="electricity_consumption_kwh",
+        criterion_id="purchased_energy_management",
+        raw_value="310,000 kWh",
+        normalized_value=310000.0,
+        unit="kwh",
+        reporting_period="FY2025",
+        scope="company_operations",
+        source_locator="page 1",
+        extraction_method="document_ai_and_semantic_extraction",
+        extractor_name="test",
+        validation_status=EvidenceValidationStatus.ACCEPTED,
+    )
+    record = _record(sme_id).model_copy(update={"evidence_items": (evidence,)})
+    prepared = _workflow().prepare(
+        record=record,
+        context=AssessmentContext(
+            sme_id=sme_id,
+            activity_description="Environmental service provider with one facility.",
+            facts={
+                "manufactures_or_processes": False,
+                "burns_fuel_on_site": False,
+                "operates_vehicle_fleet": False,
+                "operates_facility": True,
+                "uses_cloud_services": False,
+                "handles_materials_or_waste": False,
+                "provides_clean_energy": False,
+                "provides_circular_services": False,
+                "works_on_buildings": False,
+                "works_in_agriculture_food_land": False,
+                "provides_digital_services": False,
+                "offers_environmental_solution": False,
+                "operates_retail_or_hospitality": False,
+                "plans_operational_transition": False,
+            },
+        ),
+        responses=tuple(
+            CriterionResponse(
+                response_id=f"response_{criterion}",
+                sme_id=sme_id,
+                criterion_id=criterion,
+                kind=ResponseKind.LINGUISTIC,
+                linguistic_value="high",
+                submitted_by="reviewer_001",
+            )
+            for criterion in (
+                "green_contribution",
+                "purchased_energy_management",
+            )
+        ),
+    )
+
+    energy_observation = next(
+        item
+        for item in prepared.observations.observations
+        if item.criterion_id == "purchased_energy_management"
+    )
+    assert energy_observation.status == "ready_linguistic"
+    assert prepared.green_score is not None
+    assert prepared.green_score.status == "final"
+    assert prepared.green_score.score == 75.0
 
 
 def test_compare_with_three_complementary_methods() -> None:

@@ -62,6 +62,24 @@ export function AssessmentResultPage() {
         <div className="result-assurance"><ShieldCheck size={18} /><span><strong>Robustness checked.</strong> {robustness?.completed_scenarios ?? 0} controlled weight and threshold perturbations completed.</span></div>
       )}
 
+      {(run.result.preparations?.length ?? 0) > 0 && <section className="panel green-score-results">
+        <div className="panel__header"><div><span className="eyebrow">Primary environmental result</span><h2>Green Score</h2></div><span className="result-count">Distinct from TOPSIS, finance and readiness</span></div>
+        <div className="green-score-grid">
+          {run.result.preparations?.map((preparation) => {
+            const greenScore = preparation.green_score
+            return <article className="green-score-card" key={preparation.profile.sme_id}>
+              <header><div><strong>{names.get(preparation.profile.sme_id) ?? preparation.profile.sme_id}</strong><small>{greenScore ? `${Math.round(greenScore.coverage_ratio * 100)}% applicable-criterion coverage` : 'Legacy result'}</small></div><StatusPill label={greenScore?.status ?? 'not stored'} tone={greenScore?.status === 'final' ? 'positive' : 'warning'} /></header>
+              <div className="green-score-value"><b>{greenScore?.score === null || greenScore?.score === undefined ? '—' : greenScore.score.toFixed(1)}</b><span>/100</span></div>
+              {greenScore?.criteria.filter((criterion) => criterion.applicability === 'applicable').map((criterion) => <div className="green-score-criterion" key={criterion.criterion_id}>
+                <span><strong>{humanize(criterion.title)}</strong><small>{criterion.resolved ? `${criterion.normalized_score?.toFixed(1)} × ${(criterion.scoring_weight * 100).toFixed(1)}%` : 'Unresolved — not scored as zero'}</small></span>
+                <b>{criterion.weighted_contribution === null ? '—' : criterion.weighted_contribution.toFixed(1)}</b>
+              </div>)}
+              {greenScore?.issues.map((issue) => <small className="green-score-issue" key={issue}>{issue}</small>)}
+            </article>
+          })}
+        </div>
+      </section>}
+
       <section className="result-overview-grid">
         <article className="panel result-ranking-panel"><div className="panel__header"><div><span className="eyebrow">Primary ranking</span><h2>Relative portfolio position</h2></div><StatusPill label={run.comparison_status} tone={run.comparison_status === 'ready' ? 'positive' : 'warning'} /></div><RankingChart data={chartData} /></article>
         <article className="panel method-guide"><span className="eyebrow">How to read this</span><h2>Three methods, three questions</h2>

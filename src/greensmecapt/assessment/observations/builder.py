@@ -1,8 +1,11 @@
 """Resolve applicant responses and document evidence into observations."""
 
+from __future__ import annotations
+
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from greensmecapt.assessment.observations.models import (
     CriterionObservation,
@@ -21,6 +24,9 @@ from greensmecapt.domain import (
     EvidenceValidationStatus,
 )
 
+if TYPE_CHECKING:
+    from greensmecapt.assessment.normalization.models import NumericScale
+
 
 @dataclass(frozen=True)
 class _Number:
@@ -35,6 +41,7 @@ def build_observations(
     *,
     responses: Sequence[CriterionResponse] = (),
     evidence_items: Sequence[EvidenceItem] = (),
+    numeric_scoring_scales: Mapping[str, NumericScale] | None = None,
 ) -> ObservationSet:
     """Build observations without converting unknowns into scores."""
 
@@ -148,6 +155,12 @@ def build_observations(
                 decision.criterion_id,
                 (),
             ),
+            (
+                numeric_scoring_scales.get(decision.criterion_id)
+                if numeric_scoring_scales is not None
+                else None
+            ),
+            numeric_scoring_scales is not None,
         )
         for decision in profile.decisions
     )
@@ -203,6 +216,8 @@ def _build_one(
     decision,
     responses,
     evidence_items,
+    numeric_scale,
+    enforce_numeric_scale,
 ) -> CriterionObservation:
     if decision.status is Applicability.NOT_APPLICABLE:
         if responses or any(
@@ -286,6 +301,10 @@ def _build_one(
         and not isinstance(
             item.normalized_value,
             bool,
+        )
+        and (
+            not enforce_numeric_scale
+            or _numeric_evidence_is_score_ready(item, numeric_scale)
         )
     ]
     response_numbers = [
@@ -638,4 +657,22 @@ def _indicator_ids(
                 for item in evidence_items
             }
         )
+    )
+
+
+def _numeric_evidence_is_score_ready(
+    evidence: EvidenceItem,
+    scale: NumericScale | None,
+) -> bool:
+    """Keep raw totals contextual unless policy explicitly permits scoring."""
+
+    if scale is None or evidence.unit is None:
+        return False
+    if evidence.unit.casefold() not in {
+        unit.casefold() for unit in scale.allowed_units
+    }:
+        return False
+    return (
+        not scale.allowed_indicator_ids
+        or evidence.indicator_id in scale.allowed_indicator_ids
     )

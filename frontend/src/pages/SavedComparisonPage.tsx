@@ -119,6 +119,7 @@ function SavedResult({ run, selected, names }: { run: AssessmentRunRecord; selec
     <div className="saved-company-grid">
       {selected.map((smeId) => {
         const preparation = preparations.find((item) => item.profile.sme_id === smeId)
+        const greenScore = preparation?.green_score
         const crispItem = rankedItem(crisp, smeId)
         const fuzzyItem = rankedItem(fuzzy, smeId)
         const financial = preparation?.financial_assessment
@@ -129,7 +130,7 @@ function SavedResult({ run, selected, names }: { run: AssessmentRunRecord; selec
         const companyCoverage = coverage.find((item) => item.sme_id === smeId)
         return <article className="panel saved-company-card" key={smeId}>
           <header><div><span className="eyebrow">Saved result</span><h2>{names.get(smeId) ?? smeId}</h2></div><strong className="saved-rank">#{crispItem?.rank ?? '—'}</strong></header>
-          <div className="saved-score-grid"><span><b>{percent(crispItem?.score)}</b>TOPSIS</span><span><b>{percent(fuzzyItem?.score)}</b>Fuzzy TOPSIS</span><span><b>{percent(preparation?.observations.coverage.coverage_ratio)}</b>Assessment coverage</span><span><b>{percent(financial?.core_coverage_ratio)}</b>Financial coverage</span></div>
+          <div className="saved-score-grid"><span><b>{greenScore?.score === null || greenScore?.score === undefined ? '—' : `${greenScore.score.toFixed(1)}/100`}</b>Green Score · {greenScore?.status ?? 'legacy'}</span><span><b>{percent(crispItem?.score)}</b>TOPSIS</span><span><b>{percent(fuzzyItem?.score)}</b>Fuzzy TOPSIS</span><span><b>{percent(preparation?.observations.coverage.coverage_ratio)}</b>Assessment coverage</span><span><b>{percent(financial?.core_coverage_ratio)}</b>Financial coverage</span></div>
           <div className="dimension-result-detail"><strong>Environmental measures</strong>{context?.metrics.filter((item) => item.measurement_value !== null).map((item) => <span key={item.indicator_id}>{item.metric_name}: {item.measurement_value?.toLocaleString()} {item.measurement_unit ?? ''} · {humanize(item.state)}</span>)}{!context?.metrics.some((item) => item.measurement_value !== null) && <span>No accepted quantitative measurements stored.</span>}</div>
           <div className="dimension-result-detail"><strong>Financial values</strong>{financial?.metrics.filter((item) => item.state === 'reported').map((item) => <span key={item.metric_id}>{item.title}: {item.value?.toLocaleString()} {item.unit?.replaceAll('_', ' ')}</span>)}{!financial?.metrics.some((item) => item.state === 'reported') && <span>No reviewed financial values stored.</span>}</div>
           <div className="dimension-result-detail"><strong>Calculated indicators</strong>{financial?.derived_indicators.map((item) => <span key={item.indicator_id}>{humanize(item.indicator_id)}: {item.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} {item.unit.replaceAll('_', ' ')}<small>{item.formula}</small></span>)}{!financial?.derived_indicators.length && <span>Required source inputs were incomplete.</span>}</div>

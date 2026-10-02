@@ -1,7 +1,7 @@
 """Versioned contracts for converting observations into fuzzy MCDM inputs."""
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -98,6 +98,13 @@ class NormalizationPolicy(NormalizationModel):
     version: NonBlank
     status: str = "development"
     weight_source: NonBlank
+    green_score_method: Literal["weighted_centroid"] = "weighted_centroid"
+    applicability_weight_rule: Literal["renormalize_applicable"] = (
+        "renormalize_applicable"
+    )
+    incomplete_score_rule: Literal[
+        "withhold_below_minimum_otherwise_provisional"
+    ] = "withhold_below_minimum_otherwise_provisional"
     minimum_coverage_ratio: float = Field(ge=0.0, le=1.0)
     default_linguistic_scale: dict[
         NonBlank,
