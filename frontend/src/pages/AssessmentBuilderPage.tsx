@@ -138,6 +138,14 @@ export function AssessmentBuilderPage() {
               sourceId: item.source_ids[0] ?? '',
             }])),
           },
+          readiness: {
+            ...current.readiness,
+            ...Object.fromEntries(result.readiness_observations.map((item) => [item.factor_id, {
+              state: item.state,
+              sourceId: item.source_ids[0] ?? '',
+              narrative: item.narrative ?? '',
+            }])),
+          },
           metricContexts: {
             ...current.metricContexts,
             ...Object.fromEntries(result.metric_contexts.map((item) => [item.indicator_id, {
@@ -405,7 +413,7 @@ export function AssessmentBuilderPage() {
             return (
               <section className="panel dimension-card" key={smeId}>
                 <div className="profile-card__header"><div><span className="eyebrow">Distinct assessment dimensions</span><h2>{company.legal_name}</h2></div></div>
-                {prefill && <div className="methodology-note"><Info size={16} /><p>Accepted evidence prefilled {prefill.financial_observations.length} financial values and {prefill.metric_contexts.length} environmental contexts. {prefill.gaps.length ? `${prefill.gaps.length} conflict(s) still require review.` : 'No accepted-evidence conflicts were found.'}</p></div>}
+                {prefill && <div className="methodology-note"><Info size={16} /><p>Accepted evidence prefilled {prefill.financial_observations.length} financial values, {prefill.readiness_observations.length} readiness factors and {prefill.metric_contexts.length} environmental contexts. {prefill.gaps.length ? `${prefill.gaps.length} conflict(s) still require review.` : 'No accepted-evidence conflicts were found.'}</p></div>}
 
                 <div className="dimension-section">
                   <div><h3>Financial & investment assessment</h3><p>Core ratios establish coverage. Supporting transaction values remain visible without fabricated pass/fail thresholds.</p></div>

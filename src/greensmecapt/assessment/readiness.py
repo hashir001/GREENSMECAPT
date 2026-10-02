@@ -1,5 +1,7 @@
 """Interpret SME readiness evidence through a calibrated causal model."""
 
+from collections import defaultdict
+from collections.abc import Sequence
 from enum import StrEnum
 from typing import Self
 
@@ -10,6 +12,7 @@ from greensmecapt.assessment.fuzzy_dematel import (
     DematelSpecification,
     FuzzyDematelResult,
 )
+from greensmecapt.domain import EvidenceItem, EvidenceValidationStatus
 
 
 class ReadinessError(ValueError):
@@ -67,6 +70,13 @@ class ReadinessObservation(ReadinessModel):
         return self
 
 
+class ReadinessCausalLink(ReadinessModel):
+    """Expose a calibrated total-relation link without turning it into a score."""
+
+    target_factor_id: str = Field(min_length=1)
+    influence_strength: float = Field(ge=0.0)
+
+
 class ReadinessFactorInterpretation(ReadinessModel):
     """Join one SME observation to optional DEMATEL influence results."""
 
@@ -76,6 +86,8 @@ class ReadinessFactorInterpretation(ReadinessModel):
     source_ids: tuple[str, ...] = ()
     narrative: str | None = Field(default=None, min_length=1)
     influence: DematelFactorResult | None = None
+    interpretation: str = Field(min_length=1)
+    downstream_influences: tuple[ReadinessCausalLink, ...] = ()
 
 
 class SMEReadinessProfile(ReadinessModel):
@@ -142,6 +154,7 @@ def build_readiness_profile(
                 "DEMATEL result factors must match the readiness taxonomy."
             )
 
+    downstream_by_factor = _downstream_influences(dematel_result)
     factors = tuple(
         ReadinessFactorInterpretation(
             factor_id=factor.factor_id,
@@ -162,6 +175,15 @@ def build_readiness_profile(
                 else None
             ),
             influence=influence_by_factor.get(factor.factor_id),
+            interpretation=_factor_interpretation(
+                state=(
+                    observations_by_factor[factor.factor_id].state
+                    if factor.factor_id in observations_by_factor
+                    else ReadinessState.UNKNOWN
+                ),
+                influence=influence_by_factor.get(factor.factor_id),
+            ),
+            downstream_influences=downstream_by_factor.get(factor.factor_id, ()),
         )
         for factor in specification.factors
     )
@@ -174,3 +196,146 @@ def build_readiness_profile(
         causal_results_available=dematel_result is not None,
         factors=factors,
     )
+
+
+def readiness_observations_from_evidence(
+    *,
+    sme_id: str,
+    specification: DematelSpecification,
+    evidence_items: Sequence[EvidenceItem],
+) -> tuple[ReadinessObservation, ...]:
+    """Consolidate accepted Gemini readiness evidence by governed factor."""
+
+    prefix = "readiness_factor:"
+    grouped: dict[str, list[EvidenceItem]] = defaultdict(list)
+    for evidence in evidence_items:
+        if (
+            evidence.validation_status is EvidenceValidationStatus.ACCEPTED
+            and evidence.indicator_id.startswith(prefix)
+        ):
+            grouped[evidence.indicator_id.removeprefix(prefix)].append(evidence)
+
+    observations: list[ReadinessObservation] = []
+    evidence_states = {
+        ReadinessState.ENABLING_EVIDENCE,
+        ReadinessState.CONSTRAINING_EVIDENCE,
+        ReadinessState.MIXED_EVIDENCE,
+    }
+    for factor_id, items in sorted(grouped.items()):
+        if factor_id not in specification.factor_ids:
+            raise ReadinessError(f"Unknown accepted readiness factor: {factor_id}")
+        try:
+            states = {ReadinessState(str(item.normalized_value)) for item in items}
+        except ValueError as error:
+            raise ReadinessError(
+                f"Accepted readiness evidence has an invalid state for {factor_id}."
+            ) from error
+        if not states <= evidence_states:
+            raise ReadinessError(
+                f"Accepted readiness evidence has an invalid state for {factor_id}."
+            )
+        state = next(iter(states)) if len(states) == 1 else ReadinessState.MIXED_EVIDENCE
+        observations.append(
+            ReadinessObservation(
+                observation_id=f"accepted_evidence:{sme_id}:{factor_id}",
+                sme_id=sme_id,
+                factor_id=factor_id,
+                state=state,
+                source_ids=tuple(sorted(item.evidence_id for item in items)),
+                narrative=(
+                    "Accepted sources contain both enabling and constraining evidence."
+                    if state is ReadinessState.MIXED_EVIDENCE
+                    else "Consolidated from accepted document evidence."
+                ),
+            )
+        )
+    return tuple(observations)
+
+
+def merge_readiness_observations(
+    *,
+    supplied: Sequence[ReadinessObservation],
+    extracted: Sequence[ReadinessObservation],
+) -> tuple[ReadinessObservation, ...]:
+    """Merge reviewer input with accepted evidence without hiding conflicts."""
+
+    supplied_by_factor = {item.factor_id: item for item in supplied}
+    if len(supplied_by_factor) != len(supplied):
+        raise ReadinessError("Duplicate supplied readiness observations.")
+    extracted_by_factor = {item.factor_id: item for item in extracted}
+    merged: list[ReadinessObservation] = []
+    for factor_id in sorted(set(supplied_by_factor) | set(extracted_by_factor)):
+        reviewer = supplied_by_factor.get(factor_id)
+        evidence = extracted_by_factor.get(factor_id)
+        if evidence is None:
+            if reviewer is not None:
+                merged.append(reviewer)
+            continue
+        if reviewer is not None and reviewer.state not in {
+            ReadinessState.UNKNOWN,
+            evidence.state,
+        }:
+            raise ReadinessError(
+                f"Reviewer readiness state conflicts with accepted evidence for {factor_id}."
+            )
+        merged.append(
+            evidence.model_copy(
+                update={
+                    "narrative": (
+                        reviewer.narrative
+                        if reviewer is not None and reviewer.narrative
+                        else evidence.narrative
+                    )
+                }
+            )
+        )
+    return tuple(merged)
+
+
+def _factor_interpretation(
+    *,
+    state: ReadinessState,
+    influence: DematelFactorResult | None,
+) -> str:
+    state_text = {
+        ReadinessState.ENABLING_EVIDENCE: "Accepted evidence indicates an enabling condition.",
+        ReadinessState.CONSTRAINING_EVIDENCE: "Accepted evidence indicates a readiness bottleneck.",
+        ReadinessState.MIXED_EVIDENCE: (
+            "Accepted evidence contains both enabling and constraining signals."
+        ),
+        ReadinessState.UNKNOWN: "No accepted evidence establishes this readiness condition.",
+        ReadinessState.NOT_APPLICABLE: "A reviewer marked this factor not applicable.",
+        ReadinessState.NEEDS_REVIEW: "The available observation requires reviewer resolution.",
+    }[state]
+    if influence is None:
+        return f"{state_text} Causal interpretation awaits expert DEMATEL calibration."
+    return (
+        f"{state_text} The calibrated DEMATEL model identifies this factor as "
+        f"{influence.role.value} with prominence {influence.prominence:.3f}."
+    )
+
+
+def _downstream_influences(
+    result: FuzzyDematelResult | None,
+) -> dict[str, tuple[ReadinessCausalLink, ...]]:
+    if result is None:
+        return {}
+    factor_ids = result.total_relation_matrix.factor_ids
+    output: dict[str, tuple[ReadinessCausalLink, ...]] = {}
+    for row_index, source_id in enumerate(factor_ids):
+        links = [
+            ReadinessCausalLink(
+                target_factor_id=target_id,
+                influence_strength=(value.lower + value.modal + value.upper) / 3.0,
+            )
+            for target_id, value in zip(
+                factor_ids,
+                result.total_relation_matrix.values[row_index],
+                strict=True,
+            )
+            if target_id != source_id
+        ]
+        output[source_id] = tuple(
+            sorted(links, key=lambda item: item.influence_strength, reverse=True)[:2]
+        )
+    return output

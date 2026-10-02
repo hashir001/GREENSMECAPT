@@ -11,7 +11,12 @@ from greensmecapt.assessment.financial import (
     FinancialObservation,
     FinancialObservationState,
 )
+from greensmecapt.assessment.fuzzy_dematel import DematelSpecification
 from greensmecapt.assessment.performance_context import MetricComparisonContext
+from greensmecapt.assessment.readiness import (
+    ReadinessObservation,
+    readiness_observations_from_evidence,
+)
 from greensmecapt.document_intelligence.semantics import (
     MetricCatalog,
     MetricDimension,
@@ -49,6 +54,7 @@ class AssessmentAutofillResponse(AutofillModel):
     facts: dict[str, bool] = Field(default_factory=dict)
     fact_source_ids: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     financial_observations: tuple[FinancialObservation, ...] = ()
+    readiness_observations: tuple[ReadinessObservation, ...] = ()
     metric_contexts: tuple[MetricComparisonContext, ...] = ()
     sector_proposals: tuple[SectorProposal, ...] = ()
     gaps: tuple[AutofillGap, ...] = ()
@@ -59,6 +65,7 @@ def build_assessment_autofill(
     record: StructuredInvestmentRecord,
     financial_policy: FinancialAssessmentPolicy,
     metric_catalog: MetricCatalog,
+    readiness_specification: DematelSpecification,
 ) -> AssessmentAutofillResponse:
     """Convert accepted, non-conflicting evidence into editable form values."""
 
@@ -107,6 +114,11 @@ def build_assessment_autofill(
         facts=facts,
         fact_source_ids=fact_sources,
         financial_observations=financial,
+        readiness_observations=readiness_observations_from_evidence(
+            sme_id=record.sme.sme_id,
+            specification=readiness_specification,
+            evidence_items=record.evidence_items,
+        ),
         metric_contexts=contexts,
         sector_proposals=sectors,
         gaps=tuple(gaps),

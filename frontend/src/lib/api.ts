@@ -919,6 +919,7 @@ export const api = {
           facts: {},
           fact_source_ids: {},
           financial_observations: [],
+          readiness_observations: [],
           metric_contexts: [],
           sector_proposals: [],
           gaps: [],

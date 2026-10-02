@@ -321,6 +321,16 @@ def load_dematel_specification(
     return DematelSpecification.model_validate(data)
 
 
+def load_dematel_result(path: str | Path) -> FuzzyDematelResult:
+    """Load a previously calculated, version-matched DEMATEL result."""
+
+    data = json.loads(
+        Path(path).read_text(encoding="utf-8"),
+        object_pairs_hook=_unique_json_keys,
+    )
+    return FuzzyDematelResult.model_validate(data)
+
+
 def load_expert_assessments(
     path: str | Path,
 ) -> tuple[ExpertInfluenceAssessment, ...]:

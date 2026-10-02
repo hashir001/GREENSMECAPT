@@ -712,6 +712,8 @@ function buildPreviewAssessment(request: CohortAssessmentRequest): AssessmentRun
               factor_id: item.factor_id,
               domain_id: previewAssessmentConfiguration.readiness_specification.factors.find((factor) => factor.factor_id === item.factor_id)?.domain_id ?? '',
               state: item.state, narrative: item.narrative ?? null,
+              interpretation: 'Preview evidence state; causal interpretation awaits expert DEMATEL calibration.',
+              downstream_influences: [],
             })),
           },
           performance_context: {

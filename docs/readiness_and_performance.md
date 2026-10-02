@@ -40,6 +40,18 @@ Gemini never receives authority to create DEMATEL relationships, prominence,
 cause/effect values, criterion weights or Green Scores. Those remain separate
 expert-calibrated or deterministic layers.
 
+Accepted readiness evidence is consolidated automatically before assessment.
+Matching signals become one sourced observation; accepted enabling and
+constraining signals for the same factor become `mixed_evidence` rather than
+being silently averaged. Reviewer input cannot override contradictory accepted
+evidence. The investor view explains the resulting state deterministically.
+
+When an approved Fuzzy DEMATEL result is available, configure its JSON path as
+`GREENSMECAPT_READINESS_DEMATEL_RESULT`. The workflow validates that its
+specification ID and version match the seven-factor taxonomy, then exposes the
+factor's cause/effect role, prominence and two strongest downstream relations.
+Without that file, the interface explicitly says causal calibration is pending.
+
 ## 3. Environmental comparison context
 
 A raw total describes quantity, not performance. Before comparing electricity, water, emissions or waste, the system needs a reporting period, operational boundary, suitable denominator, and a baseline, trend, target or sector benchmark.

@@ -365,6 +365,14 @@ export type AssessmentAutofill = {
   facts: Record<string, boolean>
   fact_source_ids: Record<string, string[]>
   financial_observations: FinancialObservation[]
+  readiness_observations: Array<{
+    observation_id: string
+    sme_id: string
+    factor_id: string
+    state: 'enabling_evidence' | 'constraining_evidence' | 'mixed_evidence' | 'unknown' | 'not_applicable' | 'needs_review'
+    source_ids: string[]
+    narrative?: string
+  }>
   metric_contexts: Array<{
     context_id: string
     sme_id: string
@@ -639,6 +647,11 @@ export type AssessmentRunRecord = AssessmentRunSummary & {
           domain_id: string
           state: string
           narrative: string | null
+          interpretation: string
+          downstream_influences: Array<{
+            target_factor_id: string
+            influence_strength: number
+          }>
         }>
       }
       performance_context: {

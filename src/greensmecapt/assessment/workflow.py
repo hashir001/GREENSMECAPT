@@ -41,6 +41,8 @@ from greensmecapt.assessment.financial import (
 )
 from greensmecapt.assessment.fuzzy_dematel import (
     DematelSpecification,
+    FuzzyDematelResult,
+    load_dematel_result,
     load_dematel_specification,
 )
 from greensmecapt.assessment.fuzzy_topsis import (
@@ -77,6 +79,8 @@ from greensmecapt.assessment.readiness import (
     ReadinessState,
     SMEReadinessProfile,
     build_readiness_profile,
+    merge_readiness_observations,
+    readiness_observations_from_evidence,
 )
 from greensmecapt.assessment.robustness import (
     RankingRobustnessResult,
@@ -233,6 +237,7 @@ class AssessmentWorkflow:
         normalization_policy: NormalizationPolicy,
         financial_policy: FinancialAssessmentPolicy,
         readiness_specification: DematelSpecification,
+        readiness_dematel_result: FuzzyDematelResult | None = None,
         metric_catalog: MetricCatalog,
         evidence_strength_policy: EvidenceStrengthPolicy,
         electre_configuration: ElectreIIIConfiguration,
@@ -246,10 +251,20 @@ class AssessmentWorkflow:
             metric_catalog=metric_catalog,
             evidence_strength_policy=evidence_strength_policy,
         )
+        if readiness_dematel_result is not None and (
+            readiness_dematel_result.specification_id
+            != readiness_specification.specification_id
+            or readiness_dematel_result.specification_version
+            != readiness_specification.version
+        ):
+            raise AssessmentWorkflowError(
+                "DEMATEL result and readiness specification must match."
+            )
         self._assessment_policy = assessment_policy
         self._normalization_policy = normalization_policy
         self._financial_policy = financial_policy
         self._readiness_specification = readiness_specification
+        self._readiness_dematel_result = readiness_dematel_result
         self._metric_catalog = metric_catalog
         self._evidence_strength_policy = evidence_strength_policy
         self._electre_configuration = electre_configuration
@@ -295,6 +310,7 @@ class AssessmentWorkflow:
 
         configured = environment if environment is not None else os.environ
 
+        readiness_result_path = configured.get("GREENSMECAPT_READINESS_DEMATEL_RESULT")
         return cls(
             assessment_policy=load_policy(
                 Path(
@@ -327,6 +343,11 @@ class AssessmentWorkflow:
                         "config/dematel_specification.development.json",
                     )
                 )
+            ),
+            readiness_dematel_result=(
+                load_dematel_result(Path(readiness_result_path))
+                if readiness_result_path
+                else None
             ),
             metric_catalog=load_metric_catalog(
                 Path(
@@ -394,6 +415,14 @@ class AssessmentWorkflow:
             observations,
             self._normalization_policy,
         )
+        readiness_observations = merge_readiness_observations(
+            supplied=tuple(readiness_observations),
+            extracted=readiness_observations_from_evidence(
+                sme_id=record.sme.sme_id,
+                specification=self._readiness_specification,
+                evidence_items=record.evidence_items,
+            ),
+        )
         valid_source_ids = {
             *(item.document_id for item in record.documents),
             *(item.evidence_id for item in record.evidence_items),
@@ -424,6 +453,7 @@ class AssessmentWorkflow:
             record.sme.sme_id,
             self._readiness_specification,
             tuple(readiness_observations),
+            self._readiness_dematel_result,
         )
         performance_context = build_performance_context_profile(
             sme_id=record.sme.sme_id,

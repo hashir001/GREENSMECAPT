@@ -213,6 +213,7 @@ def build_assessment_router(
             record=record,
             financial_policy=workflow.financial_policy,
             metric_catalog=workflow.metric_catalog,
+            readiness_specification=workflow.readiness_specification,
         )
 
     @router.post(

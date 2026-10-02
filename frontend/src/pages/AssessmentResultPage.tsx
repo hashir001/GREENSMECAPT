@@ -102,6 +102,7 @@ export function AssessmentResultPage() {
             const readiness = preparation.readiness_profile
             const evidenceStrength = preparation.evidence_strength
             const constraints = readiness.factors.filter((factor) => factor.state === 'constraining_evidence' || factor.state === 'mixed_evidence')
+            const enablers = readiness.factors.filter((factor) => factor.state === 'enabling_evidence')
             const contextual = preparation.performance_context.metrics
             const readyMetrics = contextual.filter((metric) => metric.state === 'ready').length
             return <article key={preparation.profile.sme_id}>
@@ -119,8 +120,9 @@ export function AssessmentResultPage() {
               </div>
               <div className="dimension-result-detail">
                 <strong>Readiness interpretation</strong>
-                {constraints.map((factor) => <span key={factor.factor_id}>{humanize(factor.factor_id)} · {humanize(factor.state)}</span>)}
+                {constraints.map((factor) => <span key={factor.factor_id}><b>{humanize(factor.factor_id)} · {humanize(factor.state)}</b><small>{factor.interpretation}</small>{factor.downstream_influences.length > 0 && <small>Strongest downstream relationships: {factor.downstream_influences.map((link) => `${humanize(link.target_factor_id)} (${link.influence_strength.toFixed(3)})`).join(', ')}.</small>}</span>)}
                 {!constraints.length && <span>No evidenced constraint recorded; unknowns remain unknown.</span>}
+                {enablers.map((factor) => <span key={factor.factor_id}><b>{humanize(factor.factor_id)} · enabling evidence</b><small>{factor.interpretation}</small></span>)}
                 {!readiness.causal_results_available && <small>DEMATEL causal interpretation awaits expert calibration.</small>}
               </div>
               <div className="dimension-result-detail">

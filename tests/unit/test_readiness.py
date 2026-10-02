@@ -13,7 +13,9 @@ from greensmecapt.assessment.readiness import (
     ReadinessObservation,
     ReadinessState,
     build_readiness_profile,
+    readiness_observations_from_evidence,
 )
+from greensmecapt.domain import EvidenceItem, EvidenceValidationStatus
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SPECIFICATION_PATH = (
@@ -76,3 +78,35 @@ def test_unknown_factor_is_rejected() -> None:
 
     with pytest.raises(ReadinessError, match="Unknown readiness factor"):
         build_readiness_profile("sme-1", specification, (observation,))
+
+
+def test_accepted_conflicting_readiness_evidence_becomes_mixed() -> None:
+    specification = load_dematel_specification(SPECIFICATION_PATH)
+    factor_id = "leadership_and_organisational_commitment"
+    evidence = tuple(
+        EvidenceItem(
+            evidence_id=f"evidence-{index}",
+            sme_id="sme-1",
+            document_id=f"document-{index}",
+            indicator_id=f"readiness_factor:{factor_id}",
+            raw_value=state,
+            normalized_value=state,
+            source_locator=f"page {index}",
+            source_excerpt=f"Readiness evidence {index}",
+            extraction_method="language_model_grounded_context_extraction",
+            extractor_name="test",
+            validation_status=EvidenceValidationStatus.ACCEPTED,
+        )
+        for index, state in enumerate(
+            ("enabling_evidence", "constraining_evidence"), start=1
+        )
+    )
+
+    observations = readiness_observations_from_evidence(
+        sme_id="sme-1",
+        specification=specification,
+        evidence_items=evidence,
+    )
+
+    assert observations[0].state is ReadinessState.MIXED_EVIDENCE
+    assert observations[0].source_ids == ("evidence-1", "evidence-2")
