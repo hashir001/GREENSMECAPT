@@ -539,11 +539,102 @@ export type AssessmentSubmission = {
     kind: 'linguistic'
     linguistic_value: string
     narrative?: string
+    supporting_evidence_ids?: string[]
     submitted_by: string
   }>
   financial_observations: FinancialObservation[]
   readiness_observations: ReadinessObservation[]
   metric_contexts: MetricComparisonContext[]
+}
+
+export type AssessmentProfileStatus = {
+  sme_id: string
+  legal_name: string
+  sector: string
+  application_status: ApplicationStatus
+  application_revision: number
+  lifecycle_status: 'not_prepared' | 'approved' | 'published' | 'approved_changes' | 'reapproval_required' | 'published_outdated'
+  latest_revision_id: string | null
+  latest_profile_version: number | null
+  latest_approved_at: string | null
+  latest_policy_current: boolean
+  active_publication_id: string | null
+  active_revision_id: string | null
+  published_at: string | null
+  active_policy_current: boolean
+  comparison_eligible: boolean
+}
+
+export type PreparedAssessment = {
+  profile: {
+    sme_id: string
+    active_modules: string[]
+    uncertain_modules: string[]
+    decisions: Array<{
+      criterion_id: string
+      title: string
+      output: 'green' | 'financial' | 'context'
+      scoring_role: string
+      status: 'applicable' | 'not_applicable' | 'uncertain'
+      missing_facts: string[]
+      reason: string
+    }>
+    follow_ups: Array<{ request_id: string; question: string; criterion_ids: string[] }>
+  }
+  observations: {
+    observations: Array<{
+      criterion_id: string
+      status: string
+      linguistic_value: string | null
+      evidence_ids: string[]
+      issues: string[]
+    }>
+    coverage: {
+      applicable_count: number
+      resolved_count: number
+      document_supported_count: number
+      coverage_ratio: number
+    }
+  }
+  green_score: {
+    status: 'final' | 'provisional' | 'blocked'
+    score: number | null
+    coverage_ratio: number
+    issues: string[]
+  } | null
+  financial_assessment: {
+    status: string
+    core_coverage_ratio: number
+    metrics: Array<{ metric_id: string; state: string; value: number | null }>
+  }
+  readiness_profile: {
+    calibration_status: string
+    causal_results_available: boolean
+    factors: Array<{ factor_id: string; state: string; interpretation: string }>
+  }
+  performance_context: {
+    metrics: Array<{ indicator_id: string; state: string; issues: string[] }>
+  }
+  evidence_strength: {
+    dimensions: Array<{ dimension_id: string; band: string; issues: string[] }>
+  }
+  normalized_inputs: { readiness: string; coverage_ratio: number; issues: Array<{ criterion_id: string; code: string; message: string }> }
+  activity_fact_evidence_ids: Record<string, string[]>
+}
+
+export type StoredAssessmentProfileRevision = {
+  revision_id: string
+  sme_id: string
+  profile_version: number
+  approved_at: string
+}
+
+export type AssessmentProfilePublication = {
+  publication_id: string
+  sme_id: string
+  revision_id: string
+  active: boolean
+  published_at: string
 }
 
 export type CohortAssessmentRequest = {

@@ -68,7 +68,7 @@ export function AssessmentsPage() {
           {canRunAssessments && (
             <Link
               className="secondary-button"
-              to="/assessments/new"
+              to="/assessments/profiles"
             >
               <Plus size={17} />
               Manage approved profiles

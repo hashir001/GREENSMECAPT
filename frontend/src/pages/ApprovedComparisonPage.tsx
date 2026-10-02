@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../lib/api'
+import { usePermissions } from '../auth/usePermissions'
 import type {
   AutomaticCohortAssessmentRequest,
   SME,
@@ -18,6 +19,7 @@ function slug(value: string) {
 
 export function ApprovedComparisonPage() {
   const navigate = useNavigate()
+  const { role } = usePermissions()
   const [companies, setCompanies] = useState<SME[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [comparisonName, setComparisonName] = useState(
@@ -28,8 +30,22 @@ export function ApprovedComparisonPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    void api.listSMEs()
-      .then(setCompanies)
+    void Promise.all([
+      api.listSMEs(),
+      role === 'investor'
+        ? Promise.resolve(null)
+        : api.listAssessmentProfileStatuses(),
+    ])
+      .then(([smes, statuses]) => {
+        if (statuses === null) {
+          setCompanies(smes)
+          return
+        }
+        const eligible = new Set(
+          statuses.filter((item) => item.comparison_eligible).map((item) => item.sme_id),
+        )
+        setCompanies(smes.filter((item) => eligible.has(item.sme_id)))
+      })
       .catch((caught: unknown) => {
         setError(
           caught instanceof Error
@@ -38,7 +54,7 @@ export function ApprovedComparisonPage() {
         )
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [role])
 
   function toggleCompany(smeId: string) {
     setSelected((current) => (

@@ -306,6 +306,27 @@ class AssessmentProfileRepository:
 
         return _revision_from_row(row)
 
+    def get_latest(
+        self,
+        sme_id: str,
+    ) -> StoredAssessmentProfileRevision | None:
+        """Return the latest approved revision without requiring publication."""
+
+        row = self._latest_row(sme_id)
+        return _revision_from_row(row) if row is not None else None
+
+    def get_active_publication(
+        self,
+        sme_id: str,
+    ) -> AssessmentProfilePublication | None:
+        row = self._session.exec(
+            select(SMEAssessmentProfilePublicationRow).where(
+                SMEAssessmentProfilePublicationRow.sme_id == sme_id,
+                SMEAssessmentProfilePublicationRow.active.is_(True),
+            )
+        ).first()
+        return _publication_from_row(row) if row is not None else None
+
     def withdraw(
         self,
         *,

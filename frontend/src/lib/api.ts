@@ -1,10 +1,15 @@
 import type {
   AssessmentConfiguration,
   AssessmentAutofill,
+  AssessmentProfilePublication,
+  AssessmentProfileStatus,
   AssessmentRunRecord,
   AssessmentRunSummary,
+  AssessmentSubmission,
   AutomaticCohortAssessmentRequest,
   CohortAssessmentRequest,
+  PreparedAssessment,
+  StoredAssessmentProfileRevision,
   DocumentProcessingResult,
   DocumentDeletionResponse,
   DocumentUploadResponse,
@@ -927,6 +932,54 @@ export const api = {
       : apiRequest<AssessmentAutofill>(
           `/assessments/autofill/${encodeURIComponent(smeId)}`,
         )
+  ),
+
+  listAssessmentProfileStatuses: () => {
+    if (isPreviewMode) {
+      return Promise.resolve<AssessmentProfileStatus[]>([])
+    }
+    return apiRequest<AssessmentProfileStatus[]>('/assessments/profiles')
+  },
+
+  getAssessmentProfileStatus: (smeId: string) => {
+    if (isPreviewMode) {
+      return Promise.reject(new ApiError('Profile governance requires the connected backend.', 501))
+    }
+    return apiRequest<AssessmentProfileStatus>(
+      `/assessments/profiles/${encodeURIComponent(smeId)}/status`,
+    )
+  },
+
+  prepareAssessment: (submission: AssessmentSubmission) => {
+    if (isPreviewMode) {
+      return Promise.reject(new ApiError('Profile preparation requires the connected backend.', 501))
+    }
+    return apiRequest<PreparedAssessment>('/assessments/prepare', {
+      method: 'POST',
+      body: JSON.stringify(submission),
+    })
+  },
+
+  approveAssessmentProfile: (smeId: string, submission: AssessmentSubmission) => (
+    apiRequest<StoredAssessmentProfileRevision>(
+      `/assessments/profiles/${encodeURIComponent(smeId)}/approve`,
+      { method: 'POST', body: JSON.stringify(submission) },
+    )
+  ),
+
+  publishAssessmentProfile: (
+    smeId: string,
+    revisionId: string,
+    expectedApplicationRevision: number,
+  ) => apiRequest<AssessmentProfilePublication>(
+    `/assessments/profiles/${encodeURIComponent(smeId)}/publish`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        revision_id: revisionId,
+        expected_application_revision: expectedApplicationRevision,
+      }),
+    },
   ),
 
   createAssessment: (

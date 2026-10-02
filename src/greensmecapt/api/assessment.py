@@ -1,6 +1,8 @@
 """Assessment preparation and cohort-comparison API routes."""
 
 from collections.abc import Callable, Iterator
+from datetime import datetime
+from typing import Literal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,6 +25,7 @@ from greensmecapt.assessment.financial import (
 )
 from greensmecapt.assessment.fuzzy_dematel import DematelSpecification
 from greensmecapt.assessment.fuzzy_topsis import FuzzyTopsisError
+from greensmecapt.assessment.green_score import GreenScoreStatus
 from greensmecapt.assessment.normalization import NormalizationPolicy
 from greensmecapt.assessment.observations import CriterionResponse
 from greensmecapt.assessment.performance_context import MetricComparisonContext
@@ -37,6 +40,7 @@ from greensmecapt.assessment.workflow import (
     PreparedAssessment,
 )
 from greensmecapt.document_intelligence.semantics import MetricCatalog
+from greensmecapt.domain import SME
 from greensmecapt.persistence import (
     ApplicationRepository,
     ApplicationStatus,
@@ -50,6 +54,7 @@ from greensmecapt.persistence import (
     GreenSMERepository,
     PersistenceConflictError,
     PersistenceNotFoundError,
+    SMEApplication,
     StoredAssessmentProfileRevision,
 )
 from greensmecapt.security import (
@@ -146,6 +151,35 @@ class ProfilePublicationRequest(BaseModel):
     expected_application_revision: int = Field(ge=1)
 
 
+class AssessmentProfileStatusResponse(BaseModel):
+    """Expose profile readiness without leaking mutable assessment inputs."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sme_id: str = Field(min_length=1)
+    legal_name: str = Field(min_length=1)
+    sector: str = Field(min_length=1)
+    application_status: ApplicationStatus
+    application_revision: int = Field(ge=1)
+    lifecycle_status: Literal[
+        "not_prepared",
+        "approved",
+        "published",
+        "approved_changes",
+        "reapproval_required",
+        "published_outdated",
+    ]
+    latest_revision_id: str | None = None
+    latest_profile_version: int | None = Field(default=None, ge=1)
+    latest_approved_at: datetime | None = None
+    latest_policy_current: bool = False
+    active_publication_id: str | None = None
+    active_revision_id: str | None = None
+    published_at: datetime | None = None
+    active_policy_current: bool = False
+    comparison_eligible: bool = False
+
+
 class AssessmentRunDeletionRequest(BaseModel):
     """Require an explicit reason for permanent run deletion."""
 
@@ -214,6 +248,55 @@ def build_assessment_router(
             financial_policy=workflow.financial_policy,
             metric_catalog=workflow.metric_catalog,
             readiness_specification=workflow.readiness_specification,
+        )
+
+    @router.get(
+        "/profiles",
+        response_model=tuple[AssessmentProfileStatusResponse, ...],
+    )
+    def list_assessment_profile_statuses(
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[AuthPrincipal, Depends(assessment_dependency)],
+    ) -> tuple[AssessmentProfileStatusResponse, ...]:
+        """List every accessible SME's governed profile lifecycle state."""
+
+        smes = GreenSMERepository(session).list_smes()
+        return tuple(
+            _profile_status(
+                sme=sme,
+                application=ApplicationRepository(session).get(sme.sme_id),
+                repository=AssessmentProfileRepository(session),
+                workflow=workflow,
+            )
+            for sme in smes
+            if principal.can_access_sme(sme.sme_id)
+        )
+
+    @router.get(
+        "/profiles/{sme_id}/status",
+        response_model=AssessmentProfileStatusResponse,
+    )
+    def get_assessment_profile_status(
+        sme_id: str,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[AuthPrincipal, Depends(assessment_dependency)],
+    ) -> AssessmentProfileStatusResponse:
+        """Return status needed to prepare, approve or publish one profile."""
+
+        del principal
+        try:
+            sme = GreenSMERepository(session).get_sme(sme_id)
+            application = ApplicationRepository(session).get(sme_id)
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        return _profile_status(
+            sme=sme,
+            application=application,
+            repository=AssessmentProfileRepository(session),
+            workflow=workflow,
         )
 
     @router.post(
@@ -291,7 +374,7 @@ def build_assessment_router(
                 if approved_financial
                 else submission.financial_observations
             )
-            workflow.prepare(
+            prepared = workflow.prepare(
                 record=record,
                 context=submission.context,
                 responses=submission.responses,
@@ -299,6 +382,15 @@ def build_assessment_router(
                 readiness_observations=submission.readiness_observations,
                 metric_contexts=submission.metric_contexts,
             )
+            if (
+                prepared.green_score is None
+                or prepared.green_score.status is not GreenScoreStatus.FINAL
+            ):
+                raise ValueError(
+                    "The Green Score must be final before the assessment "
+                    "profile can be approved. Resolve applicability and every "
+                    "applicable environmental criterion first."
+                )
             revision = AssessmentProfileRepository(session).approve(
                 context=submission.context,
                 responses=submission.responses,
@@ -483,24 +575,7 @@ def build_assessment_router(
         try:
             profiles = tuple(profile_repository.get_published(sme_id) for sme_id in request.sme_ids)
             for profile in profiles:
-                if (
-                    profile.assessment_policy.policy_id != workflow.assessment_policy.policy_id
-                    or profile.assessment_policy.version != workflow.assessment_policy.version
-                    or profile.normalization_policy.policy_id
-                    != workflow.normalization_policy.policy_id
-                    or profile.normalization_policy.version != workflow.normalization_policy.version
-                    or profile.financial_policy is None
-                    or profile.financial_policy.policy_id != workflow.financial_policy.policy_id
-                    or profile.financial_policy.version != workflow.financial_policy.version
-                    or profile.readiness_specification is None
-                    or profile.readiness_specification.specification_id
-                    != workflow.readiness_specification.specification_id
-                    or profile.readiness_specification.version
-                    != workflow.readiness_specification.version
-                    or profile.metric_catalog is None
-                    or profile.metric_catalog.catalog_id != workflow.metric_catalog.catalog_id
-                    or profile.metric_catalog.version != workflow.metric_catalog.version
-                ):
+                if not _profile_matches_workflow(profile, workflow):
                     raise ValueError(
                         f"Published profile for SME {profile.sme_id!r} "
                         "uses an older policy and requires reapproval."
@@ -625,3 +700,86 @@ def build_assessment_router(
             ) from error
 
     return router
+
+
+def _profile_matches_workflow(
+    profile: StoredAssessmentProfileRevision,
+    workflow: AssessmentWorkflow,
+) -> bool:
+    """Require every governed policy snapshot to match the active model."""
+
+    return (
+        profile.assessment_policy.policy_id == workflow.assessment_policy.policy_id
+        and profile.assessment_policy.version == workflow.assessment_policy.version
+        and profile.normalization_policy.policy_id
+        == workflow.normalization_policy.policy_id
+        and profile.normalization_policy.version
+        == workflow.normalization_policy.version
+        and profile.financial_policy is not None
+        and profile.financial_policy.policy_id == workflow.financial_policy.policy_id
+        and profile.financial_policy.version == workflow.financial_policy.version
+        and profile.readiness_specification is not None
+        and profile.readiness_specification.specification_id
+        == workflow.readiness_specification.specification_id
+        and profile.readiness_specification.version
+        == workflow.readiness_specification.version
+        and profile.metric_catalog is not None
+        and profile.metric_catalog.catalog_id == workflow.metric_catalog.catalog_id
+        and profile.metric_catalog.version == workflow.metric_catalog.version
+        and profile.evidence_strength_policy is not None
+        and profile.evidence_strength_policy.policy_id
+        == workflow.evidence_strength_policy.policy_id
+        and profile.evidence_strength_policy.version
+        == workflow.evidence_strength_policy.version
+    )
+
+
+def _profile_status(
+    *,
+    sme: SME,
+    application: SMEApplication,
+    repository: AssessmentProfileRepository,
+    workflow: AssessmentWorkflow,
+) -> AssessmentProfileStatusResponse:
+    latest = repository.get_latest(sme.sme_id)
+    publication = repository.get_active_publication(sme.sme_id)
+    active = (
+        repository.get_revision(publication.revision_id)
+        if publication is not None
+        else None
+    )
+    latest_current = latest is not None and _profile_matches_workflow(latest, workflow)
+    active_current = active is not None and _profile_matches_workflow(active, workflow)
+
+    if publication is not None and active_current:
+        lifecycle_status = (
+            "published"
+            if latest is not None and latest.revision_id == active.revision_id
+            else "approved_changes"
+        )
+    elif publication is not None:
+        lifecycle_status = "published_outdated"
+    elif latest is not None and latest_current:
+        lifecycle_status = "approved"
+    elif latest is not None:
+        lifecycle_status = "reapproval_required"
+    else:
+        lifecycle_status = "not_prepared"
+
+    return AssessmentProfileStatusResponse(
+        sme_id=sme.sme_id,
+        legal_name=sme.legal_name,
+        sector=sme.sector,
+        application_status=application.status,
+        application_revision=application.revision,
+        lifecycle_status=lifecycle_status,
+        latest_revision_id=latest.revision_id if latest is not None else None,
+        latest_profile_version=latest.profile_version if latest is not None else None,
+        latest_approved_at=latest.approved_at if latest is not None else None,
+        latest_policy_current=latest_current,
+        active_publication_id=(publication.publication_id if publication else None),
+        active_revision_id=(publication.revision_id if publication else None),
+        published_at=publication.published_at if publication else None,
+        active_policy_current=active_current,
+        comparison_eligible=active_current,
+    )
