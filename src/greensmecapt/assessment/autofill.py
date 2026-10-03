@@ -23,6 +23,7 @@ from greensmecapt.document_intelligence.semantics import (
     MetricValueNature,
 )
 from greensmecapt.domain import (
+    EvidenceClaimNature,
     EvidenceItem,
     EvidenceValidationStatus,
     StructuredInvestmentRecord,
@@ -87,6 +88,9 @@ def build_assessment_autofill(
     fact_sources: dict[str, tuple[str, ...]] = {}
     for indicator_id, items in grouped.items():
         if not indicator_id.startswith("activity_fact:"):
+            continue
+        items = [item for item in items if _describes_current_state(item)]
+        if not items:
             continue
         fact_id = indicator_id.removeprefix("activity_fact:")
         values = {item.normalized_value for item in items}
@@ -224,7 +228,15 @@ def _financial_observations(
         if metric.role is FinancialMetricRole.DERIVED_INDICATOR:
             continue
         items = grouped.get(metric.metric_id, [])
-        numeric = [item for item in items if _is_number(item.normalized_value)]
+        numeric = [
+            item
+            for item in items
+            if _is_number(item.normalized_value)
+            and (
+                metric.role is FinancialMetricRole.INVESTMENT_INPUT
+                or _describes_current_state(item)
+            )
+        ]
         if not numeric:
             continue
         signatures = {
@@ -277,6 +289,7 @@ def _metric_contexts(
         numeric = [
             item for item in grouped.get(metric.indicator_id, [])
             if _is_number(item.normalized_value)
+            and _describes_current_state(item)
         ]
         if not numeric:
             continue
@@ -305,6 +318,15 @@ def _source_ids(items: list[EvidenceItem] | tuple[EvidenceItem, ...]) -> tuple[s
 
 def _is_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _describes_current_state(item: EvidenceItem) -> bool:
+    """Prevent targets and forecasts from becoming current performance facts."""
+
+    return item.claim_nature not in {
+        EvidenceClaimNature.TARGET,
+        EvidenceClaimNature.PROJECTED,
+    }
 
 
 def _conflict_gap(

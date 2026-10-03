@@ -13,6 +13,7 @@ from greensmecapt.document_intelligence.reconciliation.models import (
     ReconciliationStatus,
 )
 from greensmecapt.domain import (
+    EvidenceClaimNature,
     EvidenceItem,
     EvidenceValidationStatus,
 )
@@ -78,6 +79,10 @@ class EvidenceReconciliationService:
                 str | None,
                 str | None,
                 str | None,
+                EvidenceClaimNature,
+                str | None,
+                str | None,
+                str | None,
             ],
             list[EvidenceItem],
         ] = defaultdict(list)
@@ -89,6 +94,10 @@ class EvidenceReconciliationService:
                 evidence.unit,
                 evidence.reporting_period,
                 evidence.scope,
+                evidence.claim_nature,
+                evidence.entity_name,
+                evidence.facility_or_site,
+                evidence.project_name,
             )
             groups[key].append(evidence)
 
@@ -126,6 +135,10 @@ class EvidenceReconciliationService:
             str | None,
             str | None,
             str | None,
+            EvidenceClaimNature,
+            str | None,
+            str | None,
+            str | None,
         ],
         evidence_items: Sequence[EvidenceItem],
     ) -> EvidenceCluster:
@@ -137,6 +150,10 @@ class EvidenceReconciliationService:
             unit,
             reporting_period,
             scope,
+            claim_nature,
+            entity_name,
+            facility_or_site,
+            project_name,
         ) = key
 
         ordered = tuple(
@@ -185,6 +202,8 @@ class EvidenceReconciliationService:
                 f"{unit}:"
                 f"{reporting_period}:"
                 f"{scope}"
+                f":{claim_nature.value}:"
+                f"{entity_name}:{facility_or_site}:{project_name}"
             ).encode()
         ).hexdigest()[:20]
 
@@ -196,6 +215,10 @@ class EvidenceReconciliationService:
             unit=unit,
             reporting_period=reporting_period,
             scope=scope,
+            claim_nature=claim_nature,
+            entity_name=entity_name,
+            facility_or_site=facility_or_site,
+            project_name=project_name,
             status=status,
             candidate_values=candidate_values,
             evidence_ids=tuple(

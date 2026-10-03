@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from greensmecapt.domain import EvidenceClaimNature
+
 type ReconciledValue = str | int | float | bool
 
 
@@ -60,6 +62,10 @@ class EvidenceCluster(ReconciliationModel):
         default=None,
         min_length=1,
     )
+    claim_nature: EvidenceClaimNature = EvidenceClaimNature.UNSPECIFIED
+    entity_name: str | None = Field(default=None, min_length=1)
+    facility_or_site: str | None = Field(default=None, min_length=1)
+    project_name: str | None = Field(default=None, min_length=1)
 
     status: ReconciliationStatus
     candidate_values: tuple[

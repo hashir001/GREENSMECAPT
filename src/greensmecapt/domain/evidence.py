@@ -1,8 +1,9 @@
 """Domain model for evidence extracted from an SME document."""
 
+from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 type EvidenceValue = str | int | float | bool
 
@@ -13,6 +14,69 @@ class EvidenceValidationStatus(StrEnum):
     UNVALIDATED = "unvalidated"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
+
+
+class EvidenceClaimNature(StrEnum):
+    """Distinguish reported results from estimates, targets and forecasts."""
+
+    ACTUAL = "actual"
+    ESTIMATE = "estimate"
+    TARGET = "target"
+    PROJECTED = "projected"
+    UNSPECIFIED = "unspecified"
+
+
+class SMEVerificationStatus(StrEnum):
+    """Describe an SME's response without changing source evidence."""
+
+    UNREVIEWED = "unreviewed"
+    CONFIRMED = "confirmed"
+    CORRECTION_PROPOSED = "correction_proposed"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class SMEVerification(BaseModel):
+    """Retain SME confirmation or correction alongside immutable evidence."""
+
+    model_config = ConfigDict(
+        allow_inf_nan=False,
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+    )
+
+    status: SMEVerificationStatus = SMEVerificationStatus.UNREVIEWED
+    proposed_value: EvidenceValue | None = None
+    proposed_unit: str | None = Field(default=None, min_length=1)
+    proposed_reporting_period: str | None = Field(default=None, min_length=1)
+    proposed_scope: str | None = Field(default=None, min_length=1)
+    comment: str | None = Field(default=None, min_length=1)
+    submitted_by: str | None = Field(default=None, min_length=1)
+    submitted_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_response(self):
+        proposed = (
+            self.proposed_value,
+            self.proposed_unit,
+            self.proposed_reporting_period,
+            self.proposed_scope,
+        )
+        if (
+            self.status is SMEVerificationStatus.CORRECTION_PROPOSED
+            and not any(value is not None for value in proposed)
+        ):
+            raise ValueError("A proposed correction must change at least one field.")
+        if (
+            self.status is SMEVerificationStatus.NOT_APPLICABLE
+            and self.comment is None
+        ):
+            raise ValueError("Not-applicable evidence requires an explanation.")
+        if self.status is not SMEVerificationStatus.UNREVIEWED and (
+            self.submitted_by is None or self.submitted_at is None
+        ):
+            raise ValueError("An SME response requires actor and timestamp provenance.")
+        return self
 
 
 class EvidenceItem(BaseModel):
@@ -46,6 +110,10 @@ class EvidenceItem(BaseModel):
         default=None,
         min_length=1,
     )
+    claim_nature: EvidenceClaimNature = EvidenceClaimNature.UNSPECIFIED
+    entity_name: str | None = Field(default=None, min_length=1)
+    facility_or_site: str | None = Field(default=None, min_length=1)
+    project_name: str | None = Field(default=None, min_length=1)
 
     source_locator: str = Field(min_length=1)
     source_excerpt: str | None = Field(
@@ -68,3 +136,4 @@ class EvidenceItem(BaseModel):
     validation_status: EvidenceValidationStatus = (
         EvidenceValidationStatus.UNVALIDATED
     )
+    sme_verification: SMEVerification = Field(default_factory=SMEVerification)

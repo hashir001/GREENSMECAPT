@@ -12,7 +12,11 @@ from greensmecapt.assessment.fuzzy_dematel import (
     DematelSpecification,
     FuzzyDematelResult,
 )
-from greensmecapt.domain import EvidenceItem, EvidenceValidationStatus
+from greensmecapt.domain import (
+    EvidenceClaimNature,
+    EvidenceItem,
+    EvidenceValidationStatus,
+)
 
 
 class ReadinessError(ValueError):
@@ -212,6 +216,8 @@ def readiness_observations_from_evidence(
         if (
             evidence.validation_status is EvidenceValidationStatus.ACCEPTED
             and evidence.indicator_id.startswith(prefix)
+            and evidence.claim_nature
+            not in {EvidenceClaimNature.TARGET, EvidenceClaimNature.PROJECTED}
         ):
             grouped[evidence.indicator_id.removeprefix(prefix)].append(evidence)
 

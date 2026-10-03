@@ -23,6 +23,7 @@ import type {
   SMEApplication,
   ApplicationStatus,
   SMEUpdateResponse,
+  SMEVerificationSubmission,
   SemanticProviderConnection,
   StructuredInvestmentRecord,
   SystemCapabilities,
@@ -902,6 +903,21 @@ export const api = {
       },
     )
   },
+
+  verifyEvidenceAsSME: (
+    evidenceId: string,
+    submission: SMEVerificationSubmission,
+  ) => (
+    isPreviewMode
+      ? Promise.reject(new ApiError('SME verification is unavailable in reviewer preview mode.', 403))
+      : apiRequest<EvidenceItem>(
+          `/evidence/${encodeURIComponent(evidenceId)}/sme-verification`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify(submission),
+          },
+        )
+  ),
 
   getAssessmentConfiguration: () => (
     isPreviewMode

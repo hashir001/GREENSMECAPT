@@ -1,7 +1,7 @@
-import { AlertTriangle, Check, ChevronDown, FileSearch, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, Ban, Check, ChevronDown, FileSearch, PencilLine, ShieldCheck, X } from 'lucide-react'
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
-import type { DocumentProcessingStatus, EvidenceItem, SourceDocument } from '../types/api'
+import type { DocumentProcessingStatus, EvidenceItem, SMEVerificationSubmission, SourceDocument } from '../types/api'
 import { StatusPill } from './StatusPill'
 
 type Filter = 'all' | EvidenceItem['validation_status']
@@ -9,12 +9,14 @@ type Filter = 'all' | EvidenceItem['validation_status']
 type EvidenceReviewPanelProps = {
   evidenceItems: EvidenceItem[]
   canValidate: boolean
+  canVerify?: boolean
   conflictEvidenceIds?: Set<string>
   companyNames?: Record<string, string>
   documents?: SourceDocument[]
   processingStatuses?: Record<string, DocumentProcessingStatus>
   onValidate: (evidenceId: string, status: 'accepted' | 'rejected', reason?: string) => Promise<void>
   onValidateMany?: (evidenceIds: string[], status: 'accepted' | 'rejected', reason?: string) => Promise<void>
+  onVerify?: (evidenceId: string, submission: SMEVerificationSubmission) => Promise<void>
 }
 
 function humanize(value: string) { return value.replaceAll('_', ' ') }
@@ -24,7 +26,7 @@ function valueLabel(item: EvidenceItem) {
   return `${item.normalized_value}${item.unit === 'percent' ? '%' : item.unit ? ` ${item.unit}` : ''}`
 }
 
-export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEvidenceIds = new Set(), companyNames = {}, documents = [], processingStatuses = {}, onValidate, onValidateMany }: EvidenceReviewPanelProps) {
+export function EvidenceReviewPanel({ evidenceItems, canValidate, canVerify = false, conflictEvidenceIds = new Set(), companyNames = {}, documents = [], processingStatuses = {}, onValidate, onValidateMany, onVerify }: EvidenceReviewPanelProps) {
   const [filter, setFilter] = useState<Filter>('all')
   const [rejectingId, setRejectingId] = useState('')
   const [reason, setReason] = useState('')
@@ -34,6 +36,9 @@ export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEviden
   const [bulkRejectDocumentId, setBulkRejectDocumentId] = useState('')
   const [bulkReason, setBulkReason] = useState('')
   const [error, setError] = useState('')
+  const [verifyingId, setVerifyingId] = useState('')
+  const [verificationMode, setVerificationMode] = useState<'correction_proposed' | 'not_applicable'>('correction_proposed')
+  const [verificationDraft, setVerificationDraft] = useState({ value: '', unit: '', period: '', scope: '', comment: '' })
 
   const documentGroups = useMemo(() => {
     const documentById = new Map(documents.map((document) => [document.document_id, document]))
@@ -76,13 +81,58 @@ export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEviden
     setter((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })
   }
 
+  function beginVerification(evidenceId: string, mode: 'correction_proposed' | 'not_applicable') {
+    setVerifyingId(evidenceId)
+    setVerificationMode(mode)
+    setVerificationDraft({ value: '', unit: '', period: '', scope: '', comment: '' })
+  }
+
+  async function submitVerification(item: EvidenceItem) {
+    if (!onVerify) return
+    setBusyId(item.evidence_id); setError('')
+    try {
+      const rawValue = verificationDraft.value.trim()
+      let proposedValue: string | number | boolean | null = rawValue || null
+      if (rawValue && typeof item.normalized_value === 'number') proposedValue = Number(rawValue)
+      if (rawValue && typeof item.normalized_value === 'boolean') proposedValue = rawValue.toLowerCase() === 'true'
+      await onVerify(item.evidence_id, {
+        status: verificationMode,
+        proposed_value: verificationMode === 'correction_proposed' ? proposedValue : null,
+        proposed_unit: verificationMode === 'correction_proposed' ? verificationDraft.unit.trim() || null : null,
+        proposed_reporting_period: verificationMode === 'correction_proposed' ? verificationDraft.period.trim() || null : null,
+        proposed_scope: verificationMode === 'correction_proposed' ? verificationDraft.scope.trim() || null : null,
+        comment: verificationDraft.comment.trim() || null,
+      })
+      setVerifyingId('')
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The SME verification response could not be saved.')
+    } finally { setBusyId('') }
+  }
+
+  async function confirmEvidence(item: EvidenceItem) {
+    if (!onVerify) return
+    setBusyId(item.evidence_id); setError('')
+    try {
+      await onVerify(item.evidence_id, {
+        status: 'confirmed',
+        proposed_value: null,
+        proposed_unit: null,
+        proposed_reporting_period: null,
+        proposed_scope: null,
+        comment: null,
+      })
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The SME confirmation could not be saved.')
+    } finally { setBusyId('') }
+  }
+
   const displayedGroups = documentGroups.filter((group) => filter === 'all' || group.visibleItems.length > 0)
   const hasVisibleEvidence = displayedGroups.length > 0
 
   return (
     <section className="panel evidence-panel">
       <div className="panel__header evidence-panel__header">
-        <div><span className="eyebrow">Traceable extraction</span><h2>Evidence review by document</h2></div>
+        <div><span className="eyebrow">{canVerify ? 'SME verification' : 'Traceable extraction'}</span><h2>{canVerify ? 'Your extracted data by document' : 'Evidence review by document'}</h2></div>
         <div className="evidence-filters" aria-label="Filter evidence">{(['all', 'unvalidated', 'accepted', 'rejected'] as Filter[]).map((status) => <button type="button" className={filter === status ? 'active' : ''} key={status} onClick={() => setFilter(status)}>{humanize(status)}</button>)}</div>
       </div>
       {error && <div className="error-banner">{error}</div>}
@@ -118,11 +168,19 @@ export function EvidenceReviewPanel({ evidenceItems, canValidate, conflictEviden
                 const selectable = canValidate && item.validation_status === 'unvalidated' && !conflict
                 return <article className={`evidence-card ${conflict ? 'evidence-card--conflict' : ''}`} key={item.evidence_id}>
                   {selectable && <label className="evidence-card__select"><input type="checkbox" checked={selectedIds.has(item.evidence_id)} onChange={() => toggleSet(setSelectedIds, item.evidence_id)} /> Select</label>}
-                  <div className="evidence-card__header"><div><strong>{humanize(item.indicator_id)}</strong><span>{item.reporting_period || 'Period not stated'} · {item.scope || 'Scope not stated'}</span></div><StatusPill label={conflict ? 'conflict' : item.validation_status} tone={conflict ? 'warning' : item.validation_status === 'accepted' ? 'positive' : item.validation_status === 'rejected' ? 'danger' : 'neutral'} /></div>
+                  <div className="evidence-card__header"><div><strong>{humanize(item.indicator_id)}</strong><span>{humanize(item.claim_nature)} · {item.reporting_period || 'Period not stated'} · {item.scope || 'Scope not stated'}</span></div><StatusPill label={conflict ? 'conflict' : item.validation_status} tone={conflict ? 'warning' : item.validation_status === 'accepted' ? 'positive' : item.validation_status === 'rejected' ? 'danger' : 'neutral'} /></div>
+                  {(item.entity_name || item.facility_or_site || item.project_name) && <div className="evidence-alert"><ShieldCheck size={15} /> {[item.entity_name, item.facility_or_site, item.project_name].filter(Boolean).join(' · ')}</div>}
                   {conflict && <div className="evidence-alert"><AlertTriangle size={15} /> Conflicting or incomplete context—review individually.</div>}
                   <div className="evidence-value"><div><span>Source said</span><strong>{item.raw_value}</strong></div><span className="evidence-value__arrow">→</span><div><span>Normalized</span><strong>{valueLabel(item)}</strong></div></div>
                   <blockquote>{item.source_excerpt || 'No source excerpt was returned.'}</blockquote>
                   <div className="evidence-provenance"><span><FileSearch size={14} /> {item.source_locator}</span><span><ShieldCheck size={14} /> {humanize(item.extraction_method)}</span>{item.confidence !== null && <span>{Math.round(item.confidence * 100)}% extraction confidence</span>}</div>
+                  <div className="sme-verification-summary">
+                    <StatusPill label={`SME ${humanize(item.sme_verification.status)}`} tone={item.sme_verification.status === 'confirmed' ? 'positive' : item.sme_verification.status === 'unreviewed' ? 'neutral' : 'warning'} />
+                    {item.sme_verification.comment && <span>{item.sme_verification.comment}</span>}
+                    {item.sme_verification.status === 'correction_proposed' && <small>Proposed: {item.sme_verification.proposed_value ?? valueLabel(item)} · {item.sme_verification.proposed_unit ?? item.unit ?? 'unit unchanged'} · {item.sme_verification.proposed_reporting_period ?? item.reporting_period ?? 'period unchanged'} · {item.sme_verification.proposed_scope ?? item.scope ?? 'scope unchanged'}</small>}
+                  </div>
+                  {canVerify && verifyingId !== item.evidence_id && <div className="review-actions"><button className="review-button review-button--accept" type="button" disabled={busyId === item.evidence_id} onClick={() => void confirmEvidence(item)}><Check size={16} /> Confirm</button><button className="secondary-button secondary-button--small" type="button" disabled={busyId === item.evidence_id} onClick={() => beginVerification(item.evidence_id, 'correction_proposed')}><PencilLine size={14} /> Propose correction</button><button className="secondary-button secondary-button--small" type="button" disabled={busyId === item.evidence_id} onClick={() => beginVerification(item.evidence_id, 'not_applicable')}><Ban size={14} /> Not applicable</button></div>}
+                  {canVerify && verifyingId === item.evidence_id && <div className="reject-form sme-verification-form"><label>{verificationMode === 'correction_proposed' ? 'Propose corrected data' : 'Explain why this does not apply'}</label>{verificationMode === 'correction_proposed' && <div className="verification-field-grid"><input value={verificationDraft.value} onChange={(event) => setVerificationDraft((current) => ({ ...current, value: event.target.value }))} placeholder={`Value: ${valueLabel(item)}`} /><input value={verificationDraft.unit} onChange={(event) => setVerificationDraft((current) => ({ ...current, unit: event.target.value }))} placeholder={`Unit: ${item.unit ?? 'not stated'}`} /><input value={verificationDraft.period} onChange={(event) => setVerificationDraft((current) => ({ ...current, period: event.target.value }))} placeholder={`Period: ${item.reporting_period ?? 'not stated'}`} /><input value={verificationDraft.scope} onChange={(event) => setVerificationDraft((current) => ({ ...current, scope: event.target.value }))} placeholder={`Scope: ${item.scope ?? 'not stated'}`} /></div>}<textarea value={verificationDraft.comment} onChange={(event) => setVerificationDraft((current) => ({ ...current, comment: event.target.value }))} placeholder={verificationMode === 'correction_proposed' ? 'Explain the correction and upload support if needed.' : 'Why is this metric not applicable?'} /><div><button className="secondary-button secondary-button--small" type="button" onClick={() => setVerifyingId('')}>Cancel</button><button className="review-button review-button--accept" type="button" disabled={Boolean(busyId) || (verificationMode === 'not_applicable' ? !verificationDraft.comment.trim() : ![verificationDraft.value, verificationDraft.unit, verificationDraft.period, verificationDraft.scope].some((value) => value.trim()))} onClick={() => void submitVerification(item)}>Save response</button></div></div>}
                   {canValidate && item.validation_status === 'unvalidated' && rejectingId !== item.evidence_id && <div className="review-actions"><button className="review-button review-button--accept" type="button" disabled={busyId === item.evidence_id} onClick={() => void validate(item.evidence_id, 'accepted')}><Check size={16} /> Accept evidence</button><button className="review-button review-button--reject" type="button" disabled={busyId === item.evidence_id} onClick={() => setRejectingId(item.evidence_id)}><X size={16} /> Reject</button></div>}
                   {rejectingId === item.evidence_id && <div className="reject-form"><label>Why is this evidence unusable?</label><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="For example: wrong reporting period or OCR misread…" /><div><button className="secondary-button secondary-button--small" type="button" onClick={() => setRejectingId('')}>Cancel</button><button className="review-button review-button--reject" type="button" disabled={!reason.trim() || busyId === item.evidence_id} onClick={() => void validate(item.evidence_id, 'rejected', reason.trim())}>Confirm rejection</button></div></div>}
                 </article>

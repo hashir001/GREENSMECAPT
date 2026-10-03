@@ -25,6 +25,7 @@ export function usePermissions() {
     canProcessDocuments: isPreviewMode || documentRole,
     canDeleteDocuments: isPreviewMode || documentRole,
     canValidateEvidence: isPreviewMode || reviewerRole,
+    canVerifyOwnEvidence: role === 'sme_user',
     canRunAssessments: isPreviewMode || reviewerRole,
     canApproveProfiles: isPreviewMode || reviewerRole,
     canPublishProfiles: isPreviewMode || reviewerRole,

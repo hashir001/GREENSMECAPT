@@ -274,9 +274,17 @@ function evidence(
 ): EvidenceItem {
   return {
     criterion_id: 'environmental_performance', unit: 'percent', reporting_period: '2025',
-    scope: 'company operations', source_locator: 'page 1, paragraph 2', source_excerpt: null,
+    scope: 'company operations', claim_nature: 'actual', entity_name: null,
+    facility_or_site: null, project_name: null,
+    source_locator: 'page 1, paragraph 2', source_excerpt: null,
     extraction_method: 'semantic_metric_extraction', extractor_name: 'greensmecapt_semantic_extractor',
-    extractor_version: '1.0.0', confidence: 0.94, validation_status: 'unvalidated', ...values,
+    extractor_version: '1.0.0', confidence: 0.94, validation_status: 'unvalidated',
+    sme_verification: {
+      status: 'unreviewed', proposed_value: null, proposed_unit: null,
+      proposed_reporting_period: null, proposed_scope: null, comment: null,
+      submitted_by: null, submitted_at: null,
+    },
+    ...values,
   }
 }
 

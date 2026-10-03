@@ -18,7 +18,9 @@ from greensmecapt.domain import (
     DocumentProcessingStatus,
     DocumentType,
     EvidenceItem,
+    EvidenceClaimNature,
     EvidenceValidationStatus,
+    SMEVerification,
     SourceDocument,
     StructuredInvestmentRecord,
 )
@@ -1310,6 +1312,47 @@ class GreenSMERepository:
             raise
         return tuple(_evidence_from_row(row) for row in rows)
 
+    def set_evidence_sme_verification(
+        self,
+        *,
+        evidence_id: str,
+        verification: SMEVerification,
+        actor_id: str,
+    ) -> EvidenceItem:
+        """Store an SME response without altering the extracted source claim."""
+
+        row = self._session.get(EvidenceRow, evidence_id)
+        if row is None:
+            raise PersistenceNotFoundError(
+                f"Evidence {evidence_id!r} was not found."
+            )
+        previous = row.sme_verification_json
+        row.sme_verification_json = json.dumps(
+            verification.model_dump(mode="json"),
+            sort_keys=True,
+        )
+        row.updated_at = datetime.now(UTC)
+        self._session.add(row)
+        self._session.add(
+            AuditEventRow(
+                sme_id=row.sme_id,
+                entity_type="evidence",
+                entity_id=row.evidence_id,
+                action="sme_evidence_verification_changed",
+                actor_id=actor_id,
+                previous_value_json=previous,
+                new_value_json=row.sme_verification_json,
+                reason=verification.comment,
+            )
+        )
+        try:
+            self._session.commit()
+            self._session.refresh(row)
+        except Exception:
+            self._session.rollback()
+            raise
+        return _evidence_from_row(row)
+
     def list_audit_events(
         self,
         *,
@@ -1523,6 +1566,14 @@ def _evidence_row(
         unit=evidence.unit,
         reporting_period=evidence.reporting_period,
         scope=evidence.scope,
+        claim_nature=evidence.claim_nature.value,
+        entity_name=evidence.entity_name,
+        facility_or_site=evidence.facility_or_site,
+        project_name=evidence.project_name,
+        sme_verification_json=json.dumps(
+            evidence.sme_verification.model_dump(mode="json"),
+            sort_keys=True,
+        ),
         source_locator=evidence.source_locator,
         source_excerpt=evidence.source_excerpt,
         extraction_method=evidence.extraction_method,
@@ -1551,6 +1602,10 @@ def _evidence_from_row(
         unit=row.unit,
         reporting_period=row.reporting_period,
         scope=row.scope,
+        claim_nature=EvidenceClaimNature(row.claim_nature),
+        entity_name=row.entity_name,
+        facility_or_site=row.facility_or_site,
+        project_name=row.project_name,
         source_locator=row.source_locator,
         source_excerpt=row.source_excerpt,
         extraction_method=row.extraction_method,
@@ -1559,6 +1614,11 @@ def _evidence_from_row(
         confidence=row.confidence,
         validation_status=EvidenceValidationStatus(
             row.validation_status
+        ),
+        sme_verification=(
+            SMEVerification.model_validate_json(row.sme_verification_json)
+            if row.sme_verification_json
+            else SMEVerification()
         ),
     )
 
@@ -1576,6 +1636,11 @@ def _evidence_signature(
         row.unit,
         row.reporting_period,
         row.scope,
+        row.claim_nature,
+        row.entity_name,
+        row.facility_or_site,
+        row.project_name,
+        row.sme_verification_json,
         row.source_locator,
         row.source_excerpt,
         row.extraction_method,

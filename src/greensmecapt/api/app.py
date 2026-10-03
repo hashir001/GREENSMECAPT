@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, Self
@@ -48,6 +49,8 @@ from greensmecapt.domain import (
     DocumentType,
     EvidenceItem,
     EvidenceValidationStatus,
+    SMEVerification,
+    SMEVerificationStatus,
     SourceDocument,
     StructuredInvestmentRecord,
 )
@@ -142,6 +145,50 @@ class BulkEvidenceValidationRequest(BaseModel):
             raise ValueError("Bulk review must accept or reject evidence.")
         if self.status is EvidenceValidationStatus.REJECTED and not self.reason:
             raise ValueError("Bulk rejection requires a reason.")
+        return self
+
+
+class SMEEvidenceVerificationRequest(BaseModel):
+    """Capture an SME response while preserving the extracted source claim."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        allow_inf_nan=False,
+    )
+
+    status: SMEVerificationStatus
+    proposed_value: str | int | float | bool | None = None
+    proposed_unit: str | None = Field(default=None, min_length=1)
+    proposed_reporting_period: str | None = Field(default=None, min_length=1)
+    proposed_scope: str | None = Field(default=None, min_length=1)
+    comment: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def validate_sme_response(self) -> Self:
+        if self.status is SMEVerificationStatus.UNREVIEWED:
+            raise ValueError("Submit a confirmation, correction or not-applicable response.")
+        proposed = (
+            self.proposed_value,
+            self.proposed_unit,
+            self.proposed_reporting_period,
+            self.proposed_scope,
+        )
+        if (
+            self.status is SMEVerificationStatus.CORRECTION_PROPOSED
+            and not any(value is not None for value in proposed)
+        ):
+            raise ValueError("A proposed correction must change at least one field.")
+        if (
+            self.status is not SMEVerificationStatus.CORRECTION_PROPOSED
+            and any(value is not None for value in proposed)
+        ):
+            raise ValueError("Only a correction proposal may contain replacement fields.")
+        if (
+            self.status is SMEVerificationStatus.NOT_APPLICABLE
+            and self.comment is None
+        ):
+            raise ValueError("Not-applicable evidence requires an explanation.")
         return self
 
 
@@ -1580,6 +1627,59 @@ def create_app(
         return job
 
     @app.patch(
+        "/evidence/{evidence_id}/sme-verification",
+        response_model=EvidenceItem,
+    )
+    def verify_evidence_as_sme(
+        evidence_id: str,
+        request: SMEEvidenceVerificationRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[AuthPrincipal, Depends(get_current_principal)],
+    ) -> EvidenceItem:
+        """Allow the owning SME to confirm or challenge extracted data."""
+
+        if principal.role is not ApplicationRole.SME_USER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the assigned SME may verify its extracted data.",
+            )
+        repository = GreenSMERepository(session)
+        try:
+            evidence = repository.get_evidence(evidence_id)
+            _require_sme_access(principal, evidence.sme_id)
+            application = ApplicationRepository(session).get(evidence.sme_id)
+            _require_application_data_mutable(
+                principal=principal,
+                application=application,
+                allow_reviewer=False,
+            )
+            verification = SMEVerification(
+                status=request.status,
+                proposed_value=request.proposed_value,
+                proposed_unit=request.proposed_unit,
+                proposed_reporting_period=request.proposed_reporting_period,
+                proposed_scope=request.proposed_scope,
+                comment=request.comment,
+                submitted_by=principal.user_id,
+                submitted_at=datetime.now(UTC),
+            )
+            return repository.set_evidence_sme_verification(
+                evidence_id=evidence_id,
+                verification=verification,
+                actor_id=principal.user_id,
+            )
+        except PersistenceNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
+
+    @app.patch(
         "/evidence/{evidence_id}/validation",
         response_model=EvidenceItem,
     )
@@ -1668,6 +1768,7 @@ def _require_application_transition_role(
         ApplicationRole.SME_USER: {
             ApplicationStatus.SUBMITTED,
             ApplicationStatus.WITHDRAWN,
+            ApplicationStatus.CHANGES_REQUESTED,
         },
     }
 

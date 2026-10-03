@@ -12,8 +12,11 @@ from greensmecapt.domain.document_processing import (
     DocumentProcessingStatus,
 )
 from greensmecapt.domain.evidence import (
+    EvidenceClaimNature,
     EvidenceItem,
     EvidenceValidationStatus,
+    SMEVerification,
+    SMEVerificationStatus,
 )
 from greensmecapt.domain.investment_record import StructuredInvestmentRecord
 from greensmecapt.domain.sme import SME
@@ -30,7 +33,10 @@ __all__ = [
     "DocumentProcessingStatus",
     "DocumentType",
     "EvidenceItem",
+    "EvidenceClaimNature",
     "EvidenceValidationStatus",
+    "SMEVerification",
+    "SMEVerificationStatus",
     "SME",
     "SourceDocument",
     "StructuredInvestmentRecord",

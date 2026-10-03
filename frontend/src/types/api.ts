@@ -25,6 +25,10 @@ export type EvidenceItem = {
   unit: string | null
   reporting_period: string | null
   scope: string | null
+  claim_nature: 'actual' | 'estimate' | 'target' | 'projected' | 'unspecified'
+  entity_name: string | null
+  facility_or_site: string | null
+  project_name: string | null
   source_locator: string
   source_excerpt: string | null
   extraction_method: string
@@ -32,7 +36,35 @@ export type EvidenceItem = {
   extractor_version: string | null
   confidence: number | null
   validation_status: 'unvalidated' | 'accepted' | 'rejected'
+  sme_verification: SMEVerification
 }
+
+export type SMEVerificationStatus =
+  | 'unreviewed'
+  | 'confirmed'
+  | 'correction_proposed'
+  | 'not_applicable'
+
+export type SMEVerification = {
+  status: SMEVerificationStatus
+  proposed_value: string | number | boolean | null
+  proposed_unit: string | null
+  proposed_reporting_period: string | null
+  proposed_scope: string | null
+  comment: string | null
+  submitted_by: string | null
+  submitted_at: string | null
+}
+
+export type SMEVerificationSubmission = Pick<
+  SMEVerification,
+  | 'status'
+  | 'proposed_value'
+  | 'proposed_unit'
+  | 'proposed_reporting_period'
+  | 'proposed_scope'
+  | 'comment'
+>
 
 export type DocumentProcessingStatus =
   | 'stored'

@@ -18,7 +18,8 @@ which applies role and SME-level authorization.
    `supabase/migrations/202609230001_assessment_profiles.sql`,
    `supabase/migrations/202609270001_access_lifecycle.sql`, then
    `supabase/migrations/202609280001_assessment_dimensions.sql`, and finally
-   `supabase/migrations/202609280002_signup_and_financial_workflow.sql`.
+   `supabase/migrations/202609280002_signup_and_financial_workflow.sql` and
+   `supabase/migrations/202610030001_evidence_claim_ledger.sql`.
 
 The migration creates the private `source-documents` bucket, prevents direct
 browser access to the application tables, and installs the controlled role

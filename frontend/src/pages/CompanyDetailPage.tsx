@@ -50,10 +50,12 @@ function lifecycleActions(
   const archive = { target: 'archived' as const, label: 'Archive', reasonRequired: true }
   const unpublish = { target: 'approved' as const, label: 'Unpublish profile' }
   const restore = { target: 'draft' as const, label: 'Restore draft' }
+  const updateDossier = { target: 'changes_requested' as const, label: 'Update dossier', reasonRequired: true }
 
   if (role === 'sme_user') {
     if (status === 'draft' || status === 'changes_requested') return [submit, withdraw]
     if (status === 'submitted' || status === 'under_review') return [withdraw]
+    if (status === 'approved' || status === 'published') return [updateDossier]
     return []
   }
 
@@ -236,6 +238,11 @@ export function CompanyDetailPage() {
     permissions.canProcessDocuments
     && applicationDocumentsMutable,
   )
+  const canVerifyOwnEvidence = Boolean(
+    permissions.canVerifyOwnEvidence
+    && application
+    && mutableStatuses.has(application.status)
+  )
   const uploadDisabledReason = !permissions.canUploadDocuments
     ? 'Your role can view documents but cannot upload them.'
     : application?.status === 'approved' || application?.status === 'published'
@@ -298,6 +305,19 @@ export function CompanyDetailPage() {
     setRecord((current) => current ? {
       ...current,
       evidence_items: current.evidence_items.map((item) => byId.get(item.evidence_id) ?? item),
+    } : current)
+  }
+
+  async function verifyEvidenceAsSME(
+    evidenceId: string,
+    submission: Parameters<typeof api.verifyEvidenceAsSME>[1],
+  ) {
+    const updated = await api.verifyEvidenceAsSME(evidenceId, submission)
+    setRecord((current) => current ? {
+      ...current,
+      evidence_items: current.evidence_items.map((item) => (
+        item.evidence_id === updated.evidence_id ? updated : item
+      )),
     } : current)
   }
 
@@ -542,11 +562,13 @@ export function CompanyDetailPage() {
       <EvidenceReviewPanel
         evidenceItems={record.evidence_items}
         canValidate={permissions.canValidateEvidence}
+        canVerify={canVerifyOwnEvidence}
         conflictEvidenceIds={conflictEvidenceIds}
         documents={record.documents}
         processingStatuses={Object.fromEntries(Object.entries(processing).map(([documentId, result]) => [documentId, result.state.status]))}
         onValidate={validateEvidence}
         onValidateMany={validateEvidenceBulk}
+        onVerify={verifyEvidenceAsSME}
       />
     </>
   )

@@ -10,7 +10,7 @@ from greensmecapt.document_intelligence.semantics.intelligence.policy import (
     SectorInstruction,
     UnmappedMaterialCategory,
 )
-from greensmecapt.domain import EvidenceItem
+from greensmecapt.domain import EvidenceClaimNature, EvidenceItem
 
 
 class IntelligenceModel(BaseModel):
@@ -118,6 +118,10 @@ class SemanticClaimPayload(IntelligenceModel):
         min_length=1,
     )
     scope: str | None = Field(default=None, min_length=1)
+    claim_nature: EvidenceClaimNature = EvidenceClaimNature.UNSPECIFIED
+    entity_name: str | None = Field(default=None, min_length=1)
+    facility_or_site: str | None = Field(default=None, min_length=1)
+    project_name: str | None = Field(default=None, min_length=1)
 
 
 class QualitativeClaimPayload(IntelligenceModel):
@@ -129,6 +133,10 @@ class QualitativeClaimPayload(IntelligenceModel):
     boolean_value: bool | None = None
     reporting_period: str | None = Field(default=None, min_length=1)
     scope: str | None = Field(default=None, min_length=1)
+    claim_nature: EvidenceClaimNature = EvidenceClaimNature.UNSPECIFIED
+    entity_name: str | None = Field(default=None, min_length=1)
+    facility_or_site: str | None = Field(default=None, min_length=1)
+    project_name: str | None = Field(default=None, min_length=1)
 
 
 class DocumentProfileClaimPayload(IntelligenceModel):

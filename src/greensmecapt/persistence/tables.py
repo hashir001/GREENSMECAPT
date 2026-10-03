@@ -156,6 +156,11 @@ class EvidenceRow(SQLModel, table=True):
     unit: str | None = None
     reporting_period: str | None = None
     scope: str | None = None
+    claim_nature: str = Field(default="unspecified", index=True)
+    entity_name: str | None = None
+    facility_or_site: str | None = None
+    project_name: str | None = None
+    sme_verification_json: str | None = None
 
     source_locator: str
     source_excerpt: str | None = None

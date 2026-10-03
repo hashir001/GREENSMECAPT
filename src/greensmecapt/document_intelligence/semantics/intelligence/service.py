@@ -653,6 +653,17 @@ def _ground_claim(
     ):
         return "The scope does not occur in the source quote."
 
+    contextual_names = (
+        claim.entity_name,
+        claim.facility_or_site,
+        claim.project_name,
+    )
+    if any(
+        value is not None and not _contains_text(claim.source_quote, value)
+        for value in contextual_names
+    ):
+        return "A claim identity field does not occur in the source quote."
+
     unit_rule = _find_unit_rule(
         metric,
         claim.raw_unit,
@@ -712,6 +723,10 @@ def _ground_claim(
             f"{unit_rule.canonical_unit}:"
             f"{reporting_period}:"
             f"{scope}:"
+            f"{claim.claim_nature.value}:"
+            f"{claim.entity_name}:"
+            f"{claim.facility_or_site}:"
+            f"{claim.project_name}:"
             f"{provider_name}:"
             f"{model_name}"
         ).encode()
@@ -738,6 +753,10 @@ def _ground_claim(
         confidence=None,
         reporting_period=reporting_period,
         scope=scope,
+        claim_nature=claim.claim_nature,
+        entity_name=claim.entity_name,
+        facility_or_site=claim.facility_or_site,
+        project_name=claim.project_name,
     )
 
 
@@ -778,6 +797,17 @@ def _ground_qualitative_claim(
     ):
         return "The scope does not occur in the source quote."
 
+    contextual_names = (
+        claim.entity_name,
+        claim.facility_or_site,
+        claim.project_name,
+    )
+    if any(
+        value is not None and not _contains_text(claim.source_quote, value)
+        for value in contextual_names
+    ):
+        return "A claim identity field does not occur in the source quote."
+
     if instruction.value_type is QualitativeValueType.BOOLEAN:
         if claim.boolean_value is None:
             return "The configured activity fact requires a boolean value."
@@ -802,6 +832,8 @@ def _ground_qualitative_claim(
             f"{document.document_id}:{claim.segment_id}:"
             f"{claim.claim_id}:{claim.source_quote}:"
             f"{normalized_value}:{reporting_period}:{scope}:"
+            f"{claim.claim_nature.value}:{claim.entity_name}:"
+            f"{claim.facility_or_site}:{claim.project_name}:"
             f"{provider_name}:{model_name}"
         ).encode()
     ).hexdigest()[:20]
@@ -825,6 +857,10 @@ def _ground_qualitative_claim(
         confidence=None,
         reporting_period=reporting_period,
         scope=scope,
+        claim_nature=claim.claim_nature,
+        entity_name=claim.entity_name,
+        facility_or_site=claim.facility_or_site,
+        project_name=claim.project_name,
     )
 
 

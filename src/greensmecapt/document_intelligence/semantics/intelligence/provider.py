@@ -303,6 +303,10 @@ Rules:
 10. Copy reporting_period only when the quote explicitly states it.
 11. Copy scope only when the quote explicitly states it, such as Scope 1.
 12. Use null for reporting_period or scope when it is not explicit.
+12a. Classify claim_nature as actual, estimate, target or projected only when
+the source language makes that nature explicit. Otherwise use unspecified.
+12b. Copy entity_name, facility_or_site and project_name only when the exact
+text occurs in source_quote and clearly limits that claim. Otherwise use null.
 13. For a qualitative claim, copy source_quote exactly from one segment and
 use only a supplied claim_id.
 14. Set boolean_value only for a qualitative instruction whose value_type is
