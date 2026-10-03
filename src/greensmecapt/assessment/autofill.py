@@ -145,21 +145,55 @@ def _activity_description(
     gaps: list[AutofillGap],
 ) -> tuple[str, tuple[str, ...]]:
     claims: list[EvidenceItem] = []
-    for field_id in ("products_and_services", "green_value_proposition"):
+    for field_id in (
+        "products_and_services",
+        "subsector_or_specialization",
+        "green_value_proposition",
+    ):
         items = grouped.get(f"company_profile:{field_id}", [])
-        values = {str(item.normalized_value).strip() for item in items}
+        values = {
+            str(item.normalized_value).strip()
+            for item in items
+            if _meaningful_activity_text(item.normalized_value)
+        }
         if len(values) == 1:
-            claims.append(items[0])
+            value = next(iter(values))
+            claims.append(
+                next(
+                    item
+                    for item in items
+                    if str(item.normalized_value).strip() == value
+                )
+            )
         elif len(values) > 1:
             gaps.append(
                 _conflict_gap(field_id, _source_ids(items), "company context")
             )
     if claims:
         return " ".join(str(item.normalized_value).strip() for item in claims), _source_ids(claims)
+
+    if not _meaningful_activity_text(record.sme.sector):
+        gaps.append(
+            AutofillGap(
+                code="missing_company_context",
+                field_id="activity_description",
+                message=(
+                    "No reliable activity description or meaningful registered "
+                    "sector is available; SME confirmation is required."
+                ),
+            )
+        )
+        return "Activity description requires SME confirmation.", ()
+
     return (
         f"{record.sme.legal_name} operates in {record.sme.sector}.",
         (),
     )
+
+
+def _meaningful_activity_text(value: object) -> bool:
+    text = str(value).strip()
+    return len(text) >= 3 and any(character.isalpha() for character in text)
 
 
 def _single_text_claim(
