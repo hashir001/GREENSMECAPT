@@ -6,6 +6,8 @@ from contextlib import contextmanager
 
 from sqlmodel import Session, SQLModel, create_engine
 
+from greensmecapt.paths import PROJECT_ROOT
+
 
 class Database:
     """Manage one SQLModel-compatible database."""
@@ -17,7 +19,7 @@ class Database:
         configured_url = (
             database_url
             or os.environ.get("GREENSMECAPT_DATABASE_URL")
-            or "sqlite:///./greensmecapt.db"
+            or f"sqlite:///{PROJECT_ROOT / 'greensmecapt.db'}"
         )
         self.url = _normalize_database_url(configured_url)
 

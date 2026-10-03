@@ -2,6 +2,7 @@
 
 import os
 
+from greensmecapt.paths import PROJECT_ROOT
 from greensmecapt.storage.documents import (
     DocumentStorage,
     DocumentStorageError,
@@ -25,7 +26,7 @@ def storage_from_environment() -> DocumentStorage:
         return LocalDocumentStorage(
             os.environ.get(
                 "GREENSMECAPT_STORAGE_ROOT",
-                "./data/documents",
+                str(PROJECT_ROOT / "data" / "documents"),
             )
         )
 
