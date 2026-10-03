@@ -1034,6 +1034,11 @@ def create_app(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
             ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
 
         mime_type = file.content_type or ""
 
@@ -1305,13 +1310,19 @@ def create_app(
     ) -> DocumentProcessingResult:
         _require_sme_access(principal, sme_id)
         repository = GreenSMERepository(session)
-        _require_document_for_sme(
-            repository=repository,
-            document_id=document_id,
-            sme_id=sme_id,
-        )
 
         try:
+            application = ApplicationRepository(session).get(sme_id)
+            _require_application_data_mutable(
+                principal=principal,
+                application=application,
+                allow_reviewer=True,
+            )
+            _require_document_for_sme(
+                repository=repository,
+                document_id=document_id,
+                sme_id=sme_id,
+            )
             return processing_service.process(
                 repository=repository,
                 document_id=document_id,
@@ -1358,13 +1369,19 @@ def create_app(
 
         _require_sme_access(principal, sme_id)
         repository = GreenSMERepository(session)
-        _require_document_for_sme(
-            repository=repository,
-            document_id=document_id,
-            sme_id=sme_id,
-        )
 
         try:
+            application = ApplicationRepository(session).get(sme_id)
+            _require_application_data_mutable(
+                principal=principal,
+                application=application,
+                allow_reviewer=True,
+            )
+            _require_document_for_sme(
+                repository=repository,
+                document_id=document_id,
+                sme_id=sme_id,
+            )
             job = repository.enqueue_document_processing(
                 document_id=document_id,
                 actor_id=principal.user_id,
@@ -1372,6 +1389,11 @@ def create_app(
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
 
@@ -1515,10 +1537,21 @@ def create_app(
         repository = GreenSMERepository(session)
 
         try:
+            application = ApplicationRepository(session).get(sme_id)
+            _require_application_data_mutable(
+                principal=principal,
+                application=application,
+                allow_reviewer=True,
+            )
             job = repository.get_document_processing_job(job_id)
         except PersistenceNotFoundError as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(error),
+            ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
                 detail=str(error),
             ) from error
 

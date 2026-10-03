@@ -709,6 +709,11 @@ def build_assessment_router(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(error),
             ) from error
+        except PersistenceConflictError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(error),
+            ) from error
 
     @router.delete(
         "/runs/{run_id}",

@@ -186,7 +186,16 @@ export function ApprovedComparisonPage() {
         {!companies.length && (
           <div className="empty-state">
             <strong>No companies are available</strong>
-            <p>Approved SMEs will appear here for comparison.</p>
+            <p>
+              {role === 'investor'
+                ? 'Published SME assessment profiles will appear here.'
+                : 'No SME currently has an approved and published assessment profile. Prepare and publish at least two profiles before comparing them.'}
+            </p>
+            {role !== 'investor' && (
+              <Link className="secondary-button" to="/assessments/profiles">
+                Prepare assessment profiles
+              </Link>
+            )}
           </div>
         )}
       </section>

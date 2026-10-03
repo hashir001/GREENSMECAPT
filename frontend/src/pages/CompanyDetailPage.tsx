@@ -198,6 +198,23 @@ export function CompanyDetailPage() {
     'changes_requested',
     'withdrawn',
   ])
+  const reviewerDocumentMutableStatuses = new Set([
+    'submitted',
+    'under_review',
+    'changes_requested',
+  ])
+  const applicationDocumentsMutable = Boolean(
+    application
+    && (
+      permissions.role === 'admin'
+        ? documentMutableStatuses.has(application.status)
+        : permissions.role === 'reviewer'
+          ? reviewerDocumentMutableStatuses.has(application.status)
+          : permissions.role === 'sme_user'
+            ? mutableStatuses.has(application.status)
+            : false
+    ),
+  )
   const canEditSME = Boolean(
     application
     && permissions.canUpdateSMEs
@@ -208,10 +225,24 @@ export function CompanyDetailPage() {
     ),
   )
   const canDeleteDocuments = Boolean(
-    application
-    && permissions.canDeleteDocuments
-    && documentMutableStatuses.has(application.status),
+    permissions.canDeleteDocuments
+    && applicationDocumentsMutable,
   )
+  const canUploadDocuments = Boolean(
+    permissions.canUploadDocuments
+    && applicationDocumentsMutable,
+  )
+  const canProcessDocuments = Boolean(
+    permissions.canProcessDocuments
+    && applicationDocumentsMutable,
+  )
+  const uploadDisabledReason = !permissions.canUploadDocuments
+    ? 'Your role can view documents but cannot upload them.'
+    : application?.status === 'approved' || application?.status === 'published'
+      ? `This application is ${application.status}. Use “Request changes” before adding or reprocessing evidence.`
+      : application
+        ? `Document changes are locked while this application is ${application.status.replaceAll('_', ' ')}.`
+        : 'The application record is unavailable.'
   const canDeleteWorkspace = Boolean(
     application
     && permissions.canDeleteSMEs
@@ -493,8 +524,8 @@ export function CompanyDetailPage() {
       )}
 
       <div className="workspace-grid">
-        <DocumentUploadPanel smeId={smeId} applicationRevision={application?.revision ?? 1} disabled={!permissions.canUploadDocuments || !canDeleteDocuments} onCompleted={uploadCompleted} />
-        <DocumentList documents={record.documents} processing={processing} jobs={jobs} canProcess={permissions.canProcessDocuments} canDelete={canDeleteDocuments} busyId={busyId} selectedDocumentId={selectedDocumentId} onInspect={setSelectedDocumentId} onProcess={(documentId) => { setSelectedDocumentId(documentId); void processDocument(documentId) }} onDelete={(documentId) => { setReason(''); setDeleteDocumentId(documentId) }} />
+        <DocumentUploadPanel smeId={smeId} applicationRevision={application?.revision ?? 1} disabled={!canUploadDocuments} disabledReason={uploadDisabledReason} onCompleted={uploadCompleted} />
+        <DocumentList documents={record.documents} processing={processing} jobs={jobs} canProcess={canProcessDocuments} canDelete={canDeleteDocuments} busyId={busyId} selectedDocumentId={selectedDocumentId} onInspect={setSelectedDocumentId} onProcess={(documentId) => { setSelectedDocumentId(documentId); void processDocument(documentId) }} onDelete={(documentId) => { setReason(''); setDeleteDocumentId(documentId) }} />
       </div>
 
       <DocumentIntelligencePanel
@@ -503,7 +534,7 @@ export function CompanyDetailPage() {
         processing={selectedDocument ? processing[selectedDocument.document_id] : undefined}
         progress={selectedDocument ? jobs[selectedDocument.document_id] : undefined}
         busy={selectedDocument ? busyId === selectedDocument.document_id : false}
-        canProcess={permissions.canProcessDocuments}
+        canProcess={canProcessDocuments}
         onProcess={(documentId) => void processDocument(documentId)}
         onRefresh={() => void load()}
       />

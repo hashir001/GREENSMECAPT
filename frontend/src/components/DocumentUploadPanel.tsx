@@ -38,10 +38,11 @@ type DocumentUploadPanelProps = {
   smeId: string
   applicationRevision: number
   disabled?: boolean
+  disabledReason?: string
   onCompleted: (result?: DocumentProcessingResult) => void | Promise<void>
 }
 
-export function DocumentUploadPanel({ smeId, applicationRevision, disabled = false, onCompleted }: DocumentUploadPanelProps) {
+export function DocumentUploadPanel({ smeId, applicationRevision, disabled = false, disabledReason, onCompleted }: DocumentUploadPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [documentType, setDocumentType] = useState('sustainability_report')
@@ -76,6 +77,7 @@ export function DocumentUploadPanel({ smeId, applicationRevision, disabled = fal
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()
     setDragging(false)
+    if (disabled) return
     chooseFile(event.dataTransfer.files[0])
   }
 
@@ -136,15 +138,16 @@ export function DocumentUploadPanel({ smeId, applicationRevision, disabled = fal
 
       <div
         className={`dropzone ${dragging ? 'dropzone--active' : ''}`}
-        onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
+        onDragEnter={(event) => { event.preventDefault(); if (!disabled) setDragging(true) }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => { if (!disabled) inputRef.current?.click() }}
         role="button"
-        tabIndex={0}
+        aria-disabled={disabled}
+        tabIndex={disabled ? -1 : 0}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') inputRef.current?.click()
+          if (!disabled && (event.key === 'Enter' || event.key === ' ')) inputRef.current?.click()
         }}
       >
         <span className="dropzone__icon"><UploadCloud size={25} /></span>
@@ -155,6 +158,7 @@ export function DocumentUploadPanel({ smeId, applicationRevision, disabled = fal
           type="file"
           accept={acceptedTypes}
           hidden
+          disabled={disabled}
           onChange={(event) => chooseFile(event.target.files?.[0])}
         />
       </div>
@@ -174,7 +178,7 @@ export function DocumentUploadPanel({ smeId, applicationRevision, disabled = fal
 
       <label className="field-label">
         Document type
-        <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+        <select disabled={disabled} value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
           {documentTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
         </select>
       </label>
@@ -202,7 +206,7 @@ export function DocumentUploadPanel({ smeId, applicationRevision, disabled = fal
           {busy ? phase === 'uploading' ? 'Uploading securely…' : 'Reading and extracting…' : 'Upload and analyse'}
         </button>
       )}
-      {disabled && <div className="permission-note">Your role can view documents but cannot upload them.</div>}
+      {disabled && <div className="permission-note">{disabledReason ?? 'Your role can view documents but cannot upload them.'}</div>}
     </form>
   )
 }

@@ -15,7 +15,7 @@ import { Link } from 'react-router-dom'
 import { MetricCard } from '../components/MetricCard'
 import { RankingChart } from '../components/RankingChart'
 import { StatusPill } from '../components/StatusPill'
-import { api } from '../lib/api'
+import { ApiError, api } from '../lib/api'
 import { usePermissions } from '../auth/usePermissions'
 import type {
   AssessmentRunRecord,
@@ -53,19 +53,31 @@ function PortfolioDashboard({ role }: { role: string | null }) {
   const [state, setState] = useState(initialState)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
     setError('')
+    setNotice('')
 
     try {
       const [smes, runs] = await Promise.all([
         api.listSMEs(),
         api.listAssessmentRuns(),
       ])
-      const latestRun = runs[0]
-        ? await api.getAssessmentRun(runs[0].run_id)
-        : null
+      let latestRun: AssessmentRunRecord | null = null
+
+      if (runs[0]) {
+        try {
+          latestRun = await api.getAssessmentRun(runs[0].run_id)
+        } catch (caught: unknown) {
+          if (caught instanceof ApiError && caught.status === 409) {
+            setNotice(caught.message)
+          } else {
+            throw caught
+          }
+        }
+      }
 
       setState({ smes, runs, latestRun })
     } catch (caught) {
@@ -129,6 +141,13 @@ function PortfolioDashboard({ role }: { role: string | null }) {
           <button type="button" onClick={() => void loadDashboard()}>
             Try again
           </button>
+        </div>
+      )}
+
+      {notice && (
+        <div className="comparison-assurance">
+          <FileCheck2 size={18} />
+          <span>{notice}</span>
         </div>
       )}
 

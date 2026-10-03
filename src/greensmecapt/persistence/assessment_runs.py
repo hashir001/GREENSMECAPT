@@ -3,7 +3,7 @@
 import json
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlmodel import Field as SQLField
 from sqlmodel import Session, SQLModel, select
 
@@ -217,7 +217,17 @@ def _summary_from_row(row: AssessmentRunRow) -> AssessmentRunSummary:
 def _record_from_row(row: AssessmentRunRow) -> AssessmentRunRecord:
     summary = _summary_from_row(row)
 
+    try:
+        result = CohortAssessmentResult.model_validate_json(row.result_json)
+    except ValidationError as error:
+        raise PersistenceConflictError(
+            f"Assessment run {row.run_id!r} was created with an older "
+            "assessment model and cannot be displayed by the current "
+            "version. Delete it and create a new comparison from published "
+            "assessment profiles."
+        ) from error
+
     return AssessmentRunRecord(
         **summary.model_dump(),
-        result=CohortAssessmentResult.model_validate_json(row.result_json),
+        result=result,
     )
