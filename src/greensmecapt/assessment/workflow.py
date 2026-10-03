@@ -101,7 +101,6 @@ from greensmecapt.domain import (
     EvidenceValidationStatus,
     StructuredInvestmentRecord,
 )
-from greensmecapt.paths import configured_path
 
 
 class AssessmentWorkflowError(ValueError):
@@ -319,31 +318,35 @@ class AssessmentWorkflow:
         readiness_result_path = configured.get("GREENSMECAPT_READINESS_DEMATEL_RESULT")
         return cls(
             assessment_policy=load_policy(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_ASSESSMENT_POLICY",
-                    "config/assessment_profiles.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_ASSESSMENT_POLICY",
+                        "config/assessment_profiles.development.json",
+                    )
                 )
             ),
             normalization_policy=load_normalization_policy(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_NORMALIZATION_POLICY",
-                    "config/normalization_policy.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_NORMALIZATION_POLICY",
+                        "config/normalization_policy.development.json",
+                    )
                 )
             ),
             financial_policy=load_financial_policy(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_FINANCIAL_POLICY",
-                    "config/financial_assessment.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_FINANCIAL_POLICY",
+                        "config/financial_assessment.development.json",
+                    )
                 )
             ),
             readiness_specification=load_dematel_specification(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_READINESS_SPECIFICATION",
-                    "config/dematel_specification.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_READINESS_SPECIFICATION",
+                        "config/dematel_specification.development.json",
+                    )
                 )
             ),
             readiness_dematel_result=(
@@ -352,31 +355,35 @@ class AssessmentWorkflow:
                 else None
             ),
             metric_catalog=load_metric_catalog(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_METRIC_CATALOG",
-                    "config/metric_catalog.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_METRIC_CATALOG",
+                        "config/metric_catalog.development.json",
+                    )
                 )
             ),
             evidence_strength_policy=load_evidence_strength_policy(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_EVIDENCE_STRENGTH_POLICY",
-                    "config/evidence_strength.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_EVIDENCE_STRENGTH_POLICY",
+                        "config/evidence_strength.development.json",
+                    )
                 )
             ),
             electre_configuration=load_electre_configuration(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_ELECTRE_CONFIGURATION",
-                    "config/electre_iii.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_ELECTRE_CONFIGURATION",
+                        "config/electre_iii.development.json",
+                    )
                 )
             ),
             calibration_manifest=load_calibration_manifest(
-                configured_path(
-                    configured,
-                    "GREENSMECAPT_MCDM_CALIBRATION",
-                    "config/mcdm_calibration.development.json",
+                Path(
+                    configured.get(
+                        "GREENSMECAPT_MCDM_CALIBRATION",
+                        "config/mcdm_calibration.development.json",
+                    )
                 )
             ),
         )

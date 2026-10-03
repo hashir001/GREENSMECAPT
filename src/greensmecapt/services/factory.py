@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 
 from greensmecapt.assessment.fuzzy_dematel import (
     DematelSpecification,
@@ -42,7 +43,6 @@ from greensmecapt.document_intelligence.vision import (
     OpenAICompatibleVisualProvider,
     VisualUnderstandingService,
 )
-from greensmecapt.paths import configured_path
 from greensmecapt.services.document_processing import (
     StoredDocumentProcessingService,
 )
@@ -61,31 +61,35 @@ def build_document_processing_service(
     """Build OCR, deterministic NLP and optional LLM extraction."""
 
     configured_environment = environment if environment is not None else os.environ
-    catalog_path = configured_path(
-        configured_environment,
-        "GREENSMECAPT_METRIC_CATALOG",
-        "config/metric_catalog.development.json",
+    catalog_path = Path(
+        configured_environment.get(
+            "GREENSMECAPT_METRIC_CATALOG",
+            ("config/metric_catalog.development.json"),
+        )
     )
     catalog = load_metric_catalog(catalog_path)
     intelligent_service = _intelligent_service_from_environment(
         configured_environment,
         policy=load_policy(
-            configured_path(
-                configured_environment,
-                "GREENSMECAPT_ASSESSMENT_POLICY",
-                "config/assessment_profiles.development.json",
+            Path(
+                configured_environment.get(
+                    "GREENSMECAPT_ASSESSMENT_POLICY",
+                    "config/assessment_profiles.development.json",
+                )
             )
         ),
-        company_policy_path=configured_path(
-            configured_environment,
-            "GREENSMECAPT_COMPANY_INTELLIGENCE_POLICY",
-            "config/company_intelligence.development.json",
+        company_policy_path=Path(
+            configured_environment.get(
+                "GREENSMECAPT_COMPANY_INTELLIGENCE_POLICY",
+                "config/company_intelligence.development.json",
+            )
         ),
         readiness_specification=load_dematel_specification(
-            configured_path(
-                configured_environment,
-                "GREENSMECAPT_READINESS_SPECIFICATION",
-                "config/dematel_specification.development.json",
+            Path(
+                configured_environment.get(
+                    "GREENSMECAPT_READINESS_SPECIFICATION",
+                    "config/dematel_specification.development.json",
+                )
             )
         ),
     )
