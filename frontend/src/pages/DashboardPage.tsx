@@ -67,16 +67,24 @@ function PortfolioDashboard({ role }: { role: string | null }) {
       ])
       let latestRun: AssessmentRunRecord | null = null
 
-      if (runs[0]) {
+      let incompatibleRunCount = 0
+      for (const run of runs) {
         try {
-          latestRun = await api.getAssessmentRun(runs[0].run_id)
+          latestRun = await api.getAssessmentRun(run.run_id)
+          break
         } catch (caught: unknown) {
           if (caught instanceof ApiError && caught.status === 409) {
-            setNotice(caught.message)
+            incompatibleRunCount += 1
           } else {
             throw caught
           }
         }
+      }
+
+      if (incompatibleRunCount > 0) {
+        setNotice(
+          `${incompatibleRunCount} saved comparison${incompatibleRunCount === 1 ? '' : 's'} use an older assessment model. Delete and recreate ${incompatibleRunCount === 1 ? 'it' : 'them'} from published profiles.`,
+        )
       }
 
       setState({ smes, runs, latestRun })
