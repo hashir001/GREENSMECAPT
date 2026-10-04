@@ -11,7 +11,10 @@ from greensmecapt.document_intelligence.semantics import (
     MetricDimension,
     MetricValueNature,
 )
-from greensmecapt.domain import EvidenceItem, EvidenceValidationStatus
+from greensmecapt.assessment.evidence_eligibility import (
+    is_current_reviewed_evidence,
+)
+from greensmecapt.domain import EvidenceItem
 
 NonBlank = Annotated[str, Field(min_length=1)]
 
@@ -119,7 +122,7 @@ def build_performance_context_profile(
     accepted = [
         item
         for item in evidence_items
-        if item.validation_status is EvidenceValidationStatus.ACCEPTED
+        if is_current_reviewed_evidence(item)
     ]
     return EnvironmentalPerformanceContextProfile(
         sme_id=sme_id,

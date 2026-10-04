@@ -15,6 +15,10 @@ from greensmecapt.assessment.observations.models import (
     ObservationStatus,
     ResponseKind,
 )
+from greensmecapt.assessment.evidence_eligibility import (
+    describes_current_state,
+    is_reviewed_evidence,
+)
 from greensmecapt.assessment.profiles.models import (
     Applicability,
     AssessmentProfile,
@@ -220,8 +224,7 @@ def _build_one(
 ) -> CriterionObservation:
     if decision.status is Applicability.NOT_APPLICABLE:
         if responses or any(
-            item.validation_status
-            is EvidenceValidationStatus.ACCEPTED
+            is_reviewed_evidence(item)
             for item in evidence_items
         ):
             return _state(
@@ -271,9 +274,10 @@ def _build_one(
     accepted = [
         item
         for item in evidence_items
-        if (
-            item.validation_status
-            is EvidenceValidationStatus.ACCEPTED
+        if is_reviewed_evidence(item)
+        and (
+            decision.scoring_role != "performance_criterion"
+            or describes_current_state(item)
         )
     ]
     pending = [
@@ -621,8 +625,7 @@ def _attach_response_support(
         evidence_id
         for response in responses
         for evidence_id in response.supporting_evidence_ids
-        if evidence_by_id[evidence_id].validation_status
-        is EvidenceValidationStatus.ACCEPTED
+        if is_reviewed_evidence(evidence_by_id[evidence_id])
     }
     if not cited:
         return observation

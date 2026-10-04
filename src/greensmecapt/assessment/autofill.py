@@ -22,12 +22,11 @@ from greensmecapt.document_intelligence.semantics import (
     MetricDimension,
     MetricValueNature,
 )
-from greensmecapt.domain import (
-    EvidenceClaimNature,
-    EvidenceItem,
-    EvidenceValidationStatus,
-    StructuredInvestmentRecord,
+from greensmecapt.assessment.evidence_eligibility import (
+    describes_current_state,
+    is_reviewed_evidence,
 )
+from greensmecapt.domain import EvidenceItem, StructuredInvestmentRecord
 
 NonBlank = Annotated[str, Field(min_length=1)]
 
@@ -77,7 +76,7 @@ def build_assessment_autofill(
     accepted = tuple(
         item
         for item in record.evidence_items
-        if item.validation_status is EvidenceValidationStatus.ACCEPTED
+        if is_reviewed_evidence(item)
     )
     grouped: dict[str, list[EvidenceItem]] = defaultdict(list)
     for item in accepted:
@@ -323,10 +322,7 @@ def _is_number(value: object) -> bool:
 def _describes_current_state(item: EvidenceItem) -> bool:
     """Prevent targets and forecasts from becoming current performance facts."""
 
-    return item.claim_nature not in {
-        EvidenceClaimNature.TARGET,
-        EvidenceClaimNature.PROJECTED,
-    }
+    return describes_current_state(item)
 
 
 def _conflict_gap(

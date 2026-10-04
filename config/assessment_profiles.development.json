@@ -1,6 +1,6 @@
 {
   "policy_id": "greensmecapt_activity_profiles",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "development",
   "description": "Development routing policy separating environmental performance, SME financial health and readiness/context evidence. Activity modules route assessment topics; they are not DEMATEL driver domains and do not themselves score applicants.",
   "fact_questions": {
@@ -173,8 +173,7 @@
       "when": {
         "any_true": [
           "burns_fuel_on_site",
-          "operates_vehicle_fleet",
-          "manufactures_or_processes"
+          "operates_vehicle_fleet"
         ]
       },
       "question": "What can you share about fuel use or process emissions: a calculation, fuel records, an approximate range, or an explanation of what is not measured?",

@@ -53,6 +53,10 @@ from greensmecapt.assessment.green_score import (
     GreenScoreResult,
     calculate_green_score,
 )
+from greensmecapt.assessment.evidence_eligibility import (
+    is_current_reviewed_evidence,
+    is_reviewed_evidence,
+)
 from greensmecapt.assessment.normalization import (
     NormalizationPolicy,
     NormalizedAssessmentInputs,
@@ -98,7 +102,6 @@ from greensmecapt.document_intelligence.semantics import (
 from greensmecapt.domain import (
     DocumentType,
     EvidenceItem,
-    EvidenceValidationStatus,
     StructuredInvestmentRecord,
 )
 
@@ -674,11 +677,11 @@ class AssessmentWorkflow:
                 source_id=evidence.evidence_id,
                 source_class=source_class,
                 confirmed=(
-                    evidence.validation_status is EvidenceValidationStatus.ACCEPTED
+                    is_reviewed_evidence(evidence)
                 ),
                 classification_basis=(
                     f"accepted_extraction_from:{document_label}"
-                    if evidence.validation_status is EvidenceValidationStatus.ACCEPTED
+                    if is_reviewed_evidence(evidence)
                     else f"unconfirmed_extraction_from:{document_label}"
                 ),
             )
@@ -805,8 +808,7 @@ def _merge_reviewed_activity_facts(
         prefix = "activity_fact:"
 
         if (
-            evidence.validation_status
-            is not EvidenceValidationStatus.ACCEPTED
+            not is_current_reviewed_evidence(evidence)
             or not evidence.indicator_id.startswith(prefix)
         ):
             continue

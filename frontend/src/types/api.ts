@@ -611,6 +611,7 @@ export type PreparedAssessment = {
       title: string
       output: 'green' | 'financial' | 'context'
       scoring_role: string
+      requirement: 'core' | 'conditional' | 'optional' | 'informational'
       status: 'applicable' | 'not_applicable' | 'uncertain'
       missing_facts: string[]
       reason: string

@@ -10,9 +10,11 @@ from greensmecapt.assessment.input_models import (
     ResolvedIndicator,
     SMEAssessmentInput,
 )
+from greensmecapt.assessment.evidence_eligibility import (
+    is_current_reviewed_evidence,
+)
 from greensmecapt.domain import (
     EvidenceItem,
-    EvidenceValidationStatus,
     StructuredInvestmentRecord,
 )
 
@@ -85,8 +87,7 @@ class AssessmentInputBuilder:
             (
                 evidence
                 for evidence in candidates
-                if evidence.validation_status
-                is EvidenceValidationStatus.ACCEPTED
+                if is_current_reviewed_evidence(evidence)
             ),
             key=lambda evidence: evidence.evidence_id,
         )

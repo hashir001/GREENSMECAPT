@@ -10,7 +10,11 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from greensmecapt.domain import EvidenceItem, EvidenceValidationStatus
+from greensmecapt.assessment.evidence_eligibility import (
+    describes_current_state,
+    is_reviewed_evidence,
+)
+from greensmecapt.domain import EvidenceItem
 
 NonBlank = Annotated[str, Field(min_length=1)]
 
@@ -249,11 +253,15 @@ def build_financial_assessment(
 
     evidence_by_metric: dict[str, list[EvidenceItem]] = defaultdict(list)
     for evidence in evidence_items:
+        definition = definitions.get(evidence.indicator_id)
+        if definition is None or not is_reviewed_evidence(evidence):
+            continue
         if (
-            evidence.validation_status is EvidenceValidationStatus.ACCEPTED
-            and evidence.indicator_id in definitions
+            definition.role is FinancialMetricRole.SOURCE_INPUT
+            and not describes_current_state(evidence)
         ):
-            evidence_by_metric[evidence.indicator_id].append(evidence)
+            continue
+        evidence_by_metric[evidence.indicator_id].append(evidence)
 
     resolved = tuple(
         _resolve_metric(

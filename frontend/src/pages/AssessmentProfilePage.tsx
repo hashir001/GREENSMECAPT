@@ -30,6 +30,7 @@ export function AssessmentProfilePage() {
   const [sector, setSector] = useState('')
   const [stage, setStage] = useState('')
   const [fundingPurpose, setFundingPurpose] = useState('')
+  const [autoPrepared, setAutoPrepared] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -90,6 +91,17 @@ export function AssessmentProfilePage() {
   async function refreshStatus() {
     setStatus(await api.getAssessmentProfileStatus(smeId))
   }
+
+  useEffect(() => {
+    if (!submission || autoPrepared) return
+    setAutoPrepared(true)
+    setBusy(true)
+    setError('')
+    void api.prepareAssessment(submission)
+      .then(setPrepared)
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Profile could not be prepared.'))
+      .finally(() => setBusy(false))
+  }, [autoPrepared, submission])
 
   async function prepare() {
     if (!submission) return
@@ -180,8 +192,17 @@ export function AssessmentProfilePage() {
         {autofill.gaps.map((gap) => <div className="review-note" key={`${gap.code}:${gap.field_id}`}><strong>{gap.field_id.replaceAll('_', ' ')}</strong><span>{gap.message}</span></div>)}
       </section>}
 
+      {prepared && <section className="panel builder-panel">
+        <h2>2. Activity-based applicability</h2>
+        <p>The system includes only criteria supported by the company’s actual activities. Excluded criteria do not become zero scores.</p>
+        {prepared.profile.decisions.map((decision) => <div className="review-note" key={decision.criterion_id}>
+          <strong>{decision.title}</strong>
+          <span>{decision.status.replaceAll('_', ' ')} · {decision.requirement} · {decision.reason}</span>
+        </div>)}
+      </section>}
+
       {prepared && unresolvedFacts.length > 0 && <section className="panel builder-panel">
-        <h2>2. Resolve applicability</h2>
+        <h2>3. Resolve only missing applicability</h2>
         <p>These are the only unanswered facts currently affecting criterion applicability.</p>
         {unresolvedFacts.map((factId) => <div className="builder-field" key={factId}>
           <strong>{configuration.assessment_policy.fact_questions[factId] ?? factId}</strong>
@@ -193,7 +214,7 @@ export function AssessmentProfilePage() {
       </section>}
 
       {prepared && unresolvedScores.length > 0 && <section className="panel builder-panel">
-        <h2>3. Resolve environmental performance</h2>
+        <h2>4. Resolve environmental performance</h2>
         {unresolvedScores.map((criterion) => <article className="financial-metric" key={criterion.criterion_id}>
           <label className="builder-field">{criterion.title}
             <select value={ratings[criterion.criterion_id] ?? ''} onChange={(event) => setRatings((current) => ({ ...current, [criterion.criterion_id]: event.target.value }))}>
@@ -212,7 +233,7 @@ export function AssessmentProfilePage() {
       </section>}
 
       {prepared && <section className="panel builder-panel">
-        <h2>4. Governed output</h2>
+        <h2>5. Governed output</h2>
         <div className="comparison-assurance"><Eye size={18} /><span>Green Score: {prepared.green_score?.score ?? 'withheld'} / 100 · {prepared.green_score?.status ?? 'blocked'} · coverage {Math.round((prepared.green_score?.coverage_ratio ?? 0) * 100)}%</span></div>
         <p>Financial assessment: {prepared.financial_assessment.status} · Readiness factors: {prepared.readiness_profile.factors.length} · Evidence strength remains separate from performance.</p>
         {unsupportedCriteria.length > 0 && <div className="error-banner">Accepted source evidence is still required for: {unsupportedCriteria.map((item) => item.title).join(', ')}.</div>}
