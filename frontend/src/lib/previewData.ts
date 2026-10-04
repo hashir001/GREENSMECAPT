@@ -128,13 +128,14 @@ const previewCriteria: AssessmentConfiguration['assessment_policy']['criteria'] 
 
 export const previewAssessmentConfiguration: AssessmentConfiguration = {
   assessment_policy: {
-    policy_id: 'greensmecapt_activity_profiles', version: '1.0.0', status: 'development',
+    policy_id: 'greensmecapt_activity_profiles', version: '1.1.0', status: 'development',
     description: 'Activity-led routing for proportionate green SME assessment.', fact_questions: factQuestions,
     criteria: previewCriteria,
   },
   normalization_policy: {
-    policy_id: 'greensmecapt_normalization', version: '0.4.0', status: 'development',
+    policy_id: 'greensmecapt_normalization', version: '0.5.0', status: 'development',
     weight_source: 'model_informed_development_weights_pending_expert_calibration', minimum_coverage_ratio: 0.6,
+    linguistic_anchor_source: 'development_evidence_rubrics_pending_expert_calibration',
     green_score_method: 'weighted_centroid',
     applicability_weight_rule: 'renormalize_applicable',
     incomplete_score_rule: 'withhold_below_minimum_otherwise_provisional',
@@ -147,7 +148,14 @@ export const previewAssessmentConfiguration: AssessmentConfiguration = {
       ['green_contribution', 0.24], ['direct_operational_emissions', 0.13],
       ['purchased_energy_management', 0.12], ['resource_use_and_recovery', 0.16],
       ['customer_environmental_effect', 0.22],
-    ].map(([criterion_id, base_weight]) => ({ criterion_id: String(criterion_id), base_weight: Number(base_weight), allow_linguistic: true })),
+    ].map(([criterion_id, base_weight]) => ({
+      criterion_id: String(criterion_id), base_weight: Number(base_weight), allow_linguistic: true,
+      linguistic_anchors: {
+        very_low: 'No achieved performance is evidenced.', low: 'Limited achieved performance is evidenced.',
+        medium: 'Documented performance is evidenced.', high: 'Strong comparable performance is evidenced.',
+        very_high: 'Sustained leading comparable performance is evidenced.',
+      },
+    })),
   },
   financial_policy: {
     policy_id: 'greensmecapt_financial_assessment', version: '2.0.0', status: 'development',

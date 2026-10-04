@@ -145,11 +145,16 @@ export function AssessmentProfilePage() {
     && !readyStatuses.has(observations.get(item.criterion_id)?.status ?? '')
   )) ?? []
   const scale = configuration ? Object.keys(configuration.normalization_policy.default_linguistic_scale) : []
+  const normalizationRules = new Map(configuration?.normalization_policy.rules.map((rule) => [rule.criterion_id, rule]) ?? [])
   const finalScore = prepared?.green_score?.status === 'final'
   const unsupportedCriteria = prepared?.green_score?.criteria.filter((item) => (
     item.applicability === 'applicable' && item.resolved && item.evidence_ids.length === 0
   )) ?? []
-  const acceptedEvidence = record?.evidence_items.filter((item) => item.validation_status === 'accepted') ?? []
+  const acceptedEvidence = record?.evidence_items.filter((item) => (
+    item.validation_status === 'accepted'
+    && !['correction_proposed', 'not_applicable'].includes(item.sme_verification.status)
+    && !['target', 'projected'].includes(item.claim_nature)
+  )) ?? []
 
   function toggleRatingSource(criterionId: string, evidenceId: string) {
     setRatingSources((current) => {
@@ -222,6 +227,10 @@ export function AssessmentProfilePage() {
               {scale.map((value) => <option value={value} key={value}>{value.replaceAll('_', ' ')}</option>)}
             </select>
           </label>
+          <div className="review-note">
+            <strong>Evidence anchor</strong>
+            <span>{ratings[criterion.criterion_id] ? normalizationRules.get(criterion.criterion_id)?.linguistic_anchors[ratings[criterion.criterion_id]] : 'Choose a rating only after matching accepted current-performance evidence to the governed criterion anchor.'}</span>
+          </div>
           <div className="builder-field"><strong>Accepted evidence supporting this rating</strong>
             {[...acceptedEvidence].sort((first, second) => Number(second.criterion_id === criterion.criterion_id) - Number(first.criterion_id === criterion.criterion_id)).map((item) => <label className="evidence-select" key={item.evidence_id}>
               <input type="checkbox" checked={(ratingSources[criterion.criterion_id] ?? []).includes(item.evidence_id)} onChange={() => toggleRatingSource(criterion.criterion_id, item.evidence_id)} />

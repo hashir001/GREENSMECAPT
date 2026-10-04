@@ -1,8 +1,9 @@
 {
   "policy_id": "greensmecapt_normalization",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "status": "development",
   "weight_source": "model_informed_performance_weights_independent_of_dematel_pending_expert_calibration",
+  "linguistic_anchor_source": "development_evidence_rubrics_pending_expert_calibration",
   "green_score_method": "weighted_centroid",
   "applicability_weight_rule": "renormalize_applicable",
   "incomplete_score_rule": "withhold_below_minimum_otherwise_provisional",
@@ -38,17 +39,38 @@
     {
       "criterion_id": "green_contribution",
       "base_weight": 0.24,
-      "allow_linguistic": true
+      "allow_linguistic": true,
+      "linguistic_anchors": {
+        "very_low": "A green label or intention is stated, but no specific environmental mechanism or achieved outcome is evidenced.",
+        "low": "A plausible environmental mechanism is described, with limited source support and no demonstrated outcome.",
+        "medium": "The activity and environmental mechanism are documented, with at least one traceable output or implementation record.",
+        "high": "Achieved environmental outcomes are supported by traceable records and a credible baseline, period or comparison context.",
+        "very_high": "Strong achieved outcomes are demonstrated repeatedly across material operations or deployments with complete comparison context."
+      }
     },
     {
       "criterion_id": "direct_operational_emissions",
       "base_weight": 0.13,
-      "allow_linguistic": true
+      "allow_linguistic": true,
+      "linguistic_anchors": {
+        "very_low": "Material direct-emission sources are unmanaged or evidenced as worsening, with no credible measurement or control.",
+        "low": "Direct-emission sources are identified and partly managed, but coverage or reduction evidence is weak.",
+        "medium": "Material sources are measured or credibly estimated and routine controls are documented.",
+        "high": "Comparable records demonstrate meaningful reductions or strong control across the relevant reporting scope.",
+        "very_high": "Comprehensive comparable evidence demonstrates sustained, material direct-emission reduction across the applicable scope."
+      }
     },
     {
       "criterion_id": "purchased_energy_management",
       "base_weight": 0.12,
       "allow_linguistic": true,
+      "linguistic_anchors": {
+        "very_low": "Purchased energy is unmanaged, with no credible usage visibility or renewable sourcing evidence.",
+        "low": "Basic bills or supplier information exist, but monitoring, efficiency action or renewable sourcing is limited.",
+        "medium": "Usage is tracked for the relevant scope and at least one documented efficiency or sourcing measure is operating.",
+        "high": "Comparable evidence shows material efficiency improvement or substantial renewable sourcing across the applicable scope.",
+        "very_high": "Complete comparable evidence shows sustained high renewable sourcing and/or leading energy performance across the applicable scope."
+      },
       "numeric_scale": {
         "lower_bound": 0,
         "upper_bound": 100,
@@ -64,12 +86,26 @@
     {
       "criterion_id": "resource_use_and_recovery",
       "base_weight": 0.16,
-      "allow_linguistic": true
+      "allow_linguistic": true,
+      "linguistic_anchors": {
+        "very_low": "Material water, material or waste flows are unmanaged or evidenced as worsening.",
+        "low": "Relevant flows are identified, but records are partial and prevention or recovery action is limited.",
+        "medium": "Material flows are tracked and documented prevention, reuse, recycling or recovery practices are operating.",
+        "high": "Comparable evidence demonstrates meaningful reduction, efficiency or recovery improvement for material flows.",
+        "very_high": "Complete comparable evidence demonstrates sustained leading resource efficiency or circular recovery across the applicable scope."
+      }
     },
     {
       "criterion_id": "customer_environmental_effect",
       "base_weight": 0.22,
-      "allow_linguistic": true
+      "allow_linguistic": true,
+      "linguistic_anchors": {
+        "very_low": "Only an intended customer benefit is asserted; no deployment, baseline or achieved effect is evidenced.",
+        "low": "A credible benefit mechanism and early deployment evidence exist, but achieved effects remain weakly evidenced.",
+        "medium": "At least one deployment or pilot has traceable achieved environmental results and a stated basis.",
+        "high": "Multiple deployments or material customer activity show comparable achieved environmental effects.",
+        "very_high": "Strong, repeated and well-grounded customer environmental effects are demonstrated across a material deployment base."
+      }
     }
   ]
 }

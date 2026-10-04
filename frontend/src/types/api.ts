@@ -356,6 +356,7 @@ export type AssessmentConfiguration = {
     version: string
     status: string
     weight_source: string
+    linguistic_anchor_source: string
     green_score_method: 'weighted_centroid'
     applicability_weight_rule: 'renormalize_applicable'
     incomplete_score_rule: 'withhold_below_minimum_otherwise_provisional'
@@ -369,6 +370,7 @@ export type AssessmentConfiguration = {
       criterion_id: string
       base_weight: number
       allow_linguistic: boolean
+      linguistic_anchors: Record<string, string>
     }>
   }
   financial_policy: {

@@ -80,6 +80,7 @@ class CriterionNormalizationRule(NormalizationModel):
     criterion_id: NonBlank
     base_weight: float = Field(gt=0.0)
     allow_linguistic: StrictBool = False
+    linguistic_anchors: dict[NonBlank, NonBlank] = Field(default_factory=dict)
     numeric_scale: NumericScale | None = None
 
     @model_validator(mode="after")
@@ -88,6 +89,8 @@ class CriterionNormalizationRule(NormalizationModel):
             raise ValueError(
                 "A rule requires a linguistic or numeric input route."
             )
+        if not self.allow_linguistic and self.linguistic_anchors:
+            raise ValueError("Linguistic anchors require a linguistic input route.")
         return self
 
 
@@ -98,6 +101,7 @@ class NormalizationPolicy(NormalizationModel):
     version: NonBlank
     status: str = "development"
     weight_source: NonBlank
+    linguistic_anchor_source: NonBlank
     green_score_method: Literal["weighted_centroid"] = "weighted_centroid"
     applicability_weight_rule: Literal["renormalize_applicable"] = (
         "renormalize_applicable"
@@ -132,6 +136,16 @@ class NormalizationPolicy(NormalizationModel):
             raise ValueError(
                 "Linguistic labels must be case-insensitively unique."
             )
+
+        expected_labels = {label.casefold() for label in self.default_linguistic_scale}
+        for rule in self.rules:
+            if rule.allow_linguistic and {
+                label.casefold() for label in rule.linguistic_anchors
+            } != expected_labels:
+                raise ValueError(
+                    f"Linguistic anchors for {rule.criterion_id!r} must cover "
+                    "the complete default linguistic scale."
+                )
 
         return self
 
