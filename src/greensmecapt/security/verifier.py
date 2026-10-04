@@ -104,6 +104,15 @@ class SupabaseJWTVerifier:
             )
         except AuthenticationError:
             raise
+        except jwt.ExpiredSignatureError as error:
+            raise AuthenticationError(
+                "The access token has expired. Sign in again; if a fresh token "
+                "fails immediately, verify the computer's UTC clock."
+            ) from error
+        except jwt.ImmatureSignatureError as error:
+            raise AuthenticationError(
+                "The access token is not valid yet. Verify the computer's UTC clock."
+            ) from error
         except Exception as error:
             raise AuthenticationError(
                 "The access token is invalid or expired."

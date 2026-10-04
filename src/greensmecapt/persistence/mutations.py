@@ -341,6 +341,53 @@ class DestructiveMutationRepository:
         self._finish(commit)
         return registrations
 
+    def purge_platform_data(
+        self,
+        *,
+        commit: bool = True,
+    ) -> tuple[tuple[StoredDocumentRegistration, ...], dict[str, int]]:
+        """Remove all application data while preserving identities and schema."""
+
+        documents = self._session.exec(select(DocumentRow)).all()
+        registrations = tuple(
+            StoredDocumentRegistration(
+                document=_document_from_row(row),
+                storage_key=row.storage_key,
+            )
+            for row in documents
+            if row.storage_key is not None
+        )
+
+        bind = self._session.get_bind()
+        existing_tables = set(inspect(bind).get_table_names())
+        # Child-to-parent ordering keeps this portable across current and older
+        # Supabase schemas without touching auth.users or migration metadata.
+        deletion_order = (
+            "assessment_runs",
+            "sme_assessment_profile_publications",
+            "sme_assessment_profile_revisions",
+            "sme_assessment_profiles",
+            "financial_submissions",
+            "document_batch_checkpoints",
+            "evidence_items",
+            "document_processing_jobs",
+            "document_processing",
+            "documents",
+            "sme_applications",
+            "audit_events",
+            "smes",
+        )
+        deleted: dict[str, int] = {}
+
+        for table in deletion_order:
+            if table not in existing_tables:
+                continue
+            result = self._session.execute(text(f"delete from {table}"))
+            deleted[table] = result.rowcount or 0
+
+        self._finish(commit)
+        return registrations, deleted
+
     def _finish(self, commit: bool) -> None:
         try:
             if commit:

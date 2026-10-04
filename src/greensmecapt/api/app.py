@@ -9,6 +9,7 @@ from typing import Annotated, Self
 from urllib.parse import quote
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -97,6 +98,11 @@ from greensmecapt.storage import (
     DocumentStorageError,
     storage_from_environment,
 )
+
+# Load the repository's environment consistently whether Uvicorn is launched
+# from the repository root, the frontend directory, or an IDE task. Existing
+# process/production variables always take precedence.
+load_dotenv(Path(__file__).resolve().parents[3] / ".env", override=False)
 
 _MAXIMUM_UPLOAD_BYTES = 20 * 1024 * 1024
 _ALLOWED_MIME_TYPES = frozenset(
@@ -243,6 +249,25 @@ class DestructiveMutationRequest(BaseModel):
 
     expected_application_revision: int = Field(ge=1)
     reason: str = Field(min_length=1)
+
+
+class PlatformResetRequest(BaseModel):
+    """Require an exact phrase for a platform-wide destructive reset."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    confirmation: str = Field(pattern=r"^RESET GREENSMECAPT$")
+
+
+class PlatformResetResponse(BaseModel):
+    """Summarize a completed reset without exposing infrastructure details."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    deleted_rows: dict[str, int]
+    deleted_storage_objects: int = Field(ge=0)
+    storage_deletion_failures: int = Field(ge=0)
+    authentication_users_preserved: bool = True
 
 
 class SMEUpdateResponse(BaseModel):
@@ -653,6 +678,48 @@ def create_app(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(error),
             ) from error
+
+    @app.post(
+        "/admin/platform-data/reset",
+        response_model=PlatformResetResponse,
+    )
+    def reset_platform_data(
+        request: PlatformResetRequest,
+        session: Annotated[Session, Depends(get_session)],
+        principal: Annotated[
+            AuthPrincipal,
+            Depends(require_roles(ApplicationRole.ADMIN)),
+        ],
+    ) -> PlatformResetResponse:
+        """Clear application records and files while preserving login users."""
+
+        del request, principal
+
+        try:
+            registrations, deleted_rows = DestructiveMutationRepository(
+                session
+            ).purge_platform_data(commit=False)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+
+        deleted_storage_objects = 0
+        storage_deletion_failures = 0
+        for registration in registrations:
+            try:
+                storage_backend.delete(registration.storage_key)
+                deleted_storage_objects += 1
+            except DocumentStorageError:
+                # Database reset has completed. A missing or legacy object must
+                # not make the application appear partially reset.
+                storage_deletion_failures += 1
+
+        return PlatformResetResponse(
+            deleted_rows=deleted_rows,
+            deleted_storage_objects=deleted_storage_objects,
+            storage_deletion_failures=storage_deletion_failures,
+        )
 
     @app.post(
         "/system/providers/semantic/check",

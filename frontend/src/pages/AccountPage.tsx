@@ -8,9 +8,11 @@ import {
   ScanText,
   ShieldCheck,
   Table2,
+  Trash2,
   UserPlus,
   UserRound,
   Users,
+  X,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
@@ -64,6 +66,11 @@ export function AccountPage() {
   const [identityNotice, setIdentityNotice] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<ApplicationRole>('reviewer')
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetConfirmation, setResetConfirmation] = useState('')
+  const [resetBusy, setResetBusy] = useState(false)
+  const [resetError, setResetError] = useState('')
+  const [resetNotice, setResetNotice] = useState('')
   const rawAssignments = user?.app_metadata.sme_ids
   const assignments = Array.isArray(rawAssignments)
     ? rawAssignments.filter((value): value is string => typeof value === 'string')
@@ -229,8 +236,80 @@ export function AccountPage() {
     }
   }
 
+  function closeResetDialog() {
+    if (resetBusy) return
+    setResetOpen(false)
+    setResetConfirmation('')
+    setResetError('')
+  }
+
+  async function handlePlatformReset() {
+    if (resetConfirmation !== 'RESET GREENSMECAPT') return
+    setResetBusy(true)
+    setResetError('')
+    setResetNotice('')
+
+    try {
+      const result = await api.resetPlatformData(resetConfirmation)
+      const deletedRows = Object.values(result.deleted_rows)
+        .reduce((total, count) => total + count, 0)
+      setResetOpen(false)
+      setResetConfirmation('')
+      setResetNotice(
+        `Platform data cleared: ${deletedRows} database rows and ${result.deleted_storage_objects} files removed. Login accounts were preserved.${result.storage_deletion_failures ? ` ${result.storage_deletion_failures} legacy storage objects could not be found or removed.` : ''}`,
+      )
+    } catch (caught) {
+      setResetError(
+        caught instanceof Error ? caught.message : 'Platform data could not be cleared.',
+      )
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
   return (
     <>
+      {resetOpen && (
+        <div className="company-create-backdrop" role="presentation" onMouseDown={closeResetDialog}>
+          <div
+            className="company-create-dialog destructive-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="platform-reset-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span className="eyebrow">Permanent platform reset</span>
+                <h2 id="platform-reset-title">Clear all application data?</h2>
+                <p>SMEs, documents, extracted evidence, profiles, financial submissions, comparisons and audit history will be deleted. Login accounts and roles remain.</p>
+              </div>
+              <button className="icon-button" type="button" aria-label="Close reset dialog" disabled={resetBusy} onClick={closeResetDialog}>
+                <X size={17} />
+              </button>
+            </header>
+            <div className="destructive-dialog__body">
+              <label className="builder-field">
+                Type RESET GREENSMECAPT to confirm
+                <input
+                  autoFocus
+                  autoComplete="off"
+                  value={resetConfirmation}
+                  onChange={(event) => setResetConfirmation(event.target.value)}
+                />
+              </label>
+              {resetError && <div className="form-error">{resetError}</div>}
+            </div>
+            <footer>
+              <button className="secondary-button" type="button" disabled={resetBusy} onClick={closeResetDialog}>Cancel</button>
+              <button className="danger-button" type="button" disabled={resetBusy || resetConfirmation !== 'RESET GREENSMECAPT'} onClick={() => void handlePlatformReset()}>
+                {resetBusy ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />}
+                {resetBusy ? 'Clearing…' : 'Clear all platform data'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
       <section className="page-heading">
         <div>
           <span className="eyebrow">Account security</span>
@@ -417,6 +496,23 @@ export function AccountPage() {
                 <div className="account-preview-note">No Supabase users were returned.</div>
               )}
             </div>
+          </article>
+        )}
+
+        {role === 'admin' && (
+          <article className="panel account-card account-card--wide account-danger-zone">
+            <div className="panel__header">
+              <div>
+                <span className="eyebrow">Demo reset</span>
+                <h2>Platform data</h2>
+                <p>Return the application to a clean state without deleting Supabase login accounts or role assignments.</p>
+              </div>
+              <span className="account-card__icon account-card__icon--danger"><Trash2 size={21} /></span>
+            </div>
+            {resetNotice && <div className="form-success">{resetNotice}</div>}
+            <button className="danger-button" type="button" onClick={() => { setResetError(''); setResetOpen(true) }}>
+              <Trash2 size={16} /> Clear all platform data
+            </button>
           </article>
         )}
       </section>

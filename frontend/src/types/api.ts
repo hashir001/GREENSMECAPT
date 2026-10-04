@@ -290,6 +290,13 @@ export type ManagedUser = {
   last_sign_in_at: string | null
 }
 
+export type PlatformResetResult = {
+  deleted_rows: Record<string, number>
+  deleted_storage_objects: number
+  storage_deletion_failures: number
+  authentication_users_preserved: boolean
+}
+
 export type SemanticProviderConnection = {
   provider_name: string
   provider_version: string

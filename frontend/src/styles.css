@@ -837,6 +837,29 @@ tbody tr:last-child td { border-bottom: 0; }tbody tr:hover { background: #fbfcfb
   grid-column: 1 / -1;
 }
 
+.account-danger-zone {
+  border-color: #efd1cb;
+  background: linear-gradient(145deg, #fff, #fff8f6);
+}
+
+.account-danger-zone .panel__header p {
+  max-width: 760px;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.55;
+}
+
+.account-danger-zone > .danger-button {
+  margin-top: 18px;
+}
+
+.account-card__icon--danger {
+  color: #a74434;
+  background: #fff0ed;
+  border-color: #efc8c1;
+}
+
 .capability-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

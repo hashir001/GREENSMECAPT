@@ -19,6 +19,7 @@ import type {
   FinancialSubmission,
   ApplicationRole,
   ManagedUser,
+  PlatformResetResult,
   SME,
   SMEApplication,
   ApplicationStatus,
@@ -124,7 +125,19 @@ async function authenticatedRequest(
     },
   )
 
-  if (response.status === 401 && supabase) {
+  let authenticationIsUnconfigured = false
+  if (response.status === 401) {
+    try {
+      const payload = await response.clone().json() as { detail?: string }
+      authenticationIsUnconfigured = (
+        payload.detail === 'Authentication has not been configured.'
+      )
+    } catch {
+      // A non-JSON 401 can still be a stale access token and should refresh.
+    }
+  }
+
+  if (response.status === 401 && supabase && !authenticationIsUnconfigured) {
     const { data, error } = await supabase.auth.refreshSession()
 
     if (!error && data.session?.access_token) {
@@ -504,6 +517,14 @@ export const api = {
         role,
         sme_ids: smeIds,
       }),
+    },
+  ),
+
+  resetPlatformData: (confirmation: string) => apiRequest<PlatformResetResult>(
+    '/admin/platform-data/reset',
+    {
+      method: 'POST',
+      body: JSON.stringify({ confirmation }),
     },
   ),
 
