@@ -42,3 +42,7 @@ After deployment:
 Application changes are redeployed by rebuilding the affected container. Data
 and documents remain in Supabase, so frontend or backend releases do not erase
 them.
+
+For the prepared Cloudflare Pages + Google Cloud Run release procedure, use
+`docs/production_deployment_runbook.md`.
+

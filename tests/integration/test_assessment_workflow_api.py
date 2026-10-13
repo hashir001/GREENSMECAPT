@@ -1,10 +1,17 @@
 """Integration tests for assessment preparation and comparison routes."""
 
+from hashlib import sha256
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from greensmecapt.api import create_app
+from greensmecapt.domain import (
+    EvidenceItem,
+    EvidenceValidationStatus,
+    SourceDocument,
+)
+from greensmecapt.persistence import GreenSMERepository
 from greensmecapt.security import (
     ApplicationRole,
     AuthenticationError,
@@ -107,6 +114,40 @@ def _approve_and_publish(
     sme_id: str,
     rating: str,
 ) -> None:
+    content = f"Green contribution assessed as {rating}.".encode()
+    document = SourceDocument(
+        document_id=f"document_{sme_id}_green_contribution",
+        sme_id=sme_id,
+        file_name="green-contribution-evidence.txt",
+        mime_type="text/plain",
+        sha256=sha256(content).hexdigest(),
+    )
+    evidence = EvidenceItem(
+        evidence_id=f"evidence_{sme_id}_green_contribution",
+        sme_id=sme_id,
+        document_id=document.document_id,
+        indicator_id="green_contribution",
+        criterion_id="green_contribution",
+        raw_value=rating,
+        normalized_value=rating,
+        source_locator="page 1",
+        source_excerpt=content.decode(),
+        extraction_method="test_fixture",
+        extractor_name="assessment_workflow_api_test",
+        validation_status=EvidenceValidationStatus.ACCEPTED,
+    )
+    with client.app.state.database.session() as session:
+        repository = GreenSMERepository(session)
+        record = repository.get_record(sme_id)
+        repository.save_record(
+            record.model_copy(
+                update={
+                    "documents": (*record.documents, document),
+                    "evidence_items": (*record.evidence_items, evidence),
+                }
+            )
+        )
+
     revision = 1
     for target_status in ("submitted", "under_review", "approved"):
         transition = client.patch(
@@ -191,7 +232,7 @@ def test_compare_smes_through_api(tmp_path: Path) -> None:
     assert preparation["financial_assessment"]["status"] == "insufficient"
     assert preparation["financial_assessment"]["aggregate_score"] is None
     assert len(preparation["readiness_profile"]["factors"]) == 7
-    assert preparation["readiness_profile"]["causal_results_available"] is False
+    assert preparation["readiness_profile"]["causal_results_available"] is True
     assert preparation["performance_context"]["metric_catalog_version"] == "2.0.0"
     assert preparation["evidence_strength"]["performance_separation"] is True
     assert len(preparation["evidence_strength"]["dimensions"]) == 4

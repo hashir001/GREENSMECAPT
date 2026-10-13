@@ -364,7 +364,7 @@ function SMEDashboard() {
 function ExpertDashboard() {
   return <>
     <section className="page-heading"><div><span className="eyebrow">Expert workspace</span><h1>DEMATEL calibration</h1><p>Your expert interface is isolated from SME, reviewer and investor data.</p></div></section>
-    <section className="panel empty-state"><span className="empty-state__icon"><Layers3 size={21} /></span><strong>Expert study awaiting activation</strong><p>The confirmed four driver domains and seven operational subdrivers are ready. Pairwise judgments stay unavailable until the expert study is approved—no values are fabricated.</p></section>
+    <section className="panel empty-state"><span className="empty-state__icon"><Layers3 size={21} /></span><strong>Expert study awaiting activation</strong><p>The four driver domains and seven operational subdrivers are ready. The development environment runs an explicitly labelled placeholder causal scenario; production remains uncalibrated until approved expert judgments replace it.</p></section>
   </>
 }
 

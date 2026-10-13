@@ -1,0 +1,25 @@
+{
+  "scenario_id": "greensmecapt_readiness_development_scenario_v1",
+  "specification_id": "greensmecapt_readiness_subdriver_dematel",
+  "specification_version": "1.1.0",
+  "status": "development_placeholder",
+  "description": "Replaceable demonstration relationships used to exercise causal readiness interpretation before expert calibration. These values are not research findings, expert judgments, Green Score weights, or MCDM performance weights.",
+  "factor_ids": [
+    "leadership_and_organisational_commitment",
+    "workforce_technical_capability_and_training",
+    "digital_data_and_ai_readiness",
+    "regulation_compliance_standards_and_certifications",
+    "institutional_support_and_implementation_guidance",
+    "customer_buyer_demand_competitiveness_and_reputation",
+    "green_finance_availability_grants_and_incentives"
+  ],
+  "linguistic_matrix": [
+    ["no_influence", "high", "high", "medium", "low", "medium", "medium"],
+    ["low", "no_influence", "high", "medium", "low", "medium", "low"],
+    ["low", "medium", "no_influence", "medium", "low", "medium", "medium"],
+    ["high", "medium", "medium", "no_influence", "high", "high", "high"],
+    ["medium", "high", "high", "high", "no_influence", "medium", "high"],
+    ["high", "medium", "medium", "medium", "medium", "no_influence", "medium"],
+    ["medium", "high", "high", "medium", "medium", "medium", "no_influence"]
+  ]
+}

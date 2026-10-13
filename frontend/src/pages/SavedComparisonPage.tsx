@@ -148,7 +148,7 @@ function SavedResult({ run, selected, names }: { run: AssessmentRunRecord; selec
         <div><strong>Robustness</strong><p>{run.result.robustness?.warnings.length ? run.result.robustness.warnings.join(' ') : `${run.result.robustness?.completed_scenarios ?? 0} sensitivity scenarios completed without a stored warning.`}</p></div>
       </div>
       <div className="weight-list">{Object.entries(weights).sort(([, left], [, right]) => right - left).map(([criterion, weight]) => <div key={criterion}><span>{humanize(criterion)}</span><div><i style={{ width: `${weight * 100}%` }} /></div><strong>{percent(weight)}</strong></div>)}</div>
-      <small className="saved-comparison-disclaimer">TOPSIS values are relative to this saved cohort. Financial coverage is completeness—not financial performance. Readiness remains contextual until DEMATEL expert calibration exists.</small>
+      <small className="saved-comparison-disclaimer">TOPSIS values are relative to this saved cohort. Financial coverage is completeness—not financial performance. Readiness is contextual; development causal results are placeholders until expert calibration replaces them.</small>
     </section>
   </section>
 }

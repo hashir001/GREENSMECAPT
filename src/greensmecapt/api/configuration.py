@@ -96,6 +96,7 @@ def validate_deployment_environment(
 
     _validate_provider_key(configured, "SEMANTIC")
     _validate_provider_key(configured, "VISUAL")
+    _validate_google_pipeline(configured)
 
 
 def cors_origins_from_environment() -> tuple[str, ...]:
@@ -169,3 +170,51 @@ def _validate_provider_key(
             f"{provider_kind.title()} provider key is not available in its "
             "configured environment variable."
         )
+
+
+def _validate_google_pipeline(environment: Mapping[str, str]) -> None:
+    """Fail before startup when the selected Google pipeline is incomplete."""
+
+    if (
+        environment.get("GREENSMECAPT_STRUCTURED_OCR_PROVIDER", "")
+        .strip()
+        .casefold()
+        == "google_document_ai"
+    ):
+        required = (
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_LOCATION",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_OCR_PROCESSOR_ID",
+        )
+        missing = tuple(name for name in required if not environment.get(name))
+        if missing:
+            raise DeploymentConfigurationError(
+                "Google Document AI configuration is missing: "
+                + ", ".join(missing)
+                + "."
+            )
+
+    if (
+        environment.get("GREENSMECAPT_SEMANTIC_PROVIDER", "")
+        .strip()
+        .casefold()
+        == "vertex_gemini"
+    ):
+        project_id = environment.get("GREENSMECAPT_VERTEX_PROJECT_ID") or environment.get(
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID"
+        )
+        if not project_id:
+            raise DeploymentConfigurationError(
+                "Vertex Gemini requires GREENSMECAPT_VERTEX_PROJECT_ID or "
+                "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID."
+            )
+        if environment.get("GREENSMECAPT_SEMANTIC_ALLOW_REMOTE", "false").casefold() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            raise DeploymentConfigurationError(
+                "Vertex Gemini remote transmission must be explicitly approved."
+            )
+

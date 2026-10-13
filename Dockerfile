@@ -13,7 +13,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir .
+    && python -m pip install --no-cache-dir ".[google-document-ai,vertex-semantic]"
 
 COPY config ./config
 
@@ -26,3 +26,4 @@ USER greensmecapt
 EXPOSE 8000
 
 CMD ["sh", "-c", "uvicorn greensmecapt.api.app:app --host 0.0.0.0 --port ${PORT}"]
+

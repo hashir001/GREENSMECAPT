@@ -115,3 +115,28 @@ def test_require_remote_provider_key_in_production() -> None:
 
     with pytest.raises(DeploymentConfigurationError, match="provider key"):
         validate_deployment_environment(environment)
+
+
+def test_require_selected_google_document_ai_configuration() -> None:
+    environment = _production_environment()
+    environment["GREENSMECAPT_STRUCTURED_OCR_PROVIDER"] = "google_document_ai"
+
+    with pytest.raises(DeploymentConfigurationError, match="Document AI"):
+        validate_deployment_environment(environment)
+
+
+def test_accept_vertex_pipeline_with_adc_configuration() -> None:
+    environment = _production_environment()
+    environment.update(
+        {
+            "GREENSMECAPT_STRUCTURED_OCR_PROVIDER": "google_document_ai",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_PROJECT_ID": "greensmecapt",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_LOCATION": "eu",
+            "GREENSMECAPT_GOOGLE_DOCUMENT_AI_OCR_PROCESSOR_ID": "processor-1",
+            "GREENSMECAPT_SEMANTIC_PROVIDER": "vertex_gemini",
+            "GREENSMECAPT_SEMANTIC_ALLOW_REMOTE": "true",
+        }
+    )
+
+    validate_deployment_environment(environment)
+

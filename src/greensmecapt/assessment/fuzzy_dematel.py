@@ -110,6 +110,31 @@ class ExpertInfluenceAssessment(DematelModel):
     )
 
 
+class DevelopmentDematelScenario(DematelModel):
+    """Store an explicit, replaceable non-expert causal scenario."""
+
+    scenario_id: str = Field(min_length=1)
+    specification_id: str = Field(min_length=1)
+    specification_version: str = Field(min_length=1)
+    status: Literal["development_placeholder"] = "development_placeholder"
+    description: str = Field(min_length=1)
+    factor_ids: tuple[str, ...] = Field(min_length=2)
+    linguistic_matrix: tuple[tuple[str, ...], ...] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def validate_dimensions(self) -> Self:
+        size = len(self.factor_ids)
+        if len(self.factor_ids) != len(set(self.factor_ids)):
+            raise ValueError("Development scenario factor IDs must be unique.")
+        if len(self.linguistic_matrix) != size or any(
+            len(row) != size for row in self.linguistic_matrix
+        ):
+            raise ValueError(
+                "Development scenario matrix must be square and match factor_ids."
+            )
+        return self
+
+
 class DematelSpecification(DematelModel):
     """Define factors, stakeholder groups and linguistic meanings."""
 
@@ -350,6 +375,75 @@ def load_expert_assessments(
         ExpertInfluenceAssessment.model_validate(item)
         for item in data
     )
+
+
+def load_development_dematel_scenario(
+    path: str | Path,
+) -> DevelopmentDematelScenario:
+    """Load a compact, clearly labelled development-only causal scenario."""
+
+    data = json.loads(
+        Path(path).read_text(encoding="utf-8"),
+        object_pairs_hook=_unique_json_keys,
+    )
+    return DevelopmentDematelScenario.model_validate(data)
+
+
+def run_development_dematel_scenario(
+    specification: DematelSpecification,
+    scenario: DevelopmentDematelScenario,
+) -> FuzzyDematelResult:
+    """Evaluate a placeholder scenario through the production DEMATEL engine."""
+
+    if (
+        scenario.specification_id != specification.specification_id
+        or scenario.specification_version != specification.version
+    ):
+        raise FuzzyDematelError(
+            "Development DEMATEL scenario and specification must match."
+        )
+    if scenario.factor_ids != specification.factor_ids:
+        raise FuzzyDematelError(
+            "Development DEMATEL scenario factors must match the specification order."
+        )
+
+    scale_labels = {label.casefold() for label in specification.linguistic_scale}
+    diagonal_labels = {
+        label.casefold()
+        for label, influence in specification.linguistic_scale.items()
+        if influence.lower == influence.modal == influence.upper == 0.0
+    }
+    assessments: list[ExpertInfluenceAssessment] = []
+    for group_id in specification.stakeholder_groups:
+        judgments: list[InfluenceJudgment] = []
+        for row_index, source_id in enumerate(scenario.factor_ids):
+            for column_index, target_id in enumerate(scenario.factor_ids):
+                label = scenario.linguistic_matrix[row_index][column_index]
+                if label.casefold() not in scale_labels:
+                    raise FuzzyDematelError(
+                        f"Unknown development influence {label!r}."
+                    )
+                if source_id == target_id:
+                    if label.casefold() not in diagonal_labels:
+                        raise FuzzyDematelError(
+                            "Development DEMATEL diagonal values must mean no influence."
+                        )
+                    continue
+                judgments.append(
+                    InfluenceJudgment(
+                        source_factor_id=source_id,
+                        target_factor_id=target_id,
+                        linguistic_value=label,
+                    )
+                )
+        assessments.append(
+            ExpertInfluenceAssessment(
+                expert_id=f"development_scenario:{group_id}",
+                stakeholder_group=group_id,
+                judgments=tuple(judgments),
+            )
+        )
+    return run_fuzzy_dematel(specification, tuple(assessments))
 
 
 def run_fuzzy_dematel(

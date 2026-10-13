@@ -1,0 +1,71 @@
+{
+  "pack_id": "greensmecapt_conference_demo_pack_v1",
+  "purpose": "Fictional held-out demonstration and extraction evaluation pack",
+  "document_routes": {
+    "*_01_utility_bill_scanned.pdf": "Google Document AI OCR (image-only PDF)",
+    "*_02_sustainability_report_text.pdf": "native PDF parsing followed by Gemini schema-guided extraction",
+    "*_03_financial_and_funding_tables.pdf": "native PDF/table parsing followed by Gemini schema-guided extraction"
+  },
+  "companies": {
+    "terra_pack": {
+      "legal_name": "TerraPack Circular Industries LLC",
+      "sector": "moulded recycled-fibre food packaging manufacturing",
+      "authoritative_2025": {
+        "electricity_consumption_kwh": 410000,
+        "renewable_energy_share_percent": 72,
+        "water_consumption_m3": 5200,
+        "ghg_emissions_tco2e": 96.0,
+        "waste_generated_kg": 84000,
+        "waste_diversion_percent": 78,
+        "revenue_aed": 18600000,
+        "net_profit_aed": 1020000,
+        "total_assets_aed": 12000000,
+        "current_assets_aed": 4725000,
+        "current_liabilities_aed": 3500000,
+        "operating_cash_flow_aed": 1200000,
+        "total_debt_aed": 5040000,
+        "requested_amount_aed": 1300000,
+        "project_cost_aed": 1800000,
+        "expected_annual_savings_aed": 480000
+      },
+      "deliberate_conflict": {
+        "indicator": "electricity_consumption_kwh",
+        "utility_value": 410000,
+        "narrative_value": 408000,
+        "expected_resolution": "flag conflict; retain both source-linked claims pending review"
+      },
+      "out_of_schema_context": "1,250 m2 native planting",
+      "incomplete_claim": "11 percent recycled-input increase without baseline year or boundary"
+    },
+    "blue_mesa": {
+      "legal_name": "BlueMesa Sustainable Packaging LLC",
+      "sector": "moulded paper-fibre packaging manufacturing",
+      "authoritative_2025": {
+        "electricity_consumption_kwh": 690000,
+        "renewable_energy_share_percent": 28,
+        "water_consumption_m3": 9100,
+        "ghg_emissions_tco2e": 238.0,
+        "waste_generated_kg": 142000,
+        "waste_diversion_percent": 46,
+        "revenue_aed": 24000000,
+        "net_profit_aed": 1782000,
+        "total_assets_aed": 13500000,
+        "current_assets_aed": 6720000,
+        "current_liabilities_aed": 3200000,
+        "operating_cash_flow_aed": 3400000,
+        "total_debt_aed": 3240000,
+        "requested_amount_aed": 1200000,
+        "project_cost_aed": 2400000,
+        "expected_annual_savings_aed": 390000
+      },
+      "deliberate_conflict": {
+        "indicator": "electricity_consumption_kwh",
+        "utility_value": 690000,
+        "narrative_value": 705000,
+        "expected_resolution": "flag conflict; retain both source-linked claims pending review"
+      },
+      "out_of_schema_context": "38 employee suggestions; 14 trials",
+      "incomplete_claim": "11 percent recycled-input increase without baseline year or boundary"
+    }
+  }
+}

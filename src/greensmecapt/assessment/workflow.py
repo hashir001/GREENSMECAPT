@@ -21,6 +21,10 @@ from greensmecapt.assessment.electre_iii import (
     load_electre_configuration,
     run_electre_iii,
 )
+from greensmecapt.assessment.evidence_eligibility import (
+    is_current_reviewed_evidence,
+    is_reviewed_evidence,
+)
 from greensmecapt.assessment.evidence_strength import (
     EvidenceDimensionInput,
     EvidenceSourceClass,
@@ -44,6 +48,8 @@ from greensmecapt.assessment.fuzzy_dematel import (
     FuzzyDematelResult,
     load_dematel_result,
     load_dematel_specification,
+    load_development_dematel_scenario,
+    run_development_dematel_scenario,
 )
 from greensmecapt.assessment.fuzzy_topsis import (
     FuzzyTopsisResult,
@@ -52,10 +58,6 @@ from greensmecapt.assessment.fuzzy_topsis import (
 from greensmecapt.assessment.green_score import (
     GreenScoreResult,
     calculate_green_score,
-)
-from greensmecapt.assessment.evidence_eligibility import (
-    is_current_reviewed_evidence,
-    is_reviewed_evidence,
 )
 from greensmecapt.assessment.normalization import (
     NormalizationPolicy,
@@ -319,6 +321,32 @@ class AssessmentWorkflow:
         configured = environment if environment is not None else os.environ
 
         readiness_result_path = configured.get("GREENSMECAPT_READINESS_DEMATEL_RESULT")
+        runtime_environment = configured.get("GREENSMECAPT_ENV", "development")
+        readiness_specification = load_dematel_specification(
+            Path(
+                configured.get(
+                    "GREENSMECAPT_READINESS_SPECIFICATION",
+                    "config/dematel_specification.development.json",
+                )
+            )
+        )
+        readiness_dematel_result: FuzzyDematelResult | None = None
+        if readiness_result_path:
+            readiness_dematel_result = load_dematel_result(Path(readiness_result_path))
+        elif (
+            runtime_environment == "development"
+            or configured.get("GREENSMECAPT_READINESS_DEMATEL_SCENARIO")
+        ):
+            scenario_path = Path(
+                configured.get(
+                    "GREENSMECAPT_READINESS_DEMATEL_SCENARIO",
+                    "config/dematel_scenario.development.json",
+                )
+            )
+            readiness_dematel_result = run_development_dematel_scenario(
+                readiness_specification,
+                load_development_dematel_scenario(scenario_path),
+            )
         return cls(
             assessment_policy=load_policy(
                 Path(
@@ -344,19 +372,8 @@ class AssessmentWorkflow:
                     )
                 )
             ),
-            readiness_specification=load_dematel_specification(
-                Path(
-                    configured.get(
-                        "GREENSMECAPT_READINESS_SPECIFICATION",
-                        "config/dematel_specification.development.json",
-                    )
-                )
-            ),
-            readiness_dematel_result=(
-                load_dematel_result(Path(readiness_result_path))
-                if readiness_result_path
-                else None
-            ),
+            readiness_specification=readiness_specification,
+            readiness_dematel_result=readiness_dematel_result,
             metric_catalog=load_metric_catalog(
                 Path(
                     configured.get(

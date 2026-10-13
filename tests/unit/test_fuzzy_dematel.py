@@ -13,6 +13,8 @@ from greensmecapt.assessment.fuzzy_dematel import (
     InfluenceJudgment,
     StakeholderAggregation,
     load_dematel_specification,
+    load_development_dematel_scenario,
+    run_development_dematel_scenario,
     run_fuzzy_dematel,
 )
 
@@ -26,6 +28,11 @@ DRIVER_SPECIFICATION_PATH = (
     PROJECT_ROOT
     / "config"
     / "dematel_driver_specification.development.json"
+)
+DEVELOPMENT_SCENARIO_PATH = (
+    PROJECT_ROOT
+    / "config"
+    / "dematel_scenario.development.json"
 )
 
 
@@ -318,3 +325,22 @@ def test_load_project_driver_level_specification() -> None:
         specification.calibration_status
         == "requires_expert_calibration"
     )
+
+
+def test_run_explicit_development_scenario() -> None:
+    specification = load_dematel_specification(SPECIFICATION_PATH)
+    scenario = load_development_dematel_scenario(DEVELOPMENT_SCENARIO_PATH)
+
+    result = run_development_dematel_scenario(specification, scenario)
+
+    assert set(result.normalized_weights) == set(specification.factor_ids)
+    assert sum(result.normalized_weights.values()) == pytest.approx(1.0)
+    assert result.cause_factors
+    assert result.effect_factors
+    assert result.expert_ids == tuple(
+        sorted(
+            f"development_scenario:{group_id}"
+            for group_id in specification.stakeholder_groups
+        )
+    )
+

@@ -7,13 +7,13 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from greensmecapt.assessment.evidence_eligibility import (
+    is_current_reviewed_evidence,
+)
 from greensmecapt.assessment.fuzzy_dematel import (
     DematelFactorResult,
     DematelSpecification,
     FuzzyDematelResult,
-)
-from greensmecapt.assessment.evidence_eligibility import (
-    is_current_reviewed_evidence,
 )
 from greensmecapt.domain import EvidenceItem
 
@@ -185,6 +185,7 @@ def build_readiness_profile(
                     else ReadinessState.UNKNOWN
                 ),
                 influence=influence_by_factor.get(factor.factor_id),
+                calibration_status=specification.calibration_status,
             ),
             downstream_influences=downstream_by_factor.get(factor.factor_id, ()),
         )
@@ -299,6 +300,7 @@ def _factor_interpretation(
     *,
     state: ReadinessState,
     influence: DematelFactorResult | None,
+    calibration_status: str,
 ) -> str:
     state_text = {
         ReadinessState.ENABLING_EVIDENCE: "Accepted evidence indicates an enabling condition.",
@@ -312,8 +314,13 @@ def _factor_interpretation(
     }[state]
     if influence is None:
         return f"{state_text} Causal interpretation awaits expert DEMATEL calibration."
+    model_label = (
+        "calibrated DEMATEL model"
+        if calibration_status == "calibrated"
+        else "development DEMATEL scenario"
+    )
     return (
-        f"{state_text} The calibrated DEMATEL model identifies this factor as "
+        f"{state_text} The {model_label} identifies this factor as "
         f"{influence.role.value} with prominence {influence.prominence:.3f}."
     )
 

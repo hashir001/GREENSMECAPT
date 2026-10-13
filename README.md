@@ -10,7 +10,7 @@ The platform keeps three concepts separate:
 - **Assessment criteria:** the SME's environmental performance, financial health and transaction characteristics. These feed performance assessment and MCDM comparison.
 - **Measures and evidence:** electricity, water, waste, emissions, financial values and source documents. Measures support criteria only when their scope and comparison context are established.
 
-DEMATEL is a causal readiness-intelligence layer. It does not automatically generate Green Score weights. Pairwise relationships and the linguistic scale remain explicitly marked for expert calibration.
+DEMATEL is a causal readiness-intelligence layer. It does not automatically generate Green Score weights. Development runs use the explicitly labelled, replaceable scenario in `config/dematel_scenario.development.json`; production remains without causal results until an approved expert-calibrated result is configured.
 
 ## DEMATEL structure
 
@@ -20,7 +20,7 @@ The official drivers are Internal Factors, Government & Institutional Support, M
 - Subdriver-level DEMATEL: 7 factors and 42 directional judgments per expert.
 - Maximum when both are collected: 54 judgments per expert.
 
-The same Fuzzy DEMATEL mathematics is used at both levels. Results remain separate and are not multiplied into performance weights.
+The same Fuzzy DEMATEL mathematics is used at both levels. Results remain separate and are not multiplied into performance weights. The current application interprets applicant evidence at the seven-subdriver level; the four domains remain the official grouping and reporting layer.
 
 ## Current workflow
 
@@ -38,3 +38,4 @@ Applicant readiness records enabling, constraining, mixed, unknown, not-applicab
 Files under `config/` are versioned development contracts. Provisional weights, benchmarks and outranking thresholds are not presented as research findings. The deprecated DEMATEL-to-criterion mapping remains only for historical reproducibility and cannot be executed.
 
 See `docs/architecture.md` and `docs/readiness_and_performance.md` for system boundaries and unresolved calibration inputs.
+
