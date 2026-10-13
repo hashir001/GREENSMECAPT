@@ -13,7 +13,7 @@
   "artifacts": [
     {
       "artifact_id": "normalization_policy",
-      "artifact_version": "0.4.0",
+      "artifact_version": "0.5.0",
       "file_name": "normalization_policy.development.json",
       "purpose": "Criterion normalization and provisional criterion weights",
       "basis": "model_informed",

@@ -3,15 +3,15 @@
 from collections.abc import Sequence
 from math import isfinite
 
+from greensmecapt.assessment.evidence_eligibility import (
+    is_current_reviewed_evidence,
+)
 from greensmecapt.assessment.input_models import (
     AssessmentSpecification,
     IndicatorDefinition,
     InputStatus,
     ResolvedIndicator,
     SMEAssessmentInput,
-)
-from greensmecapt.assessment.evidence_eligibility import (
-    is_current_reviewed_evidence,
 )
 from greensmecapt.domain import (
     EvidenceItem,

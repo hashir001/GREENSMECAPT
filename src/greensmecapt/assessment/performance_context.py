@@ -6,13 +6,13 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from greensmecapt.assessment.evidence_eligibility import (
+    is_current_reviewed_evidence,
+)
 from greensmecapt.document_intelligence.semantics import (
     MetricCatalog,
     MetricDimension,
     MetricValueNature,
-)
-from greensmecapt.assessment.evidence_eligibility import (
-    is_current_reviewed_evidence,
 )
 from greensmecapt.domain import EvidenceItem
 

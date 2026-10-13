@@ -2,8 +2,7 @@
 
 from collections.abc import Callable, Iterator
 from datetime import datetime
-from typing import Literal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field

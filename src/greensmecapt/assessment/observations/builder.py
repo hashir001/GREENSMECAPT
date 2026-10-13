@@ -7,6 +7,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from greensmecapt.assessment.evidence_eligibility import (
+    describes_current_state,
+    is_reviewed_evidence,
+)
 from greensmecapt.assessment.observations.models import (
     CriterionObservation,
     CriterionResponse,
@@ -14,10 +18,6 @@ from greensmecapt.assessment.observations.models import (
     ObservationSet,
     ObservationStatus,
     ResponseKind,
-)
-from greensmecapt.assessment.evidence_eligibility import (
-    describes_current_state,
-    is_reviewed_evidence,
 )
 from greensmecapt.assessment.profiles.models import (
     Applicability,

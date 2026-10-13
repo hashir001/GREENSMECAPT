@@ -6,6 +6,7 @@ from contextlib import contextmanager
 
 from sqlmodel import Session, SQLModel, create_engine
 
+
 class Database:
     """Manage one SQLModel-compatible database."""
 

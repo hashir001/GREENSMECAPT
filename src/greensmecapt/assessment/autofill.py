@@ -5,6 +5,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from greensmecapt.assessment.evidence_eligibility import (
+    describes_current_state,
+    is_reviewed_evidence,
+)
 from greensmecapt.assessment.financial import (
     FinancialAssessmentPolicy,
     FinancialMetricRole,
@@ -21,10 +25,6 @@ from greensmecapt.document_intelligence.semantics import (
     MetricCatalog,
     MetricDimension,
     MetricValueNature,
-)
-from greensmecapt.assessment.evidence_eligibility import (
-    describes_current_state,
-    is_reviewed_evidence,
 )
 from greensmecapt.domain import EvidenceItem, StructuredInvestmentRecord
 
