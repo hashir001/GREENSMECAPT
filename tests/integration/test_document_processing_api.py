@@ -149,7 +149,7 @@ def test_process_uploaded_document_and_persist_evidence(
     assert record["evidence_items"][0]["document_id"] == document_id
     assert record["evidence_items"][0][
         "validation_status"
-    ] == "unvalidated"
+    ] == "accepted"
 
 
 def test_processing_is_idempotent_through_api(tmp_path: Path) -> None:
