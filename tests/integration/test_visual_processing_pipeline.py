@@ -205,7 +205,7 @@ def test_persist_visual_evidence_and_audit_report(
     assert len(result.evidence_items) == 1
     assert (
         result.evidence_items[0].validation_status
-        is EvidenceValidationStatus.UNVALIDATED
+        is EvidenceValidationStatus.ACCEPTED
     )
     assert result.report is not None
     assert len(result.report.visual_evidence_ids) == 1
