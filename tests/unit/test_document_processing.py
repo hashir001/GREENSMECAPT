@@ -29,9 +29,9 @@ from greensmecapt.document_intelligence.vision import (
     VisualUnderstandingService,
 )
 from greensmecapt.domain import (
+    SME,
     DocumentProcessingStatus,
     EvidenceValidationStatus,
-    SME,
     SourceDocument,
     StructuredInvestmentRecord,
 )
