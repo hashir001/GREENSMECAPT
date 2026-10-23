@@ -22,6 +22,7 @@ from greensmecapt.document_intelligence.readers import DocumentReadError
 from greensmecapt.document_intelligence.reconciliation import (
     EvidenceReconciliationReport,
     EvidenceReconciliationService,
+    ReconciliationStatus,
 )
 from greensmecapt.document_intelligence.semantics.intelligence import (
     SemanticProviderConnection,
@@ -49,6 +50,7 @@ from greensmecapt.domain import (
     DocumentProcessingState,
     DocumentProcessingStatus,
     EvidenceItem,
+    EvidenceValidationStatus,
     SourceDocument,
 )
 from greensmecapt.persistence import (
@@ -206,6 +208,15 @@ class StoredDocumentProcessingService:
                     visual_result=visual_result,
                 )
 
+            reconciliation = self._reconcile_with_existing_evidence(
+                repository=repository,
+                document=registration.document,
+                evidence_items=evidence_items,
+            )
+            evidence_items = _admit_source_grounded_evidence(
+                evidence_items=evidence_items,
+                reconciliation=reconciliation,
+            )
             reconciliation = self._reconcile_with_existing_evidence(
                 repository=repository,
                 document=registration.document,
@@ -435,6 +446,15 @@ class StoredDocumentProcessingService:
                 document=registration.document,
                 evidence_items=evidence_items,
             )
+            evidence_items = _admit_source_grounded_evidence(
+                evidence_items=evidence_items,
+                reconciliation=reconciliation,
+            )
+            reconciliation = self._reconcile_with_existing_evidence(
+                repository=repository,
+                document=registration.document,
+                evidence_items=evidence_items,
+            )
             state = repository.complete_document_processing(
                 document_id=document_id,
                 evidence_items=evidence_items,
@@ -548,6 +568,54 @@ def _reconcile(
         return None
 
     return service.reconcile(evidence_items)
+
+
+def _admit_source_grounded_evidence(
+    *,
+    evidence_items: tuple[EvidenceItem, ...],
+    reconciliation: EvidenceReconciliationReport | None,
+) -> tuple[EvidenceItem, ...]:
+    """Admit safe evidence while retaining exceptions for human review.
+
+    Admission means the extracted claim may enter the governed assessment
+    record. It does not mean the claim is independently verified, sufficient
+    for scoring, or free from later SME correction.
+    """
+
+    if reconciliation is None:
+        return evidence_items
+
+    blocked_ids = {
+        evidence_id
+        for cluster in reconciliation.clusters
+        if cluster.status
+        in {
+            ReconciliationStatus.CONFLICT,
+            ReconciliationStatus.CONTEXT_REQUIRED,
+            ReconciliationStatus.DUPLICATE_EXTRACTION,
+        }
+        for evidence_id in cluster.evidence_ids
+    }
+    unit_mismatch_indicators = set(
+        reconciliation.unit_mismatch_indicator_ids
+    )
+
+    return tuple(
+        evidence.model_copy(
+            update={
+                "validation_status": EvidenceValidationStatus.ACCEPTED,
+            }
+        )
+        if (
+            evidence.validation_status
+            is EvidenceValidationStatus.UNVALIDATED
+            and evidence.evidence_id not in blocked_ids
+            and evidence.indicator_id not in unit_mismatch_indicators
+            and bool(evidence.source_excerpt and evidence.source_excerpt.strip())
+        )
+        else evidence
+        for evidence in evidence_items
+    )
 
 
 def _planned_checkpoints(
@@ -840,3 +908,4 @@ def _failure_details(error: Exception) -> tuple[str, str]:
         "internal_processing_error",
         "Document processing failed unexpectedly.",
     )
+

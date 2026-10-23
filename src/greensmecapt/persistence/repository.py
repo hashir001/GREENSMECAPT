@@ -1001,6 +1001,33 @@ class GreenSMERepository:
         try:
             for evidence in evidence_items:
                 self._save_evidence(evidence)
+                if (
+                    evidence.validation_status
+                    is EvidenceValidationStatus.ACCEPTED
+                ):
+                    self._session.add(
+                        AuditEventRow(
+                            sme_id=evidence.sme_id,
+                            entity_type="evidence",
+                            entity_id=evidence.evidence_id,
+                            action="evidence_admitted_by_system",
+                            actor_id="system:document_processing",
+                            reason=(
+                                "Source-grounded, non-conflicting evidence "
+                                "passed automatic admission rules."
+                            ),
+                            new_value_json=json.dumps(
+                                {
+                                    "validation_status": (
+                                        EvidenceValidationStatus.ACCEPTED.value
+                                    ),
+                                    "admission_basis": (
+                                        "source_grounded_non_conflicting"
+                                    ),
+                                }
+                            ),
+                        )
+                    )
 
             row.status = DocumentProcessingStatus.COMPLETED.value
             row.evidence_count = len(evidence_items)
@@ -1781,3 +1808,4 @@ def _document_batch_signature(
         row.attempt_count,
         row.max_attempts,
     )
+

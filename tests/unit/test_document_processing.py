@@ -29,8 +29,9 @@ from greensmecapt.document_intelligence.vision import (
     VisualUnderstandingService,
 )
 from greensmecapt.domain import (
-    SME,
     DocumentProcessingStatus,
+    EvidenceValidationStatus,
+    SME,
     SourceDocument,
     StructuredInvestmentRecord,
 )
@@ -198,6 +199,10 @@ def test_process_stored_document_into_persisted_evidence(
     assert result.state.intelligent_provider_status == "disabled"
     assert len(result.evidence_items) == 1
     assert result.evidence_items[0].normalized_value == 72.0
+    assert (
+        result.evidence_items[0].validation_status
+        is EvidenceValidationStatus.ACCEPTED
+    )
     assert result.reconciliation is not None
 
     with database.session() as session:
@@ -331,3 +336,4 @@ def test_record_failure_and_allow_retry(tmp_path: Path) -> None:
     assert first_state.attempt_count == 1
     assert second_state.status is DocumentProcessingStatus.FAILED
     assert second_state.attempt_count == 2
+

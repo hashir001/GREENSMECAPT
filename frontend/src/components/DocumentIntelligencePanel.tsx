@@ -92,7 +92,7 @@ export function DocumentIntelligencePanel({
   const visualDecisions = report?.visual_understanding?.decisions ?? []
   const intelligenceClaims = report?.intelligence_claims ?? []
   const evidence = processing?.evidence_items ?? []
-  const pendingReview = evidence.filter(
+  const pendingExceptions = evidence.filter(
     (item) => item.validation_status === 'unvalidated',
   ).length
   const completedBatches = checkpoints.filter(
@@ -194,9 +194,9 @@ export function DocumentIntelligencePanel({
           state={processing?.reconciliation ? 'done' : 'pending'}
         />
         <PipelineStep
-          label="Human review"
-          detail={pendingReview ? `${pendingReview} decisions pending` : evidence.length ? 'Review complete' : 'No extracted evidence'}
-          state={pendingReview ? 'active' : evidence.length ? 'done' : 'pending'}
+          label="Evidence admission"
+          detail={pendingExceptions ? `${pendingExceptions} exceptions pending` : evidence.length ? 'Clean evidence admitted' : 'No extracted evidence'}
+          state={pendingExceptions ? 'active' : evidence.length ? 'done' : 'pending'}
         />
       </div>
 
@@ -300,7 +300,7 @@ export function DocumentIntelligencePanel({
           <div className="diagnostic-grid">
             <article><span>Rules and catalog</span><strong>{report.deterministic_evidence_ids.length}</strong><p>Deterministic, traceable metric matches.</p></article>
             <article><span>Language model</span><strong>{report.intelligent_evidence_ids.length}</strong><p>{report.intelligent_request_count} bounded request{report.intelligent_request_count === 1 ? '' : 's'} · metrics and varied wording.</p><StatusPill label={humanize(report.intelligent_provider_status)} tone={statusTone(report.intelligent_provider_status)} /></article>
-            <article><span>Activity & context</span><strong>{report.context_evidence_ids.length}</strong><p>Grounded qualitative facts awaiting human review.</p></article>
+            <article><span>Activity & context</span><strong>{report.context_evidence_ids.length}</strong><p>Grounded qualitative facts retained with their source.</p></article>
             <article><span>Visual understanding</span><strong>{report.visual_evidence_ids.length}</strong><p>Claims grounded in selected charts or diagrams.</p></article>
             <article><span>Rejected proposals</span><strong>{report.rejected_intelligent_claim_count}</strong><p>AI suggestions blocked by grounding or bounds.</p></article>
           </div>
@@ -373,3 +373,4 @@ function IntelligenceMetric({ icon: Icon, label, value, detail }: { icon: typeof
     </article>
   )
 }
+

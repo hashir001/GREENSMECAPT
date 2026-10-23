@@ -182,10 +182,20 @@ export function CompanyDetailPage() {
 
   const completedDocuments = Object.values(processing)
     .filter((result) => result.state.status === 'completed').length
-  const acceptedEvidence = record?.evidence_items
-    .filter((item) => item.validation_status === 'accepted').length ?? 0
-  const pendingEvidence = record?.evidence_items
-    .filter((item) => item.validation_status === 'unvalidated').length ?? 0
+  const attentionEvidenceIds = new Set([
+    ...conflictEvidenceIds,
+    ...(record?.evidence_items
+      .filter((item) => (
+        item.validation_status === 'unvalidated'
+        || item.sme_verification.status === 'correction_proposed'
+        || item.sme_verification.status === 'not_applicable'
+      ))
+      .map((item) => item.evidence_id) ?? []),
+  ])
+  const readyEvidence = record?.evidence_items.filter((item) => (
+    item.validation_status === 'accepted'
+    && !attentionEvidenceIds.has(item.evidence_id)
+  )).length ?? 0
   const selectedDocument = record?.documents.find(
     (document) => document.document_id === selectedDocumentId,
   ) ?? null
@@ -510,7 +520,7 @@ export function CompanyDetailPage() {
         <div className="company-hero__identity">
           <span className="company-hero__avatar"><Building2 size={28} /></span>
           <div>
-            <span className="eyebrow eyebrow--light">Evidence workspace</span>
+            <span className="eyebrow eyebrow--light">SME dossier workspace</span>
             <h1>{record.sme.legal_name}</h1>
             <p><span>{record.sme.sector}</span><span><MapPin size={14} /> {record.sme.jurisdiction}</span><span>{record.sme.sme_id}</span></p>
           </div>
@@ -523,21 +533,33 @@ export function CompanyDetailPage() {
         </div>
         <div className="company-hero__metrics">
           <div><FileStack size={18} /><strong>{record.documents.length}</strong><span>documents</span></div>
-          <div><ScanSearch size={18} /><strong>{record.evidence_items.length}</strong><span>evidence items</span></div>
-          <div><CheckCircle2 size={18} /><strong>{acceptedEvidence}</strong><span>accepted</span></div>
+          <div><ScanSearch size={18} /><strong>{record.evidence_items.length}</strong><span>extracted facts</span></div>
+          <div><CheckCircle2 size={18} /><strong>{readyEvidence}</strong><span>evidence ready</span></div>
         </div>
       </section>
 
       {error && <div className="error-banner"><span>{error}</span><button type="button" onClick={() => void load()}><RefreshCw size={13} /> Retry</button></div>}
 
-      {(conflictEvidenceIds.size > 0 || pendingEvidence > 0) && (
-        <div className="insight-banner">
-          <span className="insight-banner__icon"><AlertTriangle size={20} /></span>
+      {record.evidence_items.length > 0 && (
+        <div className={`insight-banner ${attentionEvidenceIds.size ? '' : 'insight-banner--ready'}`}>
+          <span className="insight-banner__icon">
+            {attentionEvidenceIds.size
+              ? <AlertTriangle size={20} />
+              : <CheckCircle2 size={20} />}
+          </span>
           <div>
-            <strong>{conflictEvidenceIds.size > 0 ? 'This record needs reviewer attention' : 'Evidence is ready for validation'}</strong>
-            <p>{conflictEvidenceIds.size > 0
-              ? `${conflictEvidenceIds.size} evidence item${conflictEvidenceIds.size === 1 ? '' : 's'} belong to conflicting or unclear contexts. Reviewers must resolve them explicitly; the system never auto-averages them.`
-              : `${pendingEvidence} extracted item${pendingEvidence === 1 ? ' is' : 's are'} waiting for a reviewer decision.`}</p>
+            <strong>
+              {attentionEvidenceIds.size
+                ? `${attentionEvidenceIds.size} item${attentionEvidenceIds.size === 1 ? '' : 's'} need attention`
+                : 'The dossier has no unresolved evidence exceptions'}
+            </strong>
+            <p>
+              {attentionEvidenceIds.size
+                ? permissions.role === 'sme_user'
+                  ? 'Check the flagged source data and confirm it, correct it or mark it not applicable.'
+                  : 'Only conflicts, missing source grounding and SME disputes require a reviewer decision.'
+                : `${readyEvidence} source-grounded item${readyEvidence === 1 ? '' : 's'} passed the evidence admission checks. Criterion scoring may still require periods, denominators or benchmarks.`}
+            </p>
           </div>
           <span className="insight-banner__stat">{completedDocuments}/{record.documents.length}<small>processed</small></span>
         </div>
@@ -548,16 +570,22 @@ export function CompanyDetailPage() {
         <DocumentList documents={record.documents} processing={processing} jobs={jobs} canProcess={canProcessDocuments} canDelete={canDeleteDocuments} busyId={busyId} selectedDocumentId={selectedDocumentId} onInspect={setSelectedDocumentId} onProcess={(documentId) => { setSelectedDocumentId(documentId); void processDocument(documentId) }} onDelete={(documentId) => { setReason(''); setDeleteDocumentId(documentId) }} />
       </div>
 
-      <DocumentIntelligencePanel
-        key={selectedDocument?.document_id ?? 'no-document'}
-        document={selectedDocument}
-        processing={selectedDocument ? processing[selectedDocument.document_id] : undefined}
-        progress={selectedDocument ? jobs[selectedDocument.document_id] : undefined}
-        busy={selectedDocument ? busyId === selectedDocument.document_id : false}
-        canProcess={canProcessDocuments}
-        onProcess={(documentId) => void processDocument(documentId)}
-        onRefresh={() => void load()}
-      />
+      <details className="advanced-processing">
+        <summary>
+          <span><ScanSearch size={16} /> Processing details</span>
+          <small>OCR, Gemini extraction and technical diagnostics</small>
+        </summary>
+        <DocumentIntelligencePanel
+          key={selectedDocument?.document_id ?? 'no-document'}
+          document={selectedDocument}
+          processing={selectedDocument ? processing[selectedDocument.document_id] : undefined}
+          progress={selectedDocument ? jobs[selectedDocument.document_id] : undefined}
+          busy={selectedDocument ? busyId === selectedDocument.document_id : false}
+          canProcess={canProcessDocuments}
+          onProcess={(documentId) => void processDocument(documentId)}
+          onRefresh={() => void load()}
+        />
+      </details>
 
       <EvidenceReviewPanel
         evidenceItems={record.evidence_items}
@@ -573,3 +601,4 @@ export function CompanyDetailPage() {
     </>
   )
 }
+
