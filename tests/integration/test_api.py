@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from greensmecapt.api import create_app
+from greensmecapt.persistence.tables import DocumentProcessingJobRow
 from greensmecapt.security import (
     ApplicationRole,
     AuthenticationError,
@@ -724,10 +725,6 @@ def test_delete_document_removes_derived_data_and_storage(
             "DELETE",
             f"/smes/sme_001/documents/{document_id}",
             headers=SME_ONE_HEADERS,
-            json={
-                "expected_application_revision": 2,
-                "reason": "Incorrect source uploaded",
-            },
         )
         record = client.get(
             "/smes/sme_001/record",
@@ -789,6 +786,43 @@ def test_document_delete_survives_post_delete_storage_error(
     assert not (tmp_path / "documents" / storage_key).exists()
 
 
+def test_document_delete_cancels_queued_processing_job(tmp_path: Path) -> None:
+    """An explicit delete must not be blocked by stale queued work."""
+
+    with _client(tmp_path) as client:
+        _create_sme(client)
+        upload = client.post(
+            "/smes/sme_001/documents",
+            headers=SME_ONE_HEADERS,
+            data={
+                "document_type": "utility_bill",
+                "expected_application_revision": "1",
+            },
+            files={"file": ("bill.pdf", b"queued", "application/pdf")},
+        )
+        document_id = upload.json()["document"]["document_id"]
+        with client.app.state.database.session() as session:
+            session.add(
+                DocumentProcessingJobRow(
+                    job_id="job_delete_me",
+                    document_id=document_id,
+                    sme_id="sme_001",
+                    requested_by="sme-user-001",
+                    status="queued",
+                )
+            )
+            session.commit()
+
+        deleted = client.delete(
+            f"/smes/sme_001/documents/{document_id}",
+            headers=SME_ONE_HEADERS,
+        )
+        record = client.get("/smes/sme_001/record", headers=SME_ONE_HEADERS)
+
+    assert deleted.status_code == 200
+    assert record.json()["documents"] == []
+
+
 def test_document_delete_survives_unreadable_storage_object(
     tmp_path: Path,
 ) -> None:
@@ -845,7 +879,6 @@ def test_admin_purges_sme_documents_and_storage(
             headers=ADMIN_HEADERS,
             json={
                 "expected_application_revision": 2,
-                "reason": "Duplicate workspace",
             },
         )
         missing = client.get(

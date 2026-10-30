@@ -1,12 +1,10 @@
 """Destructive persistence operations with explicit dependency checks."""
 
 import json
-from datetime import UTC, datetime
 
 from sqlalchemy import inspect, text
 from sqlmodel import Session, select
 
-from greensmecapt.domain import DocumentJobStatus
 from greensmecapt.persistence.applications import (
     ApplicationStatus,
     SMEApplicationRow,
@@ -57,8 +55,6 @@ class DestructiveMutationRepository:
                 DocumentProcessingJobRow.document_id == document_id
             )
         ).all()
-        if any(_job_is_active(job) for job in jobs):
-            raise PersistenceConflictError("A document cannot be deleted while a job is active.")
 
         processing = self._session.get(
             DocumentProcessingRow,
@@ -86,7 +82,12 @@ class DestructiveMutationRepository:
             self._session.delete(item)
         if processing is not None:
             self._session.delete(processing)
+        # Force dependent rows out first. This makes the operation deterministic
+        # on PostgreSQL even without ORM relationship metadata and also cancels
+        # any queued/running processing state selected for deletion above.
+        self._session.flush()
         self._session.delete(row)
+        self._session.flush()
         self._session.add(
             AuditEventRow(
                 sme_id=sme_id,
@@ -385,18 +386,3 @@ class DestructiveMutationRepository:
             if commit:
                 self._session.rollback()
             raise
-
-
-def _job_is_active(job: DocumentProcessingJobRow) -> bool:
-    """Treat only queued or currently leased work as deletion-blocking."""
-
-    if job.status == DocumentJobStatus.QUEUED.value:
-        return True
-    if job.status != DocumentJobStatus.RUNNING.value:
-        return False
-    if job.lease_expires_at is None:
-        return False
-    expires_at = job.lease_expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-    return expires_at > datetime.now(UTC)

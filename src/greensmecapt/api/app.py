@@ -240,15 +240,13 @@ class SMEUpdateRequest(BaseModel):
 
 
 class DestructiveMutationRequest(BaseModel):
-    """Require an optimistic revision and human-readable deletion reason."""
+    """Carry the current revision for a destructive workspace mutation."""
 
-    model_config = ConfigDict(
-        extra="forbid",
-        str_strip_whitespace=True,
-    )
+    # Ignore the former ``reason`` field during a rolling frontend/backend
+    # deployment so an older browser bundle cannot break deletion.
+    model_config = ConfigDict(extra="ignore")
 
     expected_application_revision: int = Field(ge=1)
-    reason: str = Field(min_length=1)
 
 
 class PlatformResetRequest(BaseModel):
@@ -1035,7 +1033,7 @@ def create_app(
                 sme_id=sme_id,
                 actor_id=principal.user_id,
                 expected_revision=request.expected_application_revision,
-                reason=request.reason,
+                reason="Company workspace deleted",
                 commit=False,
             )
             for registration in registrations:
@@ -1244,7 +1242,6 @@ def create_app(
     def delete_document(
         sme_id: str,
         document_id: str,
-        request: DestructiveMutationRequest,
         session: Annotated[Session, Depends(get_session)],
         principal: Annotated[
             AuthPrincipal,
@@ -1280,14 +1277,14 @@ def create_app(
                 sme_id=sme_id,
                 document_id=document_id,
                 actor_id=principal.user_id,
-                reason=request.reason,
+                reason="Source document deleted",
                 commit=False,
             )
             application = applications.record_change(
                 sme_id=sme_id,
                 actor_id=principal.user_id,
-                expected_revision=request.expected_application_revision,
-                reason=request.reason,
+                expected_revision=application.revision,
+                reason="Source document deleted",
                 commit=False,
             )
             try:

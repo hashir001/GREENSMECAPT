@@ -27,26 +27,22 @@ export function AssessmentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [deleteRunId, setDeleteRunId] = useState('')
-  const [deleteReason, setDeleteReason] = useState('')
   const [deleteBusy, setDeleteBusy] = useState(false)
 
   function closeDeleteDialog() {
     if (deleteBusy) return
     setDeleteRunId('')
-    setDeleteReason('')
   }
 
   async function deleteRun() {
     const runId = deleteRunId
-    const reason = deleteReason.trim()
-    if (!reason) return
+    if (!runId) return
     setError('')
     setDeleteBusy(true)
     try {
-      await api.deleteAssessmentRun(runId, reason)
+      await api.deleteAssessmentRun(runId)
       setRuns((current) => current.filter((run) => run.run_id !== runId))
       setDeleteRunId('')
-      setDeleteReason('')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Assessment run could not be deleted.')
     } finally {
@@ -84,19 +80,9 @@ export function AssessmentsPage() {
                 <X size={17} />
               </button>
             </header>
-            <div className="destructive-dialog__body">
-              <label className="builder-field">
-                Assessment run
-                <input value={deleteRunId} readOnly />
-              </label>
-              <label className="builder-field">
-                Deletion reason
-                <input required autoFocus value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} placeholder="Required for the audit trail" />
-              </label>
-            </div>
             <footer>
               <button className="secondary-button" type="button" disabled={deleteBusy} onClick={closeDeleteDialog}>Cancel</button>
-              <button className="danger-button" type="button" disabled={deleteBusy || !deleteReason.trim()} onClick={() => void deleteRun()}>
+              <button className="danger-button" type="button" disabled={deleteBusy} onClick={() => void deleteRun()}>
                 {deleteBusy ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />}
                 Delete permanently
               </button>
@@ -166,7 +152,7 @@ export function AssessmentsPage() {
                 </div>
                 <div className="assessment-card__actions">
                   {canDeleteAssessmentRuns && (
-                    <button className="icon-button icon-button--danger" type="button" aria-label={`Delete ${run.run_id}`} onClick={() => { setDeleteReason(''); setDeleteRunId(run.run_id) }}>
+                    <button className="icon-button icon-button--danger" type="button" aria-label={`Delete ${run.run_id}`} onClick={() => setDeleteRunId(run.run_id)}>
                       <Trash2 size={18} />
                     </button>
                   )}

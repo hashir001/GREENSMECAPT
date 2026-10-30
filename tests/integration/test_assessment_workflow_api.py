@@ -204,7 +204,6 @@ def test_compare_smes_through_api(tmp_path: Path) -> None:
             "DELETE",
             "/assessments/runs/run_001",
             headers=ADMIN_HEADERS,
-            json={"reason": "Demo cleanup"},
         )
         missing = client.get(
             "/assessments/runs/run_001",

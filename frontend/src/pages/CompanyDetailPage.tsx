@@ -369,18 +369,15 @@ export function CompanyDetailPage() {
   }
 
   async function confirmDocumentDelete() {
-    if (!application || !deleteDocumentId || !reason.trim()) return
+    if (!application || !deleteDocumentId) return
     setMutationBusy(true)
     setError('')
     try {
       await api.deleteDocument(
         smeId,
         deleteDocumentId,
-        application.revision,
-        reason.trim(),
       )
       setDeleteDocumentId('')
-      setReason('')
       await load()
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'The document could not be deleted.')
@@ -390,14 +387,13 @@ export function CompanyDetailPage() {
   }
 
   async function confirmWorkspaceDelete() {
-    if (!application || !reason.trim()) return
+    if (!application) return
     setMutationBusy(true)
     setError('')
     try {
       await api.deleteSME(
         smeId,
         application.revision,
-        reason.trim(),
       )
       void navigate('/companies', { replace: true })
     } catch (caught: unknown) {
@@ -487,12 +483,9 @@ export function CompanyDetailPage() {
               <div><span className="eyebrow">Permanent deletion</span><h2>{deleteWorkspaceOpen ? 'Delete company and all data?' : 'Delete source document?'}</h2><p>{deleteWorkspaceOpen ? 'This permanently removes the company, documents, evidence, profiles and assessment runs containing it.' : 'Derived evidence and processing history for this document will also be removed.'}</p></div>
               <button className="icon-button" type="button" aria-label="Close deletion form" onClick={() => { setDeleteDocumentId(''); setDeleteWorkspaceOpen(false) }}><X size={17} /></button>
             </header>
-            <div className="destructive-dialog__body">
-              <label className="builder-field">Deletion reason<input required value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required for the audit trail" /></label>
-            </div>
             <footer>
               <button className="secondary-button" type="button" onClick={() => { setDeleteDocumentId(''); setDeleteWorkspaceOpen(false) }}>Cancel</button>
-              <button className="danger-button" type="button" disabled={mutationBusy || !reason.trim()} onClick={() => void (deleteWorkspaceOpen ? confirmWorkspaceDelete() : confirmDocumentDelete())}>{mutationBusy ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />} Delete permanently</button>
+              <button className="danger-button" type="button" disabled={mutationBusy} onClick={() => void (deleteWorkspaceOpen ? confirmWorkspaceDelete() : confirmDocumentDelete())}>{mutationBusy ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />} Delete permanently</button>
             </footer>
           </div>
         </div>
@@ -567,7 +560,7 @@ export function CompanyDetailPage() {
 
       <div className="workspace-grid">
         <DocumentUploadPanel smeId={smeId} applicationRevision={application?.revision ?? 1} disabled={!canUploadDocuments} disabledReason={uploadDisabledReason} onCompleted={uploadCompleted} />
-        <DocumentList documents={record.documents} processing={processing} jobs={jobs} canProcess={canProcessDocuments} canDelete={canDeleteDocuments} busyId={busyId} selectedDocumentId={selectedDocumentId} onInspect={setSelectedDocumentId} onProcess={(documentId) => { setSelectedDocumentId(documentId); void processDocument(documentId) }} onDelete={(documentId) => { setReason(''); setDeleteDocumentId(documentId) }} />
+        <DocumentList documents={record.documents} processing={processing} jobs={jobs} canProcess={canProcessDocuments} canDelete={canDeleteDocuments} busyId={busyId} selectedDocumentId={selectedDocumentId} onInspect={setSelectedDocumentId} onProcess={(documentId) => { setSelectedDocumentId(documentId); void processDocument(documentId) }} onDelete={setDeleteDocumentId} />
       </div>
 
       <details className="advanced-processing">

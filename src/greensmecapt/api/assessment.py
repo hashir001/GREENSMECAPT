@@ -179,14 +179,6 @@ class AssessmentProfileStatusResponse(BaseModel):
     comparison_eligible: bool = False
 
 
-class AssessmentRunDeletionRequest(BaseModel):
-    """Require an explicit reason for permanent run deletion."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
-
-    reason: str = Field(min_length=1, max_length=1000)
-
-
 def build_assessment_router(
     *,
     get_session: Callable[[], Iterator[Session]],
@@ -720,7 +712,6 @@ def build_assessment_router(
     )
     def delete_assessment_run(
         run_id: str,
-        request: AssessmentRunDeletionRequest,
         session: Annotated[Session, Depends(get_session)],
         principal: Annotated[
             AuthPrincipal,
@@ -733,7 +724,7 @@ def build_assessment_router(
             AssessmentRunRepository(session).delete(
                 run_id=run_id,
                 actor_id=principal.user_id,
-                reason=request.reason,
+                reason="Assessment run deleted",
             )
         except PersistenceNotFoundError as error:
             raise HTTPException(
