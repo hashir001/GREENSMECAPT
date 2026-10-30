@@ -376,6 +376,7 @@ export function CompanyDetailPage() {
       await api.deleteDocument(
         smeId,
         deleteDocumentId,
+        application.revision,
       )
       setDeleteDocumentId('')
       await load()

@@ -619,6 +619,7 @@ export const api = {
             method: 'DELETE',
             body: JSON.stringify({
               expected_application_revision: expectedApplicationRevision,
+              reason: 'Company workspace deleted',
             }),
           },
         ).then(() => undefined)
@@ -682,6 +683,7 @@ export const api = {
   deleteDocument: (
     smeId: string,
     documentId: string,
+    expectedApplicationRevision: number,
   ) => (
     isPreviewMode
       ? deletePreviewDocument(smeId, documentId).then(
@@ -694,6 +696,10 @@ export const api = {
           `/smes/${encodeURIComponent(smeId)}/documents/${encodeURIComponent(documentId)}`,
           {
             method: 'DELETE',
+            body: JSON.stringify({
+              expected_application_revision: expectedApplicationRevision,
+              reason: 'Source document deleted',
+            }),
           },
         )
   ),
@@ -1081,6 +1087,7 @@ export const api = {
           `/assessments/runs/${encodeURIComponent(runId)}`,
           {
             method: 'DELETE',
+            body: JSON.stringify({ reason: 'Assessment run deleted' }),
           },
         ).then(() => undefined)
   ),
