@@ -294,6 +294,8 @@ Rules:
 array. A separate closed-set classifier handles quantitative candidates.
 2. Never infer or estimate a value.
 3. Copy source_quote exactly from one segment.
+3a. Set grounding_context to null. The application reserves it for
+backend-constructed table header and row context.
 4. Copy raw_value exactly as written.
 5. raw_number is the number explicitly represented by raw_value.
 6. raw_unit is the unit explicitly written in the same source quote,

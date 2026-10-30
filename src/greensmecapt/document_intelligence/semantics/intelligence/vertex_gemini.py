@@ -39,6 +39,10 @@ _VERTEX_OUTPUT_SCHEMA = {
                     "raw_number": {"type": "NUMBER"},
                     "raw_unit": {"type": "STRING"},
                     "source_quote": {"type": "STRING"},
+                    "grounding_context": {
+                        "type": "STRING",
+                        "nullable": True,
+                    },
                     "reporting_period": {
                         "type": "STRING",
                         "nullable": True,
@@ -62,6 +66,7 @@ _VERTEX_OUTPUT_SCHEMA = {
                     "raw_number",
                     "raw_unit",
                     "source_quote",
+                    "grounding_context",
                     "reporting_period",
                     "scope",
                     "claim_nature",

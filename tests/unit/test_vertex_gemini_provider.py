@@ -42,6 +42,7 @@ class _Models:
                         "raw_number": 1250,
                         "raw_unit": "kWh",
                         "source_quote": "Purchased electricity was 1,250 kWh in 2025.",
+                        "grounding_context": None,
                         "reporting_period": "2025",
                         "scope": None,
                     }
@@ -141,6 +142,7 @@ def _candidate_request() -> CandidateClassificationRequest:
                 raw_value="1,250",
                 raw_number=1250,
                 raw_unit="kWh",
+                source_quote="Electricity | 1,250 | kWh | whole facility",
                 context="2025 billed | Electricity | 1,250 | kWh | whole facility",
             ),
             NumericEvidenceCandidate(
@@ -151,6 +153,7 @@ def _candidate_request() -> CandidateClassificationRequest:
                 raw_value="900",
                 raw_number=900,
                 raw_unit="kWh",
+                source_quote="Electricity | 900 | kWh | whole facility",
                 context="2024 comparator | Electricity | 900 | kWh | whole facility",
             ),
         ),

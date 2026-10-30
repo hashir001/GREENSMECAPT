@@ -589,7 +589,7 @@ def _build_numeric_candidates(
             continue
 
         contexts = _candidate_contexts(segment)
-        for context_index, context in enumerate(contexts):
+        for context_index, (source_quote, context) in enumerate(contexts):
             for match in _CANDIDATE_NUMBER_PATTERN.finditer(context):
                 raw_number = match.group(0)
                 if _YEAR_PATTERN.fullmatch(raw_number.replace(",", "")):
@@ -627,6 +627,7 @@ def _build_numeric_candidates(
                         raw_value=raw_number,
                         raw_number=numeric_value,
                         raw_unit=raw_unit,
+                        source_quote=source_quote,
                         context=context,
                     )
                 )
@@ -648,13 +649,13 @@ def _partition_candidates(
 
 def _candidate_contexts(
     segment: SemanticSourceSegment,
-) -> tuple[str, ...]:
+) -> tuple[tuple[str, str], ...]:
     """Attach governing layout headers to individual OCR rows."""
 
     if not segment.segment_id.endswith("_layout"):
-        return (segment.text,)
+        return ((segment.text, segment.text),)
 
-    contexts: list[str] = []
+    contexts: list[tuple[str, str]] = []
     active_header: str | None = None
     for raw_line in segment.text.splitlines():
         line = " ".join(raw_line.split())
@@ -663,11 +664,12 @@ def _candidate_contexts(
         if _is_layout_header(line):
             active_header = line
             continue
-        contexts.append(
+        context = (
             f"{active_header} || {line}"
             if active_header and " | " in line
             else line
         )
+        contexts.append((line, context))
 
     return tuple(contexts)
 
@@ -783,7 +785,8 @@ def _candidate_claims(
                     raw_value=candidate.raw_value,
                     raw_number=candidate.raw_number,
                     raw_unit=candidate.raw_unit,
-                    source_quote=candidate.context,
+                    source_quote=candidate.source_quote,
+                    grounding_context=candidate.context,
                     reporting_period=classification.reporting_period,
                     scope=classification.scope,
                     claim_nature=classification.claim_nature,
@@ -985,7 +988,20 @@ def _ground_claim(
     if metric is None:
         return "The claim references an unconfigured indicator."
 
-    context_error = _metric_context_error(claim)
+    grounding_context = claim.grounding_context or claim.source_quote
+    if (
+        claim.grounding_context is not None
+        and not _contains_text(
+            claim.grounding_context,
+            claim.source_quote,
+        )
+    ):
+        return "The exact source quote is absent from its grounding context."
+
+    context_error = _metric_context_error(
+        claim,
+        grounding_context=grounding_context,
+    )
     if context_error is not None:
         return context_error
 
@@ -1020,6 +1036,10 @@ def _ground_claim(
             claim.source_quote,
             claim.reporting_period,
         )
+        and not _contains_text(
+            grounding_context,
+            claim.reporting_period,
+        )
     ):
         return (
             "The reporting period does not occur in the source quote."
@@ -1031,6 +1051,10 @@ def _ground_claim(
             claim.source_quote,
             claim.scope,
         )
+        and not _contains_text(
+            grounding_context,
+            claim.scope,
+        )
     ):
         return "The scope does not occur in the source quote."
 
@@ -1040,7 +1064,7 @@ def _ground_claim(
         claim.project_name,
     )
     if any(
-        value is not None and not _contains_text(claim.source_quote, value)
+        value is not None and not _contains_text(grounding_context, value)
         for value in contextual_names
     ):
         return "A claim identity field does not occur in the source quote."
@@ -1321,11 +1345,13 @@ def _ground_company_profile_claim(
 
 def _metric_context_error(
     claim: SemanticClaimPayload,
+    *,
+    grounding_context: str | None = None,
 ) -> str | None:
     """Reject electricity components assigned to the wrong indicator."""
 
     local_context = _value_context(
-        claim.source_quote,
+        grounding_context or claim.source_quote,
         claim.raw_value,
     )
 
