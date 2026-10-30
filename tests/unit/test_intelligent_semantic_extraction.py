@@ -756,7 +756,7 @@ def test_candidate_ledger_covers_utility_table_values() -> None:
         (item.indicator_id, item.normalized_value)
         for item in report.evidence_items
     }
-    assert ("electricity_consumption_kwh", 410000) in values
+    assert ("electricity_consumption_kwh", 410000) in values, report.rejected_claims
     assert ("renewable_energy_percentage", 72) in values
     assert report.numeric_candidate_count == 4
     assert report.classified_candidate_count == 4

@@ -596,6 +596,7 @@ def _build_numeric_candidates(
                     continue
 
                 raw_unit = _candidate_unit(
+                    source_quote=source_quote,
                     context=context,
                     match=match,
                     metrics=request.metrics,
@@ -696,6 +697,7 @@ def _is_layout_header(line: str) -> bool:
 
 def _candidate_unit(
     *,
+    source_quote: str,
     context: str,
     match: re.Match[str],
     metrics: tuple[MetricInstruction, ...],
@@ -720,7 +722,30 @@ def _candidate_unit(
     if adjacent:
         return max(adjacent, key=len)
 
-    present = [alias for alias in aliases if _contains_text(context, alias)]
+    present = [
+        alias
+        for alias in aliases
+        if _unit_alias_occurs(source_quote, alias)
+    ]
+    resolved = _resolve_candidate_unit(present, metrics)
+    if resolved is not None:
+        return resolved
+
+    present = [
+        alias
+        for alias in aliases
+        if alias.casefold() not in {"unit", "units"}
+        and _unit_alias_occurs(context, alias)
+    ]
+    return _resolve_candidate_unit(present, metrics)
+
+
+def _resolve_candidate_unit(
+    present: list[str],
+    metrics: tuple[MetricInstruction, ...],
+) -> str | None:
+    """Return one unambiguous unit spelling from a row or header."""
+
     canonical_groups = {
         metric.canonical_unit
         for metric in metrics
@@ -732,6 +757,19 @@ def _candidate_unit(
     return max(present, key=len)
 
 
+def _unit_alias_occurs(text: str, alias: str) -> bool:
+    """Match unit aliases as tokens instead of arbitrary substrings."""
+
+    normalized_text = _normalize_text(text)
+    normalized_alias = _normalize_text(alias)
+    if normalized_alias == "%":
+        return "%" in normalized_text
+    return re.search(
+        rf"(?<![a-z0-9]){re.escape(normalized_alias)}(?![a-z0-9])",
+        normalized_text,
+    ) is not None
+
+
 def _unit_adjacent(
     alias: str,
     *,
@@ -741,9 +779,11 @@ def _unit_adjacent(
     normalized = alias.casefold()
     if normalized == "%":
         return after.lstrip().startswith("%")
+    cleaned_after = after.lstrip(" \t|:;,-–—()[]")
+    cleaned_before = before.rstrip(" \t|:;,-–—()[]")
     return (
-        after.lstrip().casefold().startswith(normalized)
-        or before.rstrip().casefold().endswith(normalized)
+        cleaned_after.casefold().startswith(normalized)
+        or cleaned_before.casefold().endswith(normalized)
     )
 
 
