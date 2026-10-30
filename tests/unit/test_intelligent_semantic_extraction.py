@@ -4,8 +4,10 @@ from hashlib import sha256
 from pathlib import Path
 
 from greensmecapt.document_intelligence.models import (
+    BoundingBox,
     ExtractedDocument,
     ExtractedPage,
+    ExtractedTextBlock,
     TextSource,
 )
 from greensmecapt.document_intelligence.semantics import (
@@ -445,6 +447,157 @@ def test_ground_company_document_sector_and_unmapped_context() -> None:
         "unmapped_material",
     ]
     assert report.intelligence_claims[2].related_ids == ("operates_facility",)
+
+
+def test_reject_external_issuer_as_company_name() -> None:
+    quote = (
+        "ISSUED BY Emirates Industrial Utilities PJSC — "
+        "Synthetic Research Provider"
+    )
+    provider = FakeProvider(
+        (),
+        company_profile_claims=(
+            CompanyProfileClaimPayload(
+                segment_id="page_1_text",
+                field_id="legal_name",
+                raw_value="Emirates Industrial Utilities PJSC",
+                source_quote=quote,
+            ),
+        ),
+    )
+    service = IntelligentSemanticExtractionService(
+        provider,
+        company_policy=load_company_intelligence_policy(COMPANY_POLICY_PATH),
+    )
+    extracted = ExtractedDocument(
+        document_id="doc_llm_001",
+        pages=(
+            ExtractedPage(
+                page_number=1,
+                text=quote,
+                text_source=TextSource.OCR,
+            ),
+        ),
+    )
+
+    report = service.extract(
+        document=_document(),
+        extracted_document=extracted,
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert report.evidence_items == ()
+    assert "external document issuer" in report.rejected_claims[0].reason
+
+
+def test_reconstruct_ocr_blocks_as_layout_rows() -> None:
+    provider = FakeProvider(())
+    service = IntelligentSemanticExtractionService(provider)
+    extracted = ExtractedDocument(
+        document_id="doc_llm_001",
+        pages=(
+            ExtractedPage(
+                page_number=1,
+                text=(
+                    "Indicator 2024 comparator 2025 billed Unit\n"
+                    "Certified renewable supply 45% 72% Share"
+                ),
+                text_source=TextSource.OCR,
+                text_blocks=(
+                    ExtractedTextBlock(
+                        block_id="header_1",
+                        text="Indicator",
+                        bounding_box=BoundingBox(
+                            x0=0.05, top=0.10, x1=0.25, bottom=0.14
+                        ),
+                        reading_order=0,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="header_2",
+                        text="2025 billed",
+                        bounding_box=BoundingBox(
+                            x0=0.50, top=0.10, x1=0.68, bottom=0.14
+                        ),
+                        reading_order=1,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="metric",
+                        text="Certified renewable supply",
+                        bounding_box=BoundingBox(
+                            x0=0.05, top=0.20, x1=0.38, bottom=0.24
+                        ),
+                        reading_order=2,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="value",
+                        text="72%",
+                        bounding_box=BoundingBox(
+                            x0=0.50, top=0.20, x1=0.58, bottom=0.24
+                        ),
+                        reading_order=3,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    service.extract(
+        document=_document(),
+        extracted_document=extracted,
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert len(provider.requests) == 1
+    segment = provider.requests[0].segments[0]
+    assert segment.segment_id == "page_1_layout"
+    assert "Indicator | 2025 billed" in segment.text
+    assert "Certified renewable supply | 72%" in segment.text
+
+
+def test_keep_renewable_component_separate_from_total_electricity() -> None:
+    quote = "The account includes 295,200 kWh of renewable supply."
+    provider = FakeProvider(
+        (
+            SemanticClaimPayload(
+                segment_id="page_1_text",
+                indicator_id="electricity_consumption_kwh",
+                raw_value="295,200 kWh",
+                raw_number=295200,
+                raw_unit="kWh",
+                source_quote=quote,
+            ),
+            SemanticClaimPayload(
+                segment_id="page_1_text",
+                indicator_id="renewable_electricity_kwh",
+                raw_value="295,200 kWh",
+                raw_number=295200,
+                raw_unit="kWh",
+                source_quote=quote,
+            ),
+        )
+    )
+    service = IntelligentSemanticExtractionService(provider)
+    extracted = ExtractedDocument(
+        document_id="doc_llm_001",
+        pages=(
+            ExtractedPage(
+                page_number=1,
+                text=quote,
+                text_source=TextSource.OCR,
+            ),
+        ),
+    )
+
+    report = service.extract(
+        document=_document(),
+        extracted_document=extracted,
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert [item.indicator_id for item in report.evidence_items] == [
+        "renewable_electricity_kwh"
+    ]
+    assert "cannot be classified as total" in report.rejected_claims[0].reason
 
 
 def test_partition_long_documents_into_bounded_requests() -> None:

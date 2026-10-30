@@ -350,7 +350,22 @@ relationships, prominence, cause/effect values, weights or Green Scores.
 29. Company and project context must remain explicit source facts. Capture a
 funding purpose, proposed project, specialization, or implementation risk only
 when the exact source supports it.
-30. Return only the required JSON structure.
+30. Distinguish an electricity total from its supply components. Map only a
+total consumption or billed-quantity statement to electricity_consumption_kwh.
+Map a renewable kWh component to renewable_electricity_kwh and a conventional
+grid kWh component to conventional_grid_electricity_kwh. Never report the
+components again as total electricity consumption.
+31. Capture an explicit renewable percentage as renewable_energy_percentage
+and an explicit production quantity as production_output_units when those
+allowed metrics are supplied.
+32. For a reconstructed page-layout segment, source_quote may span the exact
+header and data row needed to preserve the governing period, unit and scope.
+Prefer that context-rich quote over an isolated numeric block.
+33. Company-profile claims describe the assessed customer or applicant only.
+Never classify a utility, bank, auditor, government authority, supplier or
+other document issuer as the assessed company's legal or trade name.
+34. Return each source fact once under its most specific allowed indicator.
+35. Return only the required JSON structure.
 """.strip()
 
 

@@ -8,6 +8,8 @@ from math import isclose
 from greensmecapt.document_intelligence.models import (
     ExtractedDocument,
     ExtractedPage,
+    ExtractedTextBlock,
+    TextSource,
 )
 from greensmecapt.document_intelligence.semantics.context import (
     normalize_reporting_period,
@@ -49,6 +51,24 @@ _LOGGER = logging.getLogger("uvicorn.error")
 
 _WRITTEN_NUMBER_PATTERN = re.compile(
     r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?(?![\w.])"
+)
+_ELECTRICITY_COMPONENT_PATTERN = re.compile(
+    r"\b(?:renewable(?:[-\s]+(?:energy|electricity|supply))?|"
+    r"conventional(?:[-\s]+grid)?|non[-\s]?renewable)\b",
+    flags=re.IGNORECASE,
+)
+_RENEWABLE_COMPONENT_PATTERN = re.compile(
+    r"\brenewable(?:[-\s]+(?:energy|electricity|supply))?\b",
+    flags=re.IGNORECASE,
+)
+_CONVENTIONAL_COMPONENT_PATTERN = re.compile(
+    r"\b(?:conventional(?:[-\s]+grid)?|non[-\s]?renewable)\b",
+    flags=re.IGNORECASE,
+)
+_EXTERNAL_ISSUER_PATTERN = re.compile(
+    r"\b(?:issued\s+by|utility\s+provider|service\s+provider|"
+    r"auditor|bank|supplier)\b",
+    flags=re.IGNORECASE,
 )
 
 
@@ -502,24 +522,36 @@ def _page_segments(
 
     segments: list[SemanticSourceSegment] = []
 
-    for block_index, block in enumerate(
-        page.text_blocks,
-        start=1,
-    ):
-        segments.append(
-            SemanticSourceSegment(
-                segment_id=(
-                    f"page_{page.page_number}_"
-                    f"block_{block_index}"
-                ),
-                page_number=page.page_number,
-                locator=(
-                    f"page {page.page_number}, "
-                    f"block {block.block_id}"
-                ),
-                text=block.text,
+    if page.text_blocks and page.text_source in {TextSource.OCR, TextSource.HYBRID}:
+        layout_text = _reconstruct_page_layout(page.text_blocks)
+        if layout_text:
+            segments.append(
+                SemanticSourceSegment(
+                    segment_id=f"page_{page.page_number}_layout",
+                    page_number=page.page_number,
+                    locator=f"page {page.page_number}, reconstructed layout",
+                    text=layout_text,
+                )
             )
-        )
+    else:
+        for block_index, block in enumerate(
+            page.text_blocks,
+            start=1,
+        ):
+            segments.append(
+                SemanticSourceSegment(
+                    segment_id=(
+                        f"page_{page.page_number}_"
+                        f"block_{block_index}"
+                    ),
+                    page_number=page.page_number,
+                    locator=(
+                        f"page {page.page_number}, "
+                        f"block {block.block_id}"
+                    ),
+                    text=block.text,
+                )
+            )
 
     for table_index, table in enumerate(
         page.tables,
@@ -586,6 +618,68 @@ def _page_segments(
     return tuple(segments)
 
 
+def _reconstruct_page_layout(
+    blocks: tuple[ExtractedTextBlock, ...],
+) -> str:
+    """Recombine positioned OCR blocks into readable rows."""
+
+    if not blocks:
+        return ""
+
+    ordered = sorted(
+        blocks,
+        key=lambda block: (
+            block.bounding_box.top,
+            block.bounding_box.x0,
+            block.reading_order,
+        ),
+    )
+    rows: list[list[ExtractedTextBlock]] = []
+
+    for block in ordered:
+        if rows and _shares_layout_row(rows[-1], block):
+            rows[-1].append(block)
+        else:
+            rows.append([block])
+
+    return "\n".join(
+        " | ".join(
+            " ".join(block.text.split())
+            for block in sorted(
+                row,
+                key=lambda item: (
+                    item.bounding_box.x0,
+                    item.reading_order,
+                ),
+            )
+            if block.text.strip()
+        )
+        for row in rows
+        if any(block.text.strip() for block in row)
+    )
+
+
+def _shares_layout_row(
+    row: list[ExtractedTextBlock],
+    candidate: ExtractedTextBlock,
+) -> bool:
+    """Return whether positioned blocks occupy the same visual row."""
+
+    row_top = min(block.bounding_box.top for block in row)
+    row_bottom = max(block.bounding_box.bottom for block in row)
+    overlap = min(row_bottom, candidate.bounding_box.bottom) - max(
+        row_top,
+        candidate.bounding_box.top,
+    )
+    candidate_height = (
+        candidate.bounding_box.bottom - candidate.bounding_box.top
+    )
+    row_height = row_bottom - row_top
+    minimum_height = min(candidate_height, row_height)
+
+    return overlap > 0 and overlap >= minimum_height * 0.35
+
+
 def _ground_claim(
     *,
     claim: SemanticClaimPayload,
@@ -607,6 +701,10 @@ def _ground_claim(
 
     if metric is None:
         return "The claim references an unconfigured indicator."
+
+    context_error = _metric_context_error(claim)
+    if context_error is not None:
+        return context_error
 
     if not _contains_text(
         segment.text,
@@ -921,6 +1019,11 @@ def _ground_company_profile_claim(
         return "The source quote does not occur in the referenced segment."
     if not _contains_text(claim.source_quote, claim.raw_value):
         return "The company-profile value does not occur in the source quote."
+    if (
+        claim.field_id in {"legal_name", "trade_name"}
+        and _EXTERNAL_ISSUER_PATTERN.search(claim.source_quote)
+    ):
+        return "The proposed company name identifies an external document issuer."
 
     return _intelligence_claim(
         document=document,
@@ -931,6 +1034,53 @@ def _ground_company_profile_claim(
         value=claim.raw_value,
         source_quote=claim.source_quote,
     )
+
+
+def _metric_context_error(
+    claim: SemanticClaimPayload,
+) -> str | None:
+    """Reject electricity components assigned to the wrong indicator."""
+
+    local_context = _value_context(
+        claim.source_quote,
+        claim.raw_value,
+    )
+
+    if (
+        claim.indicator_id == "electricity_consumption_kwh"
+        and _ELECTRICITY_COMPONENT_PATTERN.search(local_context)
+    ):
+        return (
+            "An electricity supply component cannot be classified as total "
+            "electricity consumption."
+        )
+    if (
+        claim.indicator_id == "renewable_electricity_kwh"
+        and not _RENEWABLE_COMPONENT_PATTERN.search(local_context)
+    ):
+        return "Renewable electricity evidence requires an explicit renewable label."
+    if (
+        claim.indicator_id == "conventional_grid_electricity_kwh"
+        and not _CONVENTIONAL_COMPONENT_PATTERN.search(local_context)
+    ):
+        return (
+            "Conventional-grid electricity evidence requires an explicit "
+            "conventional or non-renewable label."
+        )
+
+    return None
+
+
+def _value_context(source_quote: str, raw_value: str) -> str:
+    """Return the local wording governing one extracted value."""
+
+    folded_quote = source_quote.casefold()
+    position = folded_quote.find(raw_value.casefold())
+    if position < 0:
+        return source_quote
+    start = max(0, position - 100)
+    end = min(len(source_quote), position + len(raw_value) + 100)
+    return source_quote[start:end]
 
 
 def _ground_sector_activity_proposal(

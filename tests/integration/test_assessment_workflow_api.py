@@ -233,7 +233,7 @@ def test_compare_smes_through_api(tmp_path: Path) -> None:
     assert preparation["financial_assessment"]["aggregate_score"] is None
     assert len(preparation["readiness_profile"]["factors"]) == 7
     assert preparation["readiness_profile"]["causal_results_available"] is True
-    assert preparation["performance_context"]["metric_catalog_version"] == "2.0.0"
+    assert preparation["performance_context"]["metric_catalog_version"] == "2.1.0"
     assert preparation["evidence_strength"]["performance_separation"] is True
     assert len(preparation["evidence_strength"]["dimensions"]) == 4
 
@@ -429,7 +429,7 @@ def test_reviewer_can_retrieve_versioned_assessment_configuration(
     assert payload["readiness_specification"]["calibration_status"] == (
         "requires_expert_calibration"
     )
-    assert payload["metric_catalog"]["version"] == "2.0.0"
+    assert payload["metric_catalog"]["version"] == "2.1.0"
     assert payload["evidence_strength_policy"]["performance_separation"] is True
     assert (
         payload["evidence_strength_policy"]["missing_information_rule"]

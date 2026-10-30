@@ -1,13 +1,27 @@
 {
   "catalog_id": "greensmecapt_assessment_metrics",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metrics": [
     {
       "indicator_id": "renewable_energy_percentage", "criterion_id": "renewable_energy", "name": "Renewable energy share",
-      "aliases": ["renewable energy contribution", "renewable energy share", "renewable electricity share", "electricity from renewable sources", "electricity came from renewable sources", "energy came from renewable sources"],
+      "aliases": ["renewable energy contribution", "renewable energy share", "renewable electricity share", "certified renewable supply", "electricity from renewable sources", "electricity came from renewable sources", "energy came from renewable sources"],
       "units": [{"canonical_unit": "percent", "aliases": ["%", "percent", "percentage"], "multiplier": 1}],
       "dimension": "environmental_performance", "value_nature": "ratio", "direction": "benefit", "minimum": 0, "maximum": 100,
       "assessment_use": "direct_ratio", "comparison_requirements": ["reporting_period", "operational_scope"]
+    },
+    {
+      "indicator_id": "renewable_electricity_kwh", "criterion_id": "renewable_energy", "name": "Renewable electricity supplied",
+      "aliases": ["renewable electricity", "renewable electricity supplied", "renewable supply amount", "renewable-energy supply quantity"],
+      "units": [{"canonical_unit": "kwh", "aliases": ["kwh", "kilowatt hour", "kilowatt hours"], "multiplier": 1}, {"canonical_unit": "kwh", "aliases": ["mwh", "megawatt hour", "megawatt hours"], "multiplier": 1000}, {"canonical_unit": "kwh", "aliases": ["gwh", "gigawatt hour", "gigawatt hours"], "multiplier": 1000000}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "operational_scope"]
+    },
+    {
+      "indicator_id": "conventional_grid_electricity_kwh", "criterion_id": "renewable_energy", "name": "Conventional grid electricity supplied",
+      "aliases": ["conventional grid electricity", "non-renewable electricity", "nonrenewable electricity", "grid electricity excluding renewable supply"],
+      "units": [{"canonical_unit": "kwh", "aliases": ["kwh", "kilowatt hour", "kilowatt hours"], "multiplier": 1}, {"canonical_unit": "kwh", "aliases": ["mwh", "megawatt hour", "megawatt hours"], "multiplier": 1000}, {"canonical_unit": "kwh", "aliases": ["gwh", "gigawatt hour", "gigawatt hours"], "multiplier": 1000000}],
+      "dimension": "environmental_performance", "value_nature": "actual_flow", "direction": "context_only", "minimum": 0, "maximum": null,
+      "assessment_use": "evidence_only", "comparison_requirements": ["reporting_period", "operational_scope"]
     },
     {
       "indicator_id": "electricity_consumption_kwh", "criterion_id": "energy_efficiency", "name": "Electricity consumption",
