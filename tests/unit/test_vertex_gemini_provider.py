@@ -54,6 +54,20 @@ class _Models:
         )
 
 
+class _TransientModels(_Models):
+    """Fail transiently before returning a valid response."""
+
+    def __init__(self, failures: int) -> None:
+        super().__init__()
+        self.failures = failures
+
+    def generate_content(self, **kwargs):
+        if len(self.calls) < self.failures:
+            self.calls.append(kwargs)
+            raise _ProviderStatusError(503)
+        return super().generate_content(**kwargs)
+
+
 def _request() -> SemanticExtractionRequest:
     return SemanticExtractionRequest(
         document_id="document-1",
@@ -116,6 +130,24 @@ def test_vertex_provider_translates_access_denial() -> None:
 
     with pytest.raises(SemanticProviderError, match=r"roles/aiplatform\.user"):
         provider.extract(_request())
+
+
+def test_vertex_provider_retries_transient_failure() -> None:
+    models = _TransientModels(failures=2)
+    provider = VertexGeminiSemanticProvider(
+        VertexGeminiProviderConfiguration(
+            project_id="project",
+            allow_remote=True,
+            maximum_attempts=3,
+            retry_base_seconds=0,
+        ),
+        client=SimpleNamespace(models=models),
+    )
+
+    output = provider.extract(_request())
+
+    assert output.claims[0].raw_number == 1250
+    assert len(models.calls) == 3
 
 
 def test_vertex_configuration_requires_remote_approval() -> None:

@@ -889,13 +889,10 @@ def _failure_details(error: Exception) -> tuple[str, str]:
     if isinstance(error, DocumentReadError):
         return "unreadable_document", str(error)
 
-    if isinstance(
-        error,
-        (
-            ExtractionConsistencyError,
-            HybridSemanticExtractionError,
-        ),
-    ):
+    if isinstance(error, HybridSemanticExtractionError):
+        return "semantic_provider_error", str(error)
+
+    if isinstance(error, ExtractionConsistencyError):
         return "extraction_consistency_error", str(error)
 
     if isinstance(error, PersistenceNotFoundError):

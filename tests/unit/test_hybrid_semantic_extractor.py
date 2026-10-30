@@ -187,7 +187,10 @@ def test_fall_back_when_optional_provider_fails() -> None:
 def test_raise_when_required_provider_fails() -> None:
     """Strict deployments may require intelligent extraction."""
 
-    with pytest.raises(HybridSemanticExtractionError):
+    with pytest.raises(
+        HybridSemanticExtractionError,
+        match="Provider is unavailable",
+    ):
         _hybrid(
             FailingProvider(),
             required=True,

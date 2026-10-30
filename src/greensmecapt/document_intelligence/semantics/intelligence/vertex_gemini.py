@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from threading import Lock
+from time import sleep
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -253,6 +254,8 @@ class VertexGeminiProviderConfiguration(BaseModel):
     allow_remote: bool = False
     timeout_seconds: float = Field(default=120.0, gt=0, le=600)
     maximum_output_tokens: int = Field(default=8192, ge=256, le=32768)
+    maximum_attempts: int = Field(default=3, ge=1, le=5)
+    retry_base_seconds: float = Field(default=0.5, ge=0, le=10)
 
     @model_validator(mode="after")
     def require_remote_approval(self):
@@ -291,33 +294,60 @@ class VertexGeminiSemanticProvider:
     ) -> SemanticProviderOutput:
         """Return only claims satisfying the strict semantic output schema."""
 
-        try:
-            response = self._resolved_client().models.generate_content(
-                model=self._configuration.model,
-                contents=request.model_dump_json(indent=2),
-                config={
-                    "system_instruction": _SYSTEM_PROMPT,
-                    "temperature": 0,
-                    "max_output_tokens": (
-                        self._configuration.maximum_output_tokens
-                    ),
-                    "thinking_config": {"thinking_budget": 0},
-                    "response_mime_type": "application/json",
-                    "response_schema": _VERTEX_OUTPUT_SCHEMA,
-                },
+        last_error: SemanticProviderError | None = None
+        for attempt in range(1, self._configuration.maximum_attempts + 1):
+            try:
+                response = self._resolved_client().models.generate_content(
+                    model=self._configuration.model,
+                    contents=request.model_dump_json(indent=2),
+                    config={
+                        "system_instruction": _SYSTEM_PROMPT,
+                        "temperature": 0,
+                        "max_output_tokens": (
+                            self._configuration.maximum_output_tokens
+                        ),
+                        "thinking_config": {"thinking_budget": 0},
+                        "response_mime_type": "application/json",
+                        "response_schema": _VERTEX_OUTPUT_SCHEMA,
+                    },
+                )
+                return self._validated_output(response)
+            except SemanticProviderError as error:
+                last_error = error
+                retryable = _retryable_provider_message(str(error))
+            except Exception as error:
+                _LOGGER.exception(
+                    "Vertex Gemini request failed for project %s, "
+                    "location %s, model %s.",
+                    self._configuration.project_id,
+                    self._configuration.location,
+                    self._configuration.model,
+                )
+                last_error = SemanticProviderError(
+                    _provider_failure_message(error)
+                )
+                retryable = _retryable_provider_exception(error)
+
+            if not retryable or attempt >= self._configuration.maximum_attempts:
+                raise last_error
+
+            delay = self._configuration.retry_base_seconds * (2 ** (attempt - 1))
+            _LOGGER.warning(
+                "Retrying Vertex Gemini semantic extraction after attempt %s/%s: %s",
+                attempt,
+                self._configuration.maximum_attempts,
+                last_error,
             )
-        except SemanticProviderError:
-            raise
-        except Exception as error:
-            _LOGGER.exception(
-                "Vertex Gemini request failed for project %s, location %s, model %s.",
-                self._configuration.project_id,
-                self._configuration.location,
-                self._configuration.model,
-            )
-            raise SemanticProviderError(
-                _provider_failure_message(error)
-            ) from error
+            if delay:
+                sleep(delay)
+
+        raise last_error or SemanticProviderError(
+            "Vertex Gemini semantic extraction failed without a diagnostic."
+        )
+
+    @staticmethod
+    def _validated_output(response: object) -> SemanticProviderOutput:
+        """Validate both parsed and text responses against the local contract."""
 
         parsed = getattr(response, "parsed", None)
         if isinstance(parsed, SemanticProviderOutput):
@@ -428,4 +458,35 @@ def _provider_failure_message(error: Exception) -> str:
     return (
         "Vertex Gemini semantic extraction failed "
         f"({type(error).__name__}). See the backend log."
+    )
+
+
+def _retryable_provider_exception(error: Exception) -> bool:
+    """Return whether a transport/provider exception is safe to retry."""
+
+    raw_code = getattr(error, "code", None)
+    try:
+        code = int(raw_code)
+    except (TypeError, ValueError):
+        code = None
+
+    return code in {429, 500, 502, 503, 504} or isinstance(
+        error,
+        (ConnectionError, TimeoutError),
+    )
+
+
+def _retryable_provider_message(message: str) -> bool:
+    """Retry transient service failures and invalid model responses."""
+
+    lowered = message.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "quota or rate limit",
+            "temporarily unavailable",
+            "invalid structured output",
+            "returned no semantic extraction output",
+            "did not satisfy the semantic schema",
+        )
     )
