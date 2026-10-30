@@ -743,10 +743,10 @@ def test_delete_document_removes_derived_data_and_storage(
     assert not (tmp_path / "documents" / storage_key).exists()
 
 
-def test_failed_document_delete_restores_storage_and_database(
+def test_document_delete_survives_post_delete_storage_error(
     tmp_path: Path,
 ) -> None:
-    """Cross-system deletion should compensate if storage reports failure."""
+    """A storage error must not leave an undeletable database record."""
 
     storage = DeleteThenFailStorage(tmp_path / "documents")
 
@@ -783,12 +783,43 @@ def test_failed_document_delete_restores_storage_and_database(
             headers=SME_ONE_HEADERS,
         )
 
-    assert deleted.status_code == 409
-    assert [item["document_id"] for item in record.json()["documents"]] == [
-        document_id
-    ]
-    assert application.json()["revision"] == 2
-    assert (tmp_path / "documents" / storage_key).exists()
+    assert deleted.status_code == 200
+    assert record.json()["documents"] == []
+    assert application.json()["revision"] == 3
+    assert not (tmp_path / "documents" / storage_key).exists()
+
+
+def test_document_delete_survives_unreadable_storage_object(
+    tmp_path: Path,
+) -> None:
+    """Unreadable legacy storage must not block governed deletion."""
+
+    storage = UnreadableLegacyStorage(tmp_path / "documents")
+    with _client(tmp_path, storage) as client:
+        _create_sme(client)
+        upload = client.post(
+            "/smes/sme_001/documents",
+            headers=SME_ONE_HEADERS,
+            data={
+                "document_type": "sustainability_report",
+                "expected_application_revision": "1",
+            },
+            files={"file": ("legacy.txt", b"Green evidence.", "text/plain")},
+        )
+        document_id = upload.json()["document"]["document_id"]
+        deleted = client.request(
+            "DELETE",
+            f"/smes/sme_001/documents/{document_id}",
+            headers=SME_ONE_HEADERS,
+            json={
+                "expected_application_revision": 2,
+                "reason": "Remove unreadable legacy source",
+            },
+        )
+        record = client.get("/smes/sme_001/record", headers=SME_ONE_HEADERS)
+
+    assert deleted.status_code == 200
+    assert record.json()["documents"] == []
 
 
 def test_admin_purges_sme_documents_and_storage(

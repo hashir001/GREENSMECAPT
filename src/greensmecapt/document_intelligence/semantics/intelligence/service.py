@@ -260,23 +260,15 @@ class IntelligentSemanticExtractionService:
                 if candidates:
                     classified_claims: list[SemanticClaimPayload] = []
                     for candidate_batch in _partition_candidates(candidates):
-                        candidate_output = candidate_classifier(
-                            CandidateClassificationRequest(
-                                document_id=bounded_request.document_id,
-                                catalog_id=bounded_request.catalog_id,
-                                catalog_version=bounded_request.catalog_version,
-                                metrics=bounded_request.metrics,
+                        batch_claims, classified, unresolved = (
+                            _classify_candidate_batch(
+                                classifier=candidate_classifier,
+                                request=bounded_request,
                                 candidates=candidate_batch,
                             )
                         )
-                        classified_candidate_count += len(
-                            candidate_output.classifications
-                        )
-                        batch_claims, unresolved = _candidate_claims(
-                            candidates=candidate_batch,
-                            output=candidate_output,
-                        )
                         classified_claims.extend(batch_claims)
+                        classified_candidate_count += classified
                         unresolved_candidate_count += unresolved
                     quantitative_claims = tuple(classified_claims)
                 else:
@@ -638,7 +630,7 @@ def _build_numeric_candidates(
 
 def _partition_candidates(
     candidates: tuple[NumericEvidenceCandidate, ...],
-    maximum_batch_size: int = 20,
+    maximum_batch_size: int = 8,
 ) -> tuple[tuple[NumericEvidenceCandidate, ...], ...]:
     """Keep classification requests bounded and independently retryable."""
 
@@ -646,6 +638,53 @@ def _partition_candidates(
         candidates[index:index + maximum_batch_size]
         for index in range(0, len(candidates), maximum_batch_size)
     )
+
+
+def _classify_candidate_batch(
+    *,
+    classifier,
+    request: SemanticExtractionRequest,
+    candidates: tuple[NumericEvidenceCandidate, ...],
+) -> tuple[tuple[SemanticClaimPayload, ...], int, int]:
+    """Recover partial model output by recursively narrowing the ledger."""
+
+    try:
+        output = classifier(
+            CandidateClassificationRequest(
+                document_id=request.document_id,
+                catalog_id=request.catalog_id,
+                catalog_version=request.catalog_version,
+                metrics=request.metrics,
+                candidates=candidates,
+            )
+        )
+        claims, unresolved = _candidate_claims(
+            candidates=candidates,
+            output=output,
+        )
+        return claims, len(output.classifications), unresolved
+    except SemanticProviderError:
+        if len(candidates) == 1:
+            # Preserve forward progress without inventing evidence. The
+            # candidate remains explicitly unresolved in the report.
+            return (), 1, 1
+
+        midpoint = len(candidates) // 2
+        left = _classify_candidate_batch(
+            classifier=classifier,
+            request=request,
+            candidates=candidates[:midpoint],
+        )
+        right = _classify_candidate_batch(
+            classifier=classifier,
+            request=request,
+            candidates=candidates[midpoint:],
+        )
+        return (
+            (*left[0], *right[0]),
+            left[1] + right[1],
+            left[2] + right[2],
+        )
 
 
 def _candidate_contexts(

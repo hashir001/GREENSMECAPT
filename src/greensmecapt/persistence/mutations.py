@@ -1,11 +1,12 @@
 """Destructive persistence operations with explicit dependency checks."""
 
 import json
+from datetime import UTC, datetime
 
 from sqlalchemy import inspect, text
 from sqlmodel import Session, select
 
-from greensmecapt.domain import DocumentJobStatus, DocumentProcessingStatus
+from greensmecapt.domain import DocumentJobStatus
 from greensmecapt.persistence.applications import (
     ApplicationStatus,
     SMEApplicationRow,
@@ -51,32 +52,18 @@ class DestructiveMutationRepository:
         if row is None or row.sme_id != sme_id or row.storage_key is None:
             raise PersistenceNotFoundError(f"Document {document_id!r} was not found.")
 
-        processing = self._session.get(
-            DocumentProcessingRow,
-            document_id,
-        )
-        if (
-            processing is not None
-            and processing.status == DocumentProcessingStatus.PROCESSING.value
-        ):
-            raise PersistenceConflictError(
-                "A document cannot be deleted while processing is active."
-            )
-
         jobs = self._session.exec(
             select(DocumentProcessingJobRow).where(
                 DocumentProcessingJobRow.document_id == document_id
             )
         ).all()
-        if any(
-            job.status
-            in {
-                DocumentJobStatus.QUEUED.value,
-                DocumentJobStatus.RUNNING.value,
-            }
-            for job in jobs
-        ):
+        if any(_job_is_active(job) for job in jobs):
             raise PersistenceConflictError("A document cannot be deleted while a job is active.")
+
+        processing = self._session.get(
+            DocumentProcessingRow,
+            document_id,
+        )
 
         registration = StoredDocumentRegistration(
             document=_document_from_row(row),
@@ -398,3 +385,18 @@ class DestructiveMutationRepository:
             if commit:
                 self._session.rollback()
             raise
+
+
+def _job_is_active(job: DocumentProcessingJobRow) -> bool:
+    """Treat only queued or currently leased work as deletion-blocking."""
+
+    if job.status == DocumentJobStatus.QUEUED.value:
+        return True
+    if job.status != DocumentJobStatus.RUNNING.value:
+        return False
+    if job.lease_expires_at is None:
+        return False
+    expires_at = job.lease_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    return expires_at > datetime.now(UTC)

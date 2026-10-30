@@ -28,6 +28,7 @@ from greensmecapt.document_intelligence.semantics.intelligence import (
     ReadinessFactorInstruction,
     SectorActivityProposalPayload,
     SemanticClaimPayload,
+    SemanticProviderError,
     SemanticProviderOutput,
     UnmappedMaterialClaimPayload,
     load_company_intelligence_policy,
@@ -142,6 +143,28 @@ class CandidateProvider(FakeProvider):
         return CandidateClassificationOutput(
             classifications=tuple(classifications)
         )
+
+
+class SplittingCandidateProvider(CandidateProvider):
+    """Force recursive recovery for incomplete multi-candidate output."""
+
+    def classify_candidates(self, request):
+        if len(request.candidates) > 1:
+            complete = super().classify_candidates(request)
+            return complete.model_copy(
+                update={"classifications": complete.classifications[:-1]}
+            )
+        return super().classify_candidates(request)
+
+
+class UnresolvedCandidateProvider(FakeProvider):
+    """Fail one candidate without failing the complete document."""
+
+    def __init__(self) -> None:
+        super().__init__(())
+
+    def classify_candidates(self, request):
+        raise SemanticProviderError("Candidate classification was incomplete.")
 
 
 def _document() -> SourceDocument:
@@ -652,7 +675,7 @@ def test_keep_renewable_component_separate_from_total_electricity() -> None:
 
 
 def test_candidate_ledger_covers_utility_table_values() -> None:
-    provider = CandidateProvider()
+    provider = SplittingCandidateProvider()
     service = IntelligentSemanticExtractionService(provider)
     extracted = ExtractedDocument(
         document_id="doc_llm_001",
@@ -761,6 +784,22 @@ def test_candidate_ledger_covers_utility_table_values() -> None:
     assert report.numeric_candidate_count == 4
     assert report.classified_candidate_count == 4
     assert report.unresolved_candidate_count == 0
+    assert any(len(request.candidates) > 1 for request in provider.candidate_requests)
+    assert any(len(request.candidates) == 1 for request in provider.candidate_requests)
+
+
+def test_single_unclassified_candidate_does_not_fail_document() -> None:
+    service = IntelligentSemanticExtractionService(UnresolvedCandidateProvider())
+    report = service.extract(
+        document=_document(),
+        extracted_document=_extracted_document(),
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    assert report.evidence_items == ()
+    assert report.numeric_candidate_count == 1
+    assert report.classified_candidate_count == 1
+    assert report.unresolved_candidate_count == 1
 
 
 def test_partition_long_documents_into_bounded_requests() -> None:

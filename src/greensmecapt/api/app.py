@@ -1270,7 +1270,12 @@ def create_app(
                 document_id=document_id,
                 sme_id=sme_id,
             )
-            original_content = storage_backend.read(registration.storage_key)
+            try:
+                original_content = storage_backend.read(registration.storage_key)
+            except DocumentStorageError:
+                # A missing or temporarily unreadable object must not make its
+                # database record permanently undeletable.
+                original_content = None
             DestructiveMutationRepository(session).delete_document(
                 sme_id=sme_id,
                 document_id=document_id,
@@ -1285,8 +1290,14 @@ def create_app(
                 reason=request.reason,
                 commit=False,
             )
-            storage_deleted = True
-            storage_backend.delete(registration.storage_key)
+            try:
+                storage_backend.delete(registration.storage_key)
+                storage_deleted = True
+            except DocumentStorageError:
+                # The governed database record is authoritative. An orphaned
+                # private object can be cleaned separately and is no longer
+                # reachable through the application.
+                storage_deleted = False
             session.commit()
             return DocumentDeletionResponse(
                 document_id=document_id,
