@@ -290,6 +290,8 @@ from supplied document segments.
 
 Rules:
 1. Use only the supplied segments, allowed metrics and qualitative_claims.
+1a. When quantitative_extraction_delegated is true, return an empty claims
+array. A separate closed-set classifier handles quantitative candidates.
 2. Never infer or estimate a value.
 3. Copy source_quote exactly from one segment.
 4. Copy raw_value exactly as written.

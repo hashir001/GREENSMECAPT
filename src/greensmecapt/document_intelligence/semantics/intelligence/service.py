@@ -16,11 +16,15 @@ from greensmecapt.document_intelligence.semantics.context import (
     normalize_scope,
 )
 from greensmecapt.document_intelligence.semantics.intelligence.models import (
+    CandidateClassificationOutput,
+    CandidateClassificationRequest,
+    CandidateDisposition,
     CompanyProfileClaimPayload,
     DocumentProfileClaimPayload,
     GroundedIntelligenceClaim,
     IntelligentExtractionReport,
     MetricInstruction,
+    NumericEvidenceCandidate,
     QualitativeClaimPayload,
     QualitativeInstruction,
     QualitativeValueType,
@@ -39,6 +43,7 @@ from greensmecapt.document_intelligence.semantics.intelligence.policy import (
 )
 from greensmecapt.document_intelligence.semantics.intelligence.provider import (
     SemanticExtractionProvider,
+    SemanticProviderError,
 )
 from greensmecapt.document_intelligence.semantics.models import (
     MetricCatalog,
@@ -70,6 +75,10 @@ _EXTERNAL_ISSUER_PATTERN = re.compile(
     r"auditor|bank|supplier)\b",
     flags=re.IGNORECASE,
 )
+_CANDIDATE_NUMBER_PATTERN = re.compile(
+    r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?(?![\w.])"
+)
+_YEAR_PATTERN = re.compile(r"^(?:19|20)\d{2}$")
 
 
 class IntelligentSemanticExtractionService:
@@ -160,6 +169,16 @@ class IntelligentSemanticExtractionService:
             readiness_factors=self._readiness_factors,
             company_policy=self._company_policy,
         )
+        candidate_classifier = getattr(
+            self._provider,
+            "classify_candidates",
+            None,
+        )
+        candidate_mode = callable(candidate_classifier)
+        if candidate_mode:
+            request = request.model_copy(
+                update={"quantitative_extraction_delegated": True}
+            )
         requests = _partition_request(
             request,
             maximum_segments=self._maximum_segments_per_request,
@@ -213,6 +232,9 @@ class IntelligentSemanticExtractionService:
         evidence_items: list[EvidenceItem] = []
         intelligence_claims: list[GroundedIntelligenceClaim] = []
         rejected_claims: list[RejectedSemanticClaim] = []
+        numeric_candidate_count = 0
+        classified_candidate_count = 0
+        unresolved_candidate_count = 0
 
         claim_index = 0
 
@@ -231,7 +253,36 @@ class IntelligentSemanticExtractionService:
                 for segment in bounded_request.segments
             }
 
-            for claim in provider_output.claims:
+            quantitative_claims = provider_output.claims
+            if candidate_mode:
+                candidates = _build_numeric_candidates(bounded_request)
+                numeric_candidate_count += len(candidates)
+                if candidates:
+                    classified_claims: list[SemanticClaimPayload] = []
+                    for candidate_batch in _partition_candidates(candidates):
+                        candidate_output = candidate_classifier(
+                            CandidateClassificationRequest(
+                                document_id=bounded_request.document_id,
+                                catalog_id=bounded_request.catalog_id,
+                                catalog_version=bounded_request.catalog_version,
+                                metrics=bounded_request.metrics,
+                                candidates=candidate_batch,
+                            )
+                        )
+                        classified_candidate_count += len(
+                            candidate_output.classifications
+                        )
+                        batch_claims, unresolved = _candidate_claims(
+                            candidates=candidate_batch,
+                            output=candidate_output,
+                        )
+                        classified_claims.extend(batch_claims)
+                        unresolved_candidate_count += unresolved
+                    quantitative_claims = tuple(classified_claims)
+                else:
+                    quantitative_claims = ()
+
+            for claim in quantitative_claims:
                 result = _ground_claim(
                     claim=claim,
                     document=document,
@@ -406,6 +457,9 @@ class IntelligentSemanticExtractionService:
             company_policy_version=(
                 self._company_policy.version if self._company_policy else None
             ),
+            numeric_candidate_count=numeric_candidate_count,
+            classified_candidate_count=classified_candidate_count,
+            unresolved_candidate_count=unresolved_candidate_count,
             evidence_items=tuple(unique_evidence.values()),
             intelligence_claims=limited_intelligence,
             rejected_claims=tuple(rejected_claims),
@@ -513,6 +567,235 @@ def _partition_request(
         request.model_copy(update={"segments": segments})
         for segments in batches
     )
+
+
+def _build_numeric_candidates(
+    request: SemanticExtractionRequest,
+) -> tuple[NumericEvidenceCandidate, ...]:
+    """Enumerate every unit-bearing number before model classification."""
+
+    table_pages = {
+        segment.page_number
+        for segment in request.segments
+        if "_table_" in segment.segment_id
+    }
+    candidates: list[NumericEvidenceCandidate] = []
+
+    for segment in request.segments:
+        if (
+            segment.segment_id.endswith("_layout")
+            and segment.page_number in table_pages
+        ):
+            continue
+
+        contexts = _candidate_contexts(segment)
+        for context_index, context in enumerate(contexts):
+            for match in _CANDIDATE_NUMBER_PATTERN.finditer(context):
+                raw_number = match.group(0)
+                if _YEAR_PATTERN.fullmatch(raw_number.replace(",", "")):
+                    continue
+
+                raw_unit = _candidate_unit(
+                    context=context,
+                    match=match,
+                    metrics=request.metrics,
+                )
+                if raw_unit is None:
+                    continue
+
+                try:
+                    numeric_value = float(raw_number.replace(",", ""))
+                except ValueError:
+                    continue
+
+                fingerprint = sha256(
+                    (
+                        f"{request.document_id}:"
+                        f"{segment.segment_id}:"
+                        f"{context_index}:"
+                        f"{match.start()}:"
+                        f"{raw_number}:"
+                        f"{raw_unit}"
+                    ).encode()
+                ).hexdigest()[:20]
+                candidates.append(
+                    NumericEvidenceCandidate(
+                        candidate_id=f"candidate_{fingerprint}",
+                        segment_id=segment.segment_id,
+                        page_number=segment.page_number,
+                        locator=segment.locator,
+                        raw_value=raw_number,
+                        raw_number=numeric_value,
+                        raw_unit=raw_unit,
+                        context=context,
+                    )
+                )
+
+    return tuple(candidates)
+
+
+def _partition_candidates(
+    candidates: tuple[NumericEvidenceCandidate, ...],
+    maximum_batch_size: int = 20,
+) -> tuple[tuple[NumericEvidenceCandidate, ...], ...]:
+    """Keep classification requests bounded and independently retryable."""
+
+    return tuple(
+        candidates[index:index + maximum_batch_size]
+        for index in range(0, len(candidates), maximum_batch_size)
+    )
+
+
+def _candidate_contexts(
+    segment: SemanticSourceSegment,
+) -> tuple[str, ...]:
+    """Attach governing layout headers to individual OCR rows."""
+
+    if not segment.segment_id.endswith("_layout"):
+        return (segment.text,)
+
+    contexts: list[str] = []
+    active_header: str | None = None
+    for raw_line in segment.text.splitlines():
+        line = " ".join(raw_line.split())
+        if not line:
+            continue
+        if _is_layout_header(line):
+            active_header = line
+            continue
+        contexts.append(
+            f"{active_header} || {line}"
+            if active_header and " | " in line
+            else line
+        )
+
+    return tuple(contexts)
+
+
+def _is_layout_header(line: str) -> bool:
+    """Identify common table-header rows without document-specific labels."""
+
+    if line.count("|") < 1:
+        return False
+    lowered = line.casefold()
+    header_terms = (
+        "indicator",
+        "amount",
+        "unit",
+        "period",
+        "comparator",
+        "billed",
+        "description",
+        "measure",
+        "basis",
+    )
+    return sum(term in lowered for term in header_terms) >= 2
+
+
+def _candidate_unit(
+    *,
+    context: str,
+    match: re.Match[str],
+    metrics: tuple[MetricInstruction, ...],
+) -> str | None:
+    """Resolve an explicit adjacent or row-governing unit spelling."""
+
+    aliases = tuple(
+        dict.fromkeys(
+            alias
+            for metric in metrics
+            for alias in metric.accepted_unit_aliases
+        )
+    )
+    before = context[max(0, match.start() - 16):match.start()]
+    after = context[match.end():min(len(context), match.end() + 32)]
+
+    adjacent = [
+        alias
+        for alias in aliases
+        if _unit_adjacent(alias, before=before, after=after)
+    ]
+    if adjacent:
+        return max(adjacent, key=len)
+
+    present = [alias for alias in aliases if _contains_text(context, alias)]
+    canonical_groups = {
+        metric.canonical_unit
+        for metric in metrics
+        if any(alias in present for alias in metric.accepted_unit_aliases)
+    }
+    if len(canonical_groups) != 1 or not present:
+        return None
+
+    return max(present, key=len)
+
+
+def _unit_adjacent(
+    alias: str,
+    *,
+    before: str,
+    after: str,
+) -> bool:
+    normalized = alias.casefold()
+    if normalized == "%":
+        return after.lstrip().startswith("%")
+    return (
+        after.lstrip().casefold().startswith(normalized)
+        or before.rstrip().casefold().endswith(normalized)
+    )
+
+
+def _candidate_claims(
+    *,
+    candidates: tuple[NumericEvidenceCandidate, ...],
+    output: CandidateClassificationOutput,
+) -> tuple[tuple[SemanticClaimPayload, ...], int]:
+    """Convert a complete candidate ledger into grounded claim proposals."""
+
+    candidate_by_id = {
+        candidate.candidate_id: candidate for candidate in candidates
+    }
+    returned_ids = [
+        item.candidate_id for item in output.classifications
+    ]
+    if len(returned_ids) != len(set(returned_ids)):
+        raise SemanticProviderError(
+            "Candidate classification contains duplicate IDs."
+        )
+    if set(returned_ids) != set(candidate_by_id):
+        raise SemanticProviderError(
+            "Candidate classification did not cover the complete ledger."
+        )
+
+    claims: list[SemanticClaimPayload] = []
+    unresolved = 0
+    for classification in output.classifications:
+        candidate = candidate_by_id[classification.candidate_id]
+        if classification.disposition is CandidateDisposition.MAPPED:
+            if classification.indicator_id is None:
+                raise SemanticProviderError(
+                    "A mapped candidate is missing its indicator ID."
+                )
+            claims.append(
+                SemanticClaimPayload(
+                    segment_id=candidate.segment_id,
+                    indicator_id=classification.indicator_id,
+                    raw_value=candidate.raw_value,
+                    raw_number=candidate.raw_number,
+                    raw_unit=candidate.raw_unit,
+                    source_quote=candidate.context,
+                    reporting_period=classification.reporting_period,
+                    scope=classification.scope,
+                    claim_nature=classification.claim_nature,
+                )
+            )
+        elif classification.disposition in {
+            CandidateDisposition.UNMAPPED,
+            CandidateDisposition.AMBIGUOUS,
+        }:
+            unresolved += 1
+
+    return tuple(claims), unresolved
 
 
 def _page_segments(

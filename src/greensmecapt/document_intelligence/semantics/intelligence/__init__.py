@@ -1,11 +1,16 @@
 """Grounded intelligent semantic extraction."""
 
 from greensmecapt.document_intelligence.semantics.intelligence.models import (
+    CandidateClassification,
+    CandidateClassificationOutput,
+    CandidateClassificationRequest,
+    CandidateDisposition,
     CompanyProfileClaimPayload,
     DocumentProfileClaimPayload,
     GroundedIntelligenceClaim,
     IntelligentExtractionReport,
     MetricInstruction,
+    NumericEvidenceCandidate,
     QualitativeClaimPayload,
     QualitativeInstruction,
     QualitativeValueType,
@@ -41,6 +46,10 @@ from greensmecapt.document_intelligence.semantics.intelligence.vertex_gemini imp
 )
 
 __all__ = [
+    "CandidateClassification",
+    "CandidateClassificationOutput",
+    "CandidateClassificationRequest",
+    "CandidateDisposition",
     "CompanyIntelligencePolicy",
     "CompanyIntelligencePolicyError",
     "CompanyProfileClaimPayload",
@@ -49,6 +58,7 @@ __all__ = [
     "IntelligentExtractionReport",
     "IntelligentSemanticExtractionService",
     "MetricInstruction",
+    "NumericEvidenceCandidate",
     "OpenAICompatibleProviderConfiguration",
     "OpenAICompatibleSemanticProvider",
     "QualitativeClaimPayload",

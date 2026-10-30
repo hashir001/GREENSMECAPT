@@ -14,6 +14,9 @@ from greensmecapt.document_intelligence.semantics import (
     load_metric_catalog,
 )
 from greensmecapt.document_intelligence.semantics.intelligence import (
+    CandidateClassification,
+    CandidateClassificationOutput,
+    CandidateDisposition,
     CompanyProfileClaimPayload,
     DocumentProfileClaimPayload,
     IntelligentSemanticExtractionService,
@@ -90,6 +93,54 @@ class FakeProvider:
             sector_activity_proposals=self._sector_activity_proposals,
             readiness_claims=self._readiness_claims,
             unmapped_material_claims=self._unmapped_material_claims,
+        )
+
+
+class CandidateProvider(FakeProvider):
+    """Classify every enumerated candidate in a closed batch."""
+
+    def __init__(self) -> None:
+        super().__init__(())
+        self.candidate_requests = []
+
+    def classify_candidates(self, request):
+        self.candidate_requests.append(request)
+        classifications = []
+        for candidate in request.candidates:
+            if candidate.raw_number == 410000:
+                classifications.append(
+                    CandidateClassification(
+                        candidate_id=candidate.candidate_id,
+                        disposition=CandidateDisposition.MAPPED,
+                        indicator_id="electricity_consumption_kwh",
+                        reporting_period="2025",
+                        scope="whole facility",
+                        claim_nature="actual",
+                        reason="2025 billed total electricity row.",
+                    )
+                )
+            elif candidate.raw_number == 72:
+                classifications.append(
+                    CandidateClassification(
+                        candidate_id=candidate.candidate_id,
+                        disposition=CandidateDisposition.MAPPED,
+                        indicator_id="renewable_energy_percentage",
+                        reporting_period="2025",
+                        scope="whole facility",
+                        claim_nature="actual",
+                        reason="2025 renewable-share row.",
+                    )
+                )
+            else:
+                classifications.append(
+                    CandidateClassification(
+                        candidate_id=candidate.candidate_id,
+                        disposition=CandidateDisposition.IRRELEVANT,
+                        reason="Comparator omitted by this controlled test.",
+                    )
+                )
+        return CandidateClassificationOutput(
+            classifications=tuple(classifications)
         )
 
 
@@ -598,6 +649,118 @@ def test_keep_renewable_component_separate_from_total_electricity() -> None:
         "renewable_electricity_kwh"
     ]
     assert "cannot be classified as total" in report.rejected_claims[0].reason
+
+
+def test_candidate_ledger_covers_utility_table_values() -> None:
+    provider = CandidateProvider()
+    service = IntelligentSemanticExtractionService(provider)
+    extracted = ExtractedDocument(
+        document_id="doc_llm_001",
+        pages=(
+            ExtractedPage(
+                page_number=1,
+                text=(
+                    "Indicator 2024 comparator 2025 billed Unit boundary "
+                    "Electricity consumption 460,000 410,000 kWh whole "
+                    "facility Certified renewable supply 45% 72%"
+                ),
+                text_source=TextSource.OCR,
+                text_blocks=(
+                    ExtractedTextBlock(
+                        block_id="header",
+                        text=(
+                            "Indicator | 2024 comparator | 2025 billed | "
+                            "Unit / boundary"
+                        ),
+                        bounding_box=BoundingBox(
+                            x0=0.05, top=0.10, x1=0.95, bottom=0.14
+                        ),
+                        reading_order=0,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="electricity_label",
+                        text="Electricity consumption",
+                        bounding_box=BoundingBox(
+                            x0=0.05, top=0.20, x1=0.35, bottom=0.24
+                        ),
+                        reading_order=1,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="electricity_2024",
+                        text="460,000",
+                        bounding_box=BoundingBox(
+                            x0=0.40, top=0.20, x1=0.50, bottom=0.24
+                        ),
+                        reading_order=2,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="electricity_2025",
+                        text="410,000",
+                        bounding_box=BoundingBox(
+                            x0=0.55, top=0.20, x1=0.65, bottom=0.24
+                        ),
+                        reading_order=3,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="electricity_unit",
+                        text="kWh — whole facility",
+                        bounding_box=BoundingBox(
+                            x0=0.70, top=0.20, x1=0.95, bottom=0.24
+                        ),
+                        reading_order=4,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="renewable_label",
+                        text="Certified renewable supply",
+                        bounding_box=BoundingBox(
+                            x0=0.05, top=0.30, x1=0.35, bottom=0.34
+                        ),
+                        reading_order=5,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="renewable_2024",
+                        text="45%",
+                        bounding_box=BoundingBox(
+                            x0=0.40, top=0.30, x1=0.50, bottom=0.34
+                        ),
+                        reading_order=6,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="renewable_2025",
+                        text="72%",
+                        bounding_box=BoundingBox(
+                            x0=0.55, top=0.30, x1=0.65, bottom=0.34
+                        ),
+                        reading_order=7,
+                    ),
+                    ExtractedTextBlock(
+                        block_id="renewable_unit",
+                        text="Share of billed electricity — whole facility",
+                        bounding_box=BoundingBox(
+                            x0=0.70, top=0.30, x1=0.95, bottom=0.34
+                        ),
+                        reading_order=8,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    report = service.extract(
+        document=_document(),
+        extracted_document=extracted,
+        catalog=load_metric_catalog(CATALOG_PATH),
+    )
+
+    values = {
+        (item.indicator_id, item.normalized_value)
+        for item in report.evidence_items
+    }
+    assert ("electricity_consumption_kwh", 410000) in values
+    assert ("renewable_energy_percentage", 72) in values
+    assert report.numeric_candidate_count == 4
+    assert report.classified_candidate_count == 4
+    assert report.unresolved_candidate_count == 0
 
 
 def test_partition_long_documents_into_bounded_requests() -> None:

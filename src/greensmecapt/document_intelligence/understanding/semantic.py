@@ -140,6 +140,11 @@ class HybridSemanticExtractor:
                 provider_error=str(error),
             )
 
+        deterministic = _without_intelligent_overlaps(
+            deterministic=deterministic,
+            intelligent=intelligent_report.evidence_items,
+        )
+
         return _result(
             document=document,
             extracted_document=extracted_document,
@@ -156,12 +161,53 @@ class HybridSemanticExtractor:
             intelligent_request_count=(
                 intelligent_report.request_count
             ),
+            numeric_candidate_count=(
+                intelligent_report.numeric_candidate_count
+            ),
+            classified_candidate_count=(
+                intelligent_report.classified_candidate_count
+            ),
+            unresolved_candidate_count=(
+                intelligent_report.unresolved_candidate_count
+            ),
             company_policy_id=intelligent_report.company_policy_id,
             company_policy_version=(
                 intelligent_report.company_policy_version
             ),
             intelligence_claims=intelligent_report.intelligence_claims,
         )
+
+
+def _without_intelligent_overlaps(
+    *,
+    deterministic: tuple[EvidenceItem, ...],
+    intelligent: tuple[EvidenceItem, ...],
+) -> tuple[EvidenceItem, ...]:
+    """Prefer contextual intelligent evidence over the same rule match."""
+
+    intelligent_signatures = {
+        _measurement_signature(item)
+        for item in intelligent
+        if item.extraction_method
+        == "language_model_structured_extraction"
+    }
+    return tuple(
+        item
+        for item in deterministic
+        if _measurement_signature(item) not in intelligent_signatures
+    )
+
+
+def _measurement_signature(
+    item: EvidenceItem,
+) -> tuple[str, str, str | None]:
+    """Identify the same normalized measurement across extraction engines."""
+
+    return (
+        item.indicator_id,
+        str(item.normalized_value).casefold(),
+        item.unit.casefold() if item.unit is not None else None,
+    )
 
 
 def _result(
@@ -173,6 +219,9 @@ def _result(
     provider_status: IntelligentProviderStatus,
     rejected_claim_count: int = 0,
     intelligent_request_count: int = 0,
+    numeric_candidate_count: int = 0,
+    classified_candidate_count: int = 0,
+    unresolved_candidate_count: int = 0,
     company_policy_id: str | None = None,
     company_policy_version: str | None = None,
     intelligence_claims: tuple[GroundedIntelligenceClaim, ...] = (),
@@ -230,6 +279,9 @@ def _result(
                 == "language_model_grounded_context_extraction"
             ),
             intelligent_request_count=intelligent_request_count,
+            numeric_candidate_count=numeric_candidate_count,
+            classified_candidate_count=classified_candidate_count,
+            unresolved_candidate_count=unresolved_candidate_count,
             company_policy_id=company_policy_id,
             company_policy_version=company_policy_version,
             intelligence_claims=intelligence_claims,

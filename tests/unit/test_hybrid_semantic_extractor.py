@@ -15,6 +15,9 @@ from greensmecapt.document_intelligence.semantics import (
     load_metric_catalog,
 )
 from greensmecapt.document_intelligence.semantics.intelligence import (
+    CandidateClassification,
+    CandidateClassificationOutput,
+    CandidateDisposition,
     IntelligentSemanticExtractionService,
     SemanticClaimPayload,
     SemanticProviderError,
@@ -70,6 +73,31 @@ class FailingProvider:
     def extract(self, request):
         raise SemanticProviderError(
             "Provider is unavailable."
+        )
+
+
+class CandidateProvider:
+    """Return one classified candidate also found by deterministic rules."""
+
+    provider_name = "candidate_provider"
+    provider_version = "1.0"
+    model_name = "candidate_model"
+
+    def extract(self, request):
+        return SemanticProviderOutput()
+
+    def classify_candidates(self, request):
+        return CandidateClassificationOutput(
+            classifications=tuple(
+                CandidateClassification(
+                    candidate_id=candidate.candidate_id,
+                    disposition=CandidateDisposition.MAPPED,
+                    indicator_id="renewable_energy_percentage",
+                    claim_nature="actual",
+                    reason="Explicit renewable-energy percentage.",
+                )
+                for candidate in request.candidates
+            )
         )
 
 
@@ -160,6 +188,24 @@ def test_add_grounded_intelligent_evidence() -> None:
         len(result.report.intelligent_evidence_ids)
         == 1
     )
+
+
+def test_prefer_intelligent_context_over_duplicate_rule_match() -> None:
+    """The review queue should contain one copy of the same measurement."""
+
+    result = _hybrid(
+        CandidateProvider()
+    ).extract_with_diagnostics(
+        document=_document(),
+        extracted_document=_extracted(
+            "Renewable energy share was 72 percent."
+        ),
+    )
+
+    assert len(result.evidence_items) == 1
+    assert result.report.deterministic_evidence_ids == ()
+    assert len(result.report.intelligent_evidence_ids) == 1
+    assert result.evidence_items[0].claim_nature.value == "actual"
 
 
 def test_fall_back_when_optional_provider_fails() -> None:

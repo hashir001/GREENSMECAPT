@@ -6,7 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from greensmecapt.document_intelligence.semantics.intelligence import (
+    CandidateClassificationRequest,
     MetricInstruction,
+    NumericEvidenceCandidate,
     SemanticExtractionRequest,
     SemanticProviderError,
     SemanticSourceSegment,
@@ -68,6 +70,36 @@ class _TransientModels(_Models):
         return super().generate_content(**kwargs)
 
 
+class _CandidateModels(_Models):
+    """Return controlled closed-ledger candidate classifications."""
+
+    def __init__(self, *, omit_last: bool = False) -> None:
+        super().__init__()
+        self.omit_last = omit_last
+
+    def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+        candidates = _candidate_request().candidates
+        if self.omit_last:
+            candidates = candidates[:-1]
+        return SimpleNamespace(
+            parsed={
+                "classifications": [
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "disposition": "mapped",
+                        "indicator_id": "electricity_consumption_kwh",
+                        "reporting_period": "2025",
+                        "scope": "whole facility",
+                        "claim_nature": "actual",
+                        "reason": "Explicit billed electricity total.",
+                    }
+                    for candidate in candidates
+                ]
+            }
+        )
+
+
 def _request() -> SemanticExtractionRequest:
     return SemanticExtractionRequest(
         document_id="document-1",
@@ -88,6 +120,38 @@ def _request() -> SemanticExtractionRequest:
                 page_number=1,
                 locator="page 1",
                 text="Purchased electricity was 1,250 kWh in 2025.",
+            ),
+        ),
+    )
+
+
+def _candidate_request() -> CandidateClassificationRequest:
+    metric = _request().metrics[0]
+    return CandidateClassificationRequest(
+        document_id="document-1",
+        catalog_id="catalog",
+        catalog_version="1",
+        metrics=(metric,),
+        candidates=(
+            NumericEvidenceCandidate(
+                candidate_id="candidate-1",
+                segment_id="segment-1",
+                page_number=1,
+                locator="page 1, table 1, row 2",
+                raw_value="1,250",
+                raw_number=1250,
+                raw_unit="kWh",
+                context="2025 billed | Electricity | 1,250 | kWh | whole facility",
+            ),
+            NumericEvidenceCandidate(
+                candidate_id="candidate-2",
+                segment_id="segment-1",
+                page_number=1,
+                locator="page 1, table 1, row 3",
+                raw_value="900",
+                raw_number=900,
+                raw_unit="kWh",
+                context="2024 comparator | Electricity | 900 | kWh | whole facility",
             ),
         ),
     )
@@ -148,6 +212,37 @@ def test_vertex_provider_retries_transient_failure() -> None:
 
     assert output.claims[0].raw_number == 1250
     assert len(models.calls) == 3
+
+
+def test_vertex_provider_requires_complete_candidate_ledger() -> None:
+    models = _CandidateModels()
+    provider = VertexGeminiSemanticProvider(
+        VertexGeminiProviderConfiguration(
+            project_id="project",
+            allow_remote=True,
+            maximum_attempts=1,
+        ),
+        client=SimpleNamespace(models=models),
+    )
+
+    output = provider.classify_candidates(_candidate_request())
+
+    assert len(output.classifications) == 2
+    assert models.calls[0]["config"]["temperature"] == 0
+
+
+def test_vertex_provider_rejects_partial_candidate_ledger() -> None:
+    provider = VertexGeminiSemanticProvider(
+        VertexGeminiProviderConfiguration(
+            project_id="project",
+            allow_remote=True,
+            maximum_attempts=1,
+        ),
+        client=SimpleNamespace(models=_CandidateModels(omit_last=True)),
+    )
+
+    with pytest.raises(SemanticProviderError, match="was incomplete"):
+        provider.classify_candidates(_candidate_request())
 
 
 def test_vertex_configuration_requires_remote_approval() -> None:

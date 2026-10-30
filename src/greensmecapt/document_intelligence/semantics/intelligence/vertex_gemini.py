@@ -10,6 +10,8 @@ from time import sleep
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from greensmecapt.document_intelligence.semantics.intelligence.models import (
+    CandidateClassificationOutput,
+    CandidateClassificationRequest,
     SemanticExtractionRequest,
     SemanticProviderOutput,
 )
@@ -237,6 +239,71 @@ _VERTEX_OUTPUT_SCHEMA = {
     ],
 }
 
+_VERTEX_CANDIDATE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "classifications": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "candidate_id": {"type": "STRING"},
+                    "disposition": {
+                        "type": "STRING",
+                        "enum": ["mapped", "irrelevant", "unmapped", "ambiguous"],
+                    },
+                    "indicator_id": {"type": "STRING", "nullable": True},
+                    "reporting_period": {"type": "STRING", "nullable": True},
+                    "scope": {"type": "STRING", "nullable": True},
+                    "claim_nature": {
+                        "type": "STRING",
+                        "enum": [
+                            "actual",
+                            "estimate",
+                            "target",
+                            "projected",
+                            "unspecified",
+                        ],
+                    },
+                    "reason": {"type": "STRING"},
+                },
+                "required": [
+                    "candidate_id",
+                    "disposition",
+                    "indicator_id",
+                    "reporting_period",
+                    "scope",
+                    "claim_nature",
+                    "reason",
+                ],
+            },
+        },
+    },
+    "required": ["classifications"],
+}
+
+_CANDIDATE_SYSTEM_PROMPT = """
+You classify a closed set of numeric document candidates.
+
+Rules:
+1. Return exactly one classification for every supplied candidate_id.
+2. Never add, omit, merge or duplicate candidate IDs.
+3. Use mapped only when the candidate context explicitly supports one allowed
+indicator. Otherwise use irrelevant, unmapped or ambiguous.
+4. Distinguish totals, components, comparators, actuals, estimates, targets and
+projections from the row label, column header and surrounding context.
+5. Map total electricity only to electricity_consumption_kwh. Map renewable
+electricity quantities to renewable_electricity_kwh and conventional-grid
+quantities to conventional_grid_electricity_kwh.
+6. Map an explicit renewable percentage to renewable_energy_percentage and an
+explicit production quantity to production_output_units.
+7. Copy reporting_period or scope only when the supplied context explicitly
+supports it. A table column header may govern the value in that column.
+8. Set indicator_id only for mapped candidates; otherwise use null.
+9. Do not modify or recalculate the supplied value or unit.
+10. Return only the required JSON structure.
+""".strip()
+
 
 class VertexGeminiProviderConfiguration(BaseModel):
     """Configure Gemini on Vertex AI using Application Default Credentials."""
@@ -345,6 +412,61 @@ class VertexGeminiSemanticProvider:
             "Vertex Gemini semantic extraction failed without a diagnostic."
         )
 
+    def classify_candidates(
+        self,
+        request: CandidateClassificationRequest,
+    ) -> CandidateClassificationOutput:
+        """Classify every backend-enumerated candidate exactly once."""
+
+        last_error: SemanticProviderError | None = None
+        for attempt in range(1, self._configuration.maximum_attempts + 1):
+            try:
+                response = self._resolved_client().models.generate_content(
+                    model=self._configuration.model,
+                    contents=request.model_dump_json(indent=2),
+                    config={
+                        "system_instruction": _CANDIDATE_SYSTEM_PROMPT,
+                        "temperature": 0,
+                        "max_output_tokens": (
+                            self._configuration.maximum_output_tokens
+                        ),
+                        "thinking_config": {"thinking_budget": 0},
+                        "response_mime_type": "application/json",
+                        "response_schema": _VERTEX_CANDIDATE_SCHEMA,
+                    },
+                )
+                output = self._validated_candidate_output(response)
+                _validate_candidate_coverage(request, output)
+                return output
+            except SemanticProviderError as error:
+                last_error = error
+                retryable = _retryable_provider_message(str(error)) or (
+                    "candidate classification" in str(error).casefold()
+                )
+            except Exception as error:
+                _LOGGER.exception(
+                    "Vertex Gemini candidate classification failed for "
+                    "project %s, location %s, model %s.",
+                    self._configuration.project_id,
+                    self._configuration.location,
+                    self._configuration.model,
+                )
+                last_error = SemanticProviderError(
+                    _provider_failure_message(error)
+                )
+                retryable = _retryable_provider_exception(error)
+
+            if not retryable or attempt >= self._configuration.maximum_attempts:
+                raise last_error
+
+            delay = self._configuration.retry_base_seconds * (2 ** (attempt - 1))
+            if delay:
+                sleep(delay)
+
+        raise last_error or SemanticProviderError(
+            "Vertex Gemini candidate classification failed without a diagnostic."
+        )
+
     @staticmethod
     def _validated_output(response: object) -> SemanticProviderOutput:
         """Validate both parsed and text responses against the local contract."""
@@ -371,6 +493,38 @@ class VertexGeminiSemanticProvider:
         except ValueError as error:
             raise SemanticProviderError(
                 "Vertex Gemini output did not satisfy the semantic schema."
+            ) from error
+
+    @staticmethod
+    def _validated_candidate_output(
+        response: object,
+    ) -> CandidateClassificationOutput:
+        """Validate one closed-set candidate response."""
+
+        parsed = getattr(response, "parsed", None)
+        if isinstance(parsed, CandidateClassificationOutput):
+            return parsed
+        if isinstance(parsed, Mapping):
+            try:
+                return CandidateClassificationOutput.model_validate(parsed)
+            except ValueError as error:
+                raise SemanticProviderError(
+                    "Vertex Gemini returned invalid candidate classification."
+                ) from error
+
+        response_text = getattr(response, "text", None)
+        if not isinstance(response_text, str) or not response_text.strip():
+            raise SemanticProviderError(
+                "Vertex Gemini returned no candidate classification output."
+            )
+        try:
+            return CandidateClassificationOutput.model_validate_json(
+                response_text
+            )
+        except ValueError as error:
+            raise SemanticProviderError(
+                "Vertex Gemini candidate classification did not satisfy "
+                "the required schema."
             ) from error
 
     def _resolved_client(self) -> object:
@@ -490,3 +644,29 @@ def _retryable_provider_message(message: str) -> bool:
             "did not satisfy the semantic schema",
         )
     )
+
+
+def _validate_candidate_coverage(
+    request: CandidateClassificationRequest,
+    output: CandidateClassificationOutput,
+) -> None:
+    """Reject partial, duplicated or invented candidate classifications."""
+
+    expected = [candidate.candidate_id for candidate in request.candidates]
+    returned = [
+        classification.candidate_id
+        for classification in output.classifications
+    ]
+
+    if len(returned) != len(set(returned)):
+        raise SemanticProviderError(
+            "Vertex Gemini candidate classification duplicated candidate IDs."
+        )
+
+    missing = sorted(set(expected) - set(returned))
+    invented = sorted(set(returned) - set(expected))
+    if missing or invented:
+        raise SemanticProviderError(
+            "Vertex Gemini candidate classification was incomplete "
+            f"(missing={missing}, invented={invented})."
+        )

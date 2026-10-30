@@ -97,9 +97,60 @@ class SemanticExtractionRequest(IntelligenceModel):
     readiness_factors: tuple[ReadinessFactorInstruction, ...] = ()
     unmapped_material_categories: tuple[UnmappedMaterialCategory, ...] = ()
     maximum_unmapped_claims: int = Field(default=0, ge=0, le=50)
+    quantitative_extraction_delegated: bool = False
     segments: tuple[SemanticSourceSegment, ...] = Field(
         min_length=1
     )
+
+
+class NumericEvidenceCandidate(IntelligenceModel):
+    """Represent one backend-enumerated numeric source candidate."""
+
+    candidate_id: str = Field(min_length=1)
+    segment_id: str = Field(min_length=1)
+    page_number: int = Field(ge=1)
+    locator: str = Field(min_length=1)
+    raw_value: str = Field(min_length=1)
+    raw_number: float
+    raw_unit: str = Field(min_length=1)
+    context: str = Field(min_length=1)
+
+
+class CandidateDisposition(StrEnum):
+    """Describe the semantic outcome for one enumerated candidate."""
+
+    MAPPED = "mapped"
+    IRRELEVANT = "irrelevant"
+    UNMAPPED = "unmapped"
+    AMBIGUOUS = "ambiguous"
+
+
+class CandidateClassificationRequest(IntelligenceModel):
+    """Supply a closed candidate set for exhaustive classification."""
+
+    document_id: str = Field(min_length=1)
+    catalog_id: str = Field(min_length=1)
+    catalog_version: str = Field(min_length=1)
+    metrics: tuple[MetricInstruction, ...] = Field(min_length=1)
+    candidates: tuple[NumericEvidenceCandidate, ...] = Field(min_length=1)
+
+
+class CandidateClassification(IntelligenceModel):
+    """Return exactly one semantic disposition per candidate ID."""
+
+    candidate_id: str = Field(min_length=1)
+    disposition: CandidateDisposition
+    indicator_id: str | None = Field(default=None, min_length=1)
+    reporting_period: str | None = Field(default=None, min_length=1)
+    scope: str | None = Field(default=None, min_length=1)
+    claim_nature: EvidenceClaimNature = EvidenceClaimNature.UNSPECIFIED
+    reason: str = Field(min_length=1)
+
+
+class CandidateClassificationOutput(IntelligenceModel):
+    """Require a complete disposition ledger for one candidate batch."""
+
+    classifications: tuple[CandidateClassification, ...] = Field(min_length=1)
 
 
 class SemanticClaimPayload(IntelligenceModel):
@@ -231,6 +282,9 @@ class IntelligentExtractionReport(IntelligenceModel):
     request_count: int = Field(default=1, ge=1)
     company_policy_id: str | None = Field(default=None, min_length=1)
     company_policy_version: str | None = Field(default=None, min_length=1)
+    numeric_candidate_count: int = Field(default=0, ge=0)
+    classified_candidate_count: int = Field(default=0, ge=0)
+    unresolved_candidate_count: int = Field(default=0, ge=0)
 
     evidence_items: tuple[EvidenceItem, ...]
     intelligence_claims: tuple[GroundedIntelligenceClaim, ...] = ()
